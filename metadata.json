@@ -1,0 +1,6 @@
+{
+  "name": "Pahang River Fish Seller",
+  "description": "A premium e-commerce website for Pahang fresh frozen river fish. Features a dynamic catalog, interactive sizing & cutting choosers, local storage shopping cart, Malaysian postcode delivery coverage validator, and automatic WhatsApp order generator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

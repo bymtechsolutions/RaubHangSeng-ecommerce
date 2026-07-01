@@ -1,0 +1,368 @@
+import { useState, useMemo } from 'react';
+import { Search, SlidersHorizontal, Eye, ShoppingCart, HelpCircle, AlertCircle } from 'lucide-react';
+import { Product, Language } from '../types';
+import { PRODUCTS } from '../data/products';
+
+interface ProductsProps {
+  language: Language;
+  onProductClick: (product: Product) => void;
+  onAddToCart: (product: Product, quantity: number, weightKg: number, cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet') => void;
+}
+
+type CategoryFilter = 'all' | 'premium' | 'wild' | 'aquaculture' | 'wellness';
+
+export default function Products({ language, onProductClick, onAddToCart }: ProductsProps) {
+  const isZh = language === 'zh';
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('all');
+  const [sortBy, setSortBy] = useState<'default' | 'priceAsc' | 'priceDesc'>('default');
+
+  // Local states to track selected weight & cut types for each card before adding to cart
+  const [cardSelections, setCardSelections] = useState<Record<string, {
+    weightKg: number;
+    cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet';
+    quantity: number;
+  }>>({});
+
+  const categories = [
+    { id: 'all', zh: '全部河鱼', en: 'All River Fish' },
+    { id: 'premium', zh: '尊贵极品', en: 'Premium Imperial' },
+    { id: 'wild', zh: '纯野生捕捞', en: '100% Wild Caught' },
+    { id: 'aquaculture', zh: '清泉网箱养殖', en: 'Cage Aquaculture' },
+    { id: 'wellness', zh: '养生调理', en: 'Health & Wellness' },
+  ];
+
+  // Initialize selection settings for a product card if not set yet
+  const getCardSelection = (product: Product) => {
+    return cardSelections[product.id] || {
+      weightKg: product.averageWeightKg,
+      cutType: 'cleaned',
+      quantity: 1,
+    };
+  };
+
+  const updateCardSelection = (productId: string, updates: Partial<typeof cardSelections[string]>) => {
+    setCardSelections(prev => ({
+      ...prev,
+      [productId]: {
+        ...getCardSelection(PRODUCTS.find(p => p.id === productId)!),
+        ...updates,
+      }
+    }));
+  };
+
+  const filteredProducts = useMemo(() => {
+    let result = [...PRODUCTS];
+
+    // Filter by Category
+    if (selectedCategory !== 'all') {
+      result = result.filter(product => product.category === selectedCategory);
+    }
+
+    // Filter by Search Query
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        p =>
+          p.nameZh.toLowerCase().includes(q) ||
+          p.nameEn.toLowerCase().includes(q) ||
+          p.scientificName.toLowerCase().includes(q) ||
+          p.descriptionZh.toLowerCase().includes(q) ||
+          p.descriptionEn.toLowerCase().includes(q)
+      );
+    }
+
+    // Sorting
+    if (sortBy === 'priceAsc') {
+      result.sort((a, b) => a.pricePerKg - b.pricePerKg);
+    } else if (sortBy === 'priceDesc') {
+      result.sort((a, b) => b.pricePerKg - a.pricePerKg);
+    }
+
+    return result;
+  }, [selectedCategory, searchQuery, sortBy]);
+
+  const getStockStatusLabel = (status: Product['stockStatus']) => {
+    switch (status) {
+      case 'available':
+        return {
+          zh: '常备现货',
+          en: 'Ready Stock',
+          class: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        };
+      case 'limited':
+        return {
+          zh: '野生限量',
+          en: 'Limited Catch',
+          class: 'bg-amber-50 text-amber-700 border-amber-200'
+        };
+      case 'seasonal':
+        return {
+          zh: '季节稀缺',
+          en: 'Seasonal Only',
+          class: 'bg-red-50 text-red-600 border-red-200'
+        };
+    }
+  };
+
+  return (
+    <section id="products" className="py-24 bg-slate-50 border-t border-slate-200">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        {/* Section Header */}
+        <div className="text-center space-y-3 max-w-3xl mx-auto mb-16">
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-sky-600">
+            {isZh ? '天然彭亨河鲜网店' : 'Pahang Premium River Delicacies'}
+          </h2>
+          <p className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
+            {isZh ? '严选彭亨上品河鱼' : 'Browse Our Selected Fresh River Catch'}
+          </p>
+          <div className="h-1.5 w-16 bg-gradient-to-r from-sky-500 to-blue-600 mx-auto rounded-full" />
+          <p className="text-slate-600 text-sm md:text-base">
+            {isZh
+              ? '我们的河鱼起捕后一律由特聘老师傅即时活杀处理，剔除腥源。真空密封锁鲜，在最短的时间内送达您的府上。'
+              : 'Each fish is scaled, gutted and vacuum sealed within minutes of capture, retaining its pure sweetness and premium texture.'}
+          </p>
+        </div>
+
+        {/* Filter Toolbar */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-6 mb-10 shadow-sm space-y-4 md:space-y-0 md:flex md:items-center md:justify-between gap-4">
+          
+          {/* Search Box */}
+          <div className="relative flex-grow max-w-md">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <Search className="w-4 h-4" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={isZh ? '搜索河鱼、巴丁、苏丹鱼、科学分类...' : 'Search fish, patin, sultan, tilapia, scientific name...'}
+              className="w-full bg-slate-50 border border-slate-200 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-850 placeholder-slate-400 transition-colors focus:outline-none"
+            />
+          </div>
+
+          {/* Sorters and Settings */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center space-x-2 text-xs font-semibold text-slate-500">
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>{isZh ? '排序' : 'Sort By'}</span>
+            </div>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:border-sky-500 transition-colors"
+            >
+              <option value="default">{isZh ? '默认推荐' : 'Recommended'}</option>
+              <option value="priceAsc">{isZh ? '价格：从低到高' : 'Price: Low to High'}</option>
+              <option value="priceDesc">{isZh ? '价格：从高到低' : 'Price: High to Low'}</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Categories Tab Bar */}
+        <div className="flex overflow-x-auto pb-4 mb-10 -mx-4 px-4 sm:mx-0 sm:px-0 gap-2 scrollbar-none">
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id as CategoryFilter)}
+              className={`flex-shrink-0 px-4 py-2.5 rounded-full text-xs md:text-sm font-semibold transition-all border cursor-pointer ${
+                selectedCategory === cat.id
+                  ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white border-transparent shadow-md scale-105'
+                  : 'bg-white text-slate-600 border-slate-200 hover:text-sky-600 hover:border-sky-300'
+              }`}
+            >
+              {isZh ? cat.zh : cat.en}
+            </button>
+          ))}
+        </div>
+
+        {/* Products Grid */}
+        {filteredProducts.length === 0 ? (
+          <div className="text-center py-20 bg-white border border-dashed border-slate-200 rounded-3xl p-8">
+            <AlertCircle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-slate-800">{isZh ? '没有找到相关河鱼' : 'No Fish Matches Found'}</h3>
+            <p className="text-slate-500 text-sm mt-1">
+              {isZh ? '建议您换一个搜索关键词或切换品类。' : 'Try adjusting your search criteria or selecting another category.'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredProducts.map((product) => {
+              const selection = getCardSelection(product);
+              const status = getStockStatusLabel(product.stockStatus);
+              const calculatedTotalPrice = product.pricePerKg * selection.weightKg * selection.quantity;
+
+              return (
+                <div
+                  key={product.id}
+                  className="group flex flex-col bg-white border border-slate-200 hover:border-sky-300 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg"
+                >
+                  {/* Fish Image Box */}
+                  <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
+                    <img
+                      src={product.image}
+                      alt={isZh ? product.nameZh : product.nameEn}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 saturate-[0.85] group-hover:saturate-100"
+                      referrerPolicy="no-referrer"
+                    />
+                    
+                    {/* Dark gradient shadow on image */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-80" />
+
+                    {/* Left Badges */}
+                    <div className="absolute top-4 left-4 flex flex-col gap-1.5 z-10">
+                      {product.isWild ? (
+                        <span className="px-3 py-1 rounded-md text-[10px] font-bold bg-amber-600 text-white uppercase tracking-wider shadow-md">
+                          {isZh ? '野生捕捞' : '100% Wild'}
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 rounded-md text-[10px] font-bold bg-sky-600 text-white uppercase tracking-wider shadow-md">
+                          {isZh ? '清泉网箱' : 'Spring Cage'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Right Stock Status Badge */}
+                    <div className="absolute top-4 right-4 z-10">
+                      <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold border ${status.class} shadow-md`}>
+                        {isZh ? status.zh : status.en}
+                      </span>
+                    </div>
+
+                    {/* Title Overlay inside Image bottom */}
+                    <div className="absolute bottom-4 left-4 right-4 z-10">
+                      <p className="text-[10px] font-bold tracking-widest text-sky-300 uppercase font-mono mb-1">
+                        {product.scientificName}
+                      </p>
+                      <h3 className="text-xl font-bold text-white group-hover:text-sky-100 transition-colors">
+                        {isZh ? product.nameZh : product.nameEn}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {/* Product Details Section */}
+                  <div className="p-5 flex-grow flex flex-col justify-between space-y-4">
+                    {/* Description */}
+                    <p className="text-slate-600 text-xs leading-relaxed line-clamp-3">
+                      {isZh ? product.descriptionZh : product.descriptionEn}
+                    </p>
+
+                    {/* Features list (mini) */}
+                    <div className="space-y-1.5 py-2.5 border-t border-b border-slate-100">
+                      {(isZh ? product.featuresZh : product.featuresEn).slice(0, 2).map((feat, idx) => (
+                        <div key={idx} className="flex items-center text-[11px] text-slate-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-sky-500 mr-2" />
+                          <span>{feat}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Purchase Sizing Controls */}
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      {/* Weight Selector */}
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-slate-500 font-semibold block uppercase tracking-wide">
+                          {isZh ? '估重(条)' : 'Weight / Fish'}
+                        </label>
+                        <select
+                          value={selection.weightKg}
+                          onChange={(e) => updateCardSelection(product.id, { weightKg: parseFloat(e.target.value) })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 font-mono text-slate-700 focus:outline-none focus:border-sky-500 text-xs cursor-pointer"
+                        >
+                          <option value={product.averageWeightKg * 0.8}>
+                            {(product.averageWeightKg * 0.8).toFixed(1)} kg ({isZh ? '小' : 'Small'})
+                          </option>
+                          <option value={product.averageWeightKg}>
+                            {product.averageWeightKg.toFixed(1)} kg ({isZh ? '标准' : 'Standard'})
+                          </option>
+                          <option value={product.averageWeightKg * 1.3}>
+                            {(product.averageWeightKg * 1.3).toFixed(1)} kg ({isZh ? '肥大' : 'Large'})
+                          </option>
+                          <option value={product.averageWeightKg * 1.6}>
+                            {(product.averageWeightKg * 1.6).toFixed(1)} kg ({isZh ? '极品特大' : 'Extra Large'})
+                          </option>
+                        </select>
+                      </div>
+
+                      {/* Cut Preference */}
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-slate-500 font-semibold block uppercase tracking-wide">
+                          {isZh ? '屠宰处理' : 'Cutting Choice'}
+                        </label>
+                        <select
+                          value={selection.cutType}
+                          onChange={(e) => updateCardSelection(product.id, { cutType: e.target.value as any })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-slate-700 focus:outline-none focus:border-sky-500 text-xs cursor-pointer"
+                        >
+                          <option value="cleaned">{isZh ? '活杀去内脏 (Cleaned)' : 'Cleaned & Gutted'}</option>
+                          <option value="whole">{isZh ? '完整整条 (Whole)' : 'Whole intact'}</option>
+                          <option value="steak">{isZh ? '切厚段/轮切 (Steak Cuts)' : 'Thick Steaks'}</option>
+                          <option value="fillet">{isZh ? '纯去骨片 (Fillet Cuts)' : 'Boneless Fillets'}</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Quantity Selector and Pricing */}
+                    <div className="flex items-center justify-between pt-1">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wide block">
+                          {isZh ? '产地底价' : 'Unit Price'}
+                        </span>
+                        <div className="flex items-baseline space-x-1">
+                          <span className="text-xl font-black text-amber-600 font-mono">RM {product.pricePerKg}</span>
+                          <span className="text-xs text-slate-400">/ kg</span>
+                        </div>
+                      </div>
+
+                      {/* Quantity Incrementor */}
+                      <div className="flex items-center border border-slate-200 bg-slate-50 rounded-lg">
+                        <button
+                          onClick={() => updateCardSelection(product.id, { quantity: Math.max(1, selection.quantity - 1) })}
+                          className="px-2.5 py-1 text-slate-500 hover:text-slate-800 font-bold cursor-pointer"
+                        >
+                          -
+                        </button>
+                        <span className="px-2 text-slate-800 font-mono font-bold text-xs">{selection.quantity}</span>
+                        <button
+                          onClick={() => updateCardSelection(product.id, { quantity: selection.quantity + 1 })}
+                          className="px-2.5 py-1 text-slate-500 hover:text-slate-800 font-bold cursor-pointer"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Bottom Action buttons */}
+                    <div className="grid grid-cols-5 gap-2 pt-2">
+                      {/* View Details Button */}
+                      <button
+                        onClick={() => onProductClick(product)}
+                        className="col-span-1 flex items-center justify-center p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 text-slate-600 rounded-xl transition-all cursor-pointer"
+                        title={isZh ? '查看详情' : 'View Details'}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+
+                      {/* Add to Cart Button */}
+                      <button
+                        onClick={() => onAddToCart(product, selection.quantity, selection.weightKg, selection.cutType)}
+                        className="col-span-4 flex items-center justify-center space-x-1.5 md:space-x-2 px-3 py-2.5 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-bold text-xs md:text-sm rounded-xl transition-all cursor-pointer shadow-md active:scale-95 whitespace-nowrap"
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{isZh ? '加入购物车' : 'Add To Cart'}</span>
+                        <span className="font-mono bg-sky-950/20 px-1.5 py-0.5 rounded ml-1 text-[10px] flex-shrink-0">
+                          RM {calculatedTotalPrice.toFixed(0)}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
