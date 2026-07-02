@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import Products from './components/Products';
@@ -10,8 +10,12 @@ import DeliveryChecker from './components/DeliveryChecker';
 import Reviews from './components/Reviews';
 import ContactUs from './components/ContactUs';
 import Footer from './components/Footer';
-import { Product, CartItem, Language, DeliveryDetails } from './types';
-import { ShoppingBag, Eye, X, ClipboardList, CheckCircle } from 'lucide-react';
+import AuthModal from './components/AuthModal';
+import { Product, CartItem, Language, DeliveryDetails, User } from './types';
+import { ShoppingBag, Eye, X, ClipboardList, CheckCircle, PhoneCall, Lock } from 'lucide-react';
+import { PRODUCTS } from './data/products';
+import SellerDashboard from './components/SellerDashboard';
+import PolicyView from './components/PolicyView';
 
 export default function App() {
   // Main states
@@ -22,14 +26,32 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [shippingState, setShippingState] = useState<'local' | 'outstation'>('local');
+  const [activePolicy, setActivePolicy] = useState<'privacy' | 'terms' | 'refund' | null>(null);
+
+  // Member states
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   // Order history
-  const [orderHistory, setOrderHistory] = useState<{ id: string; items: CartItem[]; details: DeliveryDetails; total: number; date: string }[]>([]);
+  const [orderHistory, setOrderHistory] = useState<{ id: string; items: CartItem[]; details: DeliveryDetails; total: number; date: string; status?: string; userId?: string }[]>([]);
   const [isOrderHistoryOpen, setIsOrderHistoryOpen] = useState(false);
   const [latestOrder, setLatestOrder] = useState<string | null>(null);
 
-  // Initialize cart & order history from localStorage
+  // Seller Dashboard / Store Configuration States
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isSellerDashboardOpen, setIsSellerDashboardOpen] = useState(false);
+  const [isPasscodeModalOpen, setIsPasscodeModalOpen] = useState(false);
+  const [passcodeInput, setPasscodeInput] = useState('');
+  const [passcodeError, setPasscodeError] = useState(false);
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState(250);
+  const [localShippingRate, setLocalShippingRate] = useState(20);
+  const [outstationShippingRate, setOutstationShippingRate] = useState(30);
+  const [storeAnnouncement, setStoreAnnouncement] = useState('【恒升河鱼公告】彭亨河主流特马鲁网箱及野生巴丁/苏丹鱼每日捕捞，西马冷链送达，消费满 RM250 免运费！');
+
+  // Initialize all states from localStorage on mount
   useEffect(() => {
+    // 1. Cart
     const savedCart = localStorage.getItem('pahang_river_fish_cart');
     if (savedCart) {
       try {
@@ -39,6 +61,7 @@ export default function App() {
       }
     }
 
+    // 2. Orders
     const savedOrders = localStorage.getItem('pahang_river_fish_orders');
     if (savedOrders) {
       try {
@@ -47,7 +70,62 @@ export default function App() {
         console.error('Failed to parse order history', e);
       }
     }
+
+    // 3. Current User
+    const savedUser = localStorage.getItem('raub_hang_seng_current_user');
+    if (savedUser) {
+      try {
+        setCurrentUser(JSON.parse(savedUser));
+      } catch (e) {
+        console.error('Failed to parse user session', e);
+      }
+    }
+
+    // 4. Custom Products Catalog
+    const savedProducts = localStorage.getItem('raub_hang_seng_products');
+    if (savedProducts) {
+      try {
+        setProducts(JSON.parse(savedProducts));
+      } catch (e) {
+        console.error('Failed to parse products', e);
+        setProducts(PRODUCTS);
+      }
+    } else {
+      setProducts(PRODUCTS);
+      localStorage.setItem('raub_hang_seng_products', JSON.stringify(PRODUCTS));
+    }
+
+    // 5. Store Settings
+    const maintenance = localStorage.getItem('raub_hang_seng_maintenance');
+    if (maintenance) {
+      setIsMaintenanceMode(maintenance === 'true');
+    }
+
+    const freeShip = localStorage.getItem('raub_hang_seng_free_shipping');
+    if (freeShip) {
+      setFreeShippingThreshold(Number(freeShip));
+    }
+
+    const localRate = localStorage.getItem('raub_hang_seng_local_rate');
+    if (localRate) {
+      setLocalShippingRate(Number(localRate));
+    }
+
+    const outRate = localStorage.getItem('raub_hang_seng_outstation_rate');
+    if (outRate) {
+      setOutstationShippingRate(Number(outRate));
+    }
+
+    const announcement = localStorage.getItem('raub_hang_seng_announcement');
+    if (announcement) {
+      setStoreAnnouncement(announcement);
+    }
   }, []);
+
+  // Sync maintenance state
+  useEffect(() => {
+    localStorage.setItem('raub_hang_seng_maintenance', String(isMaintenanceMode));
+  }, [isMaintenanceMode]);
 
   // Save cart to localStorage
   const saveCart = (items: CartItem[]) => {
@@ -109,8 +187,38 @@ export default function App() {
   };
 
   // Order success registration
-  const handleOrderSuccess = (order: { id: string; items: CartItem[]; details: DeliveryDetails; total: number; date: string }) => {
-    const updatedHistory = [order, ...orderHistory];
+  const handleOrderSuccess = (order: { id: string; items: CartItem[]; details: DeliveryDetails; total: number; date: string; userId?: string }) => {
+    let finalOrder = { ...order };
+    
+    if (currentUser) {
+      finalOrder.userId = currentUser.username;
+      
+      const earnedPoints = Math.round(order.total);
+      const updatedUser: User = {
+        ...currentUser,
+        memberPoints: currentUser.memberPoints + earnedPoints,
+      };
+      
+      setCurrentUser(updatedUser);
+      localStorage.setItem('raub_hang_seng_current_user', JSON.stringify(updatedUser));
+      
+      // Update in members directory
+      const storedMembersStr = localStorage.getItem('raub_hang_seng_members');
+      if (storedMembersStr) {
+        try {
+          const members = JSON.parse(storedMembersStr);
+          const key = currentUser.username.toLowerCase();
+          if (members[key]) {
+            members[key].profile = updatedUser;
+            localStorage.setItem('raub_hang_seng_members', JSON.stringify(members));
+          }
+        } catch (e) {
+          console.error('Failed to update member points in directory', e);
+        }
+      }
+    }
+
+    const updatedHistory = [finalOrder, ...orderHistory];
     setOrderHistory(updatedHistory);
     localStorage.setItem('pahang_river_fish_orders', JSON.stringify(updatedHistory));
 
@@ -127,14 +235,14 @@ export default function App() {
     return acc + item.product.pricePerKg * item.selectedWeightKg * item.quantity;
   }, 0);
 
-  const isFreeShipping = subtotal >= 250;
+  const isFreeShipping = subtotal >= freeShippingThreshold;
   const shippingFee = cartItems.length === 0
     ? 0
     : isFreeShipping
       ? 0
       : shippingState === 'local'
-        ? 20
-        : 30;
+        ? localShippingRate
+        : outstationShippingRate;
 
   const totalAmount = subtotal + shippingFee;
 
@@ -149,6 +257,45 @@ export default function App() {
     }
   };
 
+  const handleSellerAccess = () => {
+    setPasscodeInput('');
+    setPasscodeError(false);
+    setIsPasscodeModalOpen(true);
+  };
+
+  const handleVerifyPasscode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passcodeInput === '8888') {
+      setIsPasscodeModalOpen(false);
+      setIsSellerDashboardOpen(true);
+    } else {
+      setPasscodeError(true);
+    }
+  };
+
+  const handleSetActiveSection = (section: string) => {
+    setActiveSection(section);
+    if (section !== 'policy') {
+      setActivePolicy(null);
+      // Wait a brief tick for home components to mount before scrolling
+      setTimeout(() => {
+        const element = document.getElementById(section);
+        if (element) {
+          const yOffset = -80;
+          const y = element.getBoundingClientRect().top + window.scrollY + yOffset;
+          window.scrollTo({ top: y, behavior: 'smooth' });
+        } else if (section === 'home') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 50);
+    }
+  };
+
+  const handlePolicyClick = (policyType: 'privacy' | 'terms' | 'refund') => {
+    setActivePolicy(policyType);
+    setActiveSection('policy');
+  };
+
   return (
     <div className="bg-slate-50 min-h-screen text-slate-800 selection:bg-sky-500 selection:text-white font-sans antialiased">
       {/* Premium top Navigation */}
@@ -158,7 +305,10 @@ export default function App() {
         cartCount={cartCount}
         onCartClick={() => setIsCartOpen(true)}
         activeSection={activeSection}
-        setActiveSection={setActiveSection}
+        setActiveSection={handleSetActiveSection}
+        currentUser={currentUser}
+        onAuthClick={() => setIsAuthOpen(true)}
+        onSellerClick={handleSellerAccess}
       />
 
       {/* Floating floating order history trigger if they have placed orders */}
@@ -175,34 +325,61 @@ export default function App() {
         </button>
       )}
 
-      {/* Hero Section */}
-      <Hero
-        language={language}
-        onShopNowClick={scrollToProducts}
-        onWhatsAppOrderClick={scrollToProducts}
-      />
+      {/* Dynamic Store Bulletin / Announcement Ticker */}
+      <div className="pt-[76px] bg-amber-500 text-amber-950 text-xs py-2 px-4 shadow-xs font-medium flex items-center relative z-30">
+        <div className="max-w-7xl mx-auto w-full flex items-center justify-center space-x-3">
+          <span className="flex-shrink-0 bg-amber-950 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider flex items-center">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-ping"></span>
+            {language === 'zh' ? '店铺公告' : 'Announcement'}
+          </span>
+          <p className="text-amber-950 line-clamp-1 font-bold text-center">
+            {storeAnnouncement}
+          </p>
+        </div>
+      </div>
 
-      {/* Six Step Journey explanation */}
-      <HowToBuy language={language} />
+      {activePolicy ? (
+        <PolicyView
+          initialPolicyType={activePolicy}
+          language={language}
+          onClose={() => {
+            setActivePolicy(null);
+            setActiveSection('home');
+          }}
+        />
+      ) : (
+        <>
+          {/* Hero Section */}
+          <Hero
+            language={language}
+            onShopNowClick={scrollToProducts}
+            onWhatsAppOrderClick={scrollToProducts}
+          />
 
-      {/* Interactive Products Grid */}
-      <Products
-        language={language}
-        onProductClick={(prod) => setSelectedProduct(prod)}
-        onAddToCart={handleAddToCart}
-      />
+          {/* Six Step Journey explanation */}
+          <HowToBuy language={language} />
 
-      {/* Interactive Postcode checker */}
-      <DeliveryChecker language={language} />
+          {/* Interactive Products Grid */}
+          <Products
+            language={language}
+            products={products}
+            onProductClick={(prod) => setSelectedProduct(prod)}
+            onAddToCart={handleAddToCart}
+          />
 
-      {/* Customer Testimonials reviews */}
-      <Reviews language={language} />
+          {/* Interactive Postcode checker */}
+          <DeliveryChecker language={language} />
 
-      {/* Frequently Asked Questions + Location map + inquiry form */}
-      <ContactUs language={language} />
+          {/* Customer Testimonials reviews */}
+          <Reviews language={language} />
+
+          {/* Frequently Asked Questions + Location map + inquiry form */}
+          <ContactUs language={language} />
+        </>
+      )}
 
       {/* Professional structured Footer */}
-      <Footer language={language} />
+      <Footer language={language} onPolicyClick={handlePolicyClick} />
 
       {/* MODAL: Product Details Dialog */}
       {selectedProduct && (
@@ -244,6 +421,8 @@ export default function App() {
           shippingFee={shippingFee}
           totalAmount={totalAmount}
           onOrderSuccess={handleOrderSuccess}
+          currentUser={currentUser}
+          onAuthClick={() => setIsAuthOpen(true)}
         />
       )}
 
@@ -344,6 +523,163 @@ export default function App() {
                 className="px-5 py-2 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-50 cursor-pointer"
               >
                 {language === 'zh' ? '关闭' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Optional Member Login & Registration */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        language={language}
+        currentUser={currentUser}
+        setCurrentUser={setCurrentUser}
+        orderHistory={orderHistory}
+      />
+
+      {/* MODAL: Seller Passcode Authorization */}
+      {isPasscodeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100 animate-fade-in">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div className="flex items-center space-x-2">
+                  <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">
+                      {language === 'zh' ? '商家安全验证' : 'Seller Authentication'}
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      {language === 'zh' ? '管理后台访问受限' : 'Restricted Admin Access'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsPasscodeModalOpen(false)}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleVerifyPasscode} className="mt-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                    {language === 'zh' ? '请输入管理授权密码' : 'Enter Admin Passcode'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••"
+                      value={passcodeInput}
+                      onChange={(e) => {
+                        setPasscodeInput(e.target.value);
+                        setPasscodeError(false);
+                      }}
+                      className={`w-full px-4 py-3 rounded-xl border font-mono text-center text-lg tracking-widest focus:ring-2 focus:outline-hidden transition-all ${
+                        passcodeError
+                          ? 'border-red-300 focus:border-red-500 focus:ring-red-100'
+                          : 'border-slate-200 focus:border-amber-500 focus:ring-amber-100'
+                      }`}
+                      autoFocus
+                    />
+                  </div>
+                  {passcodeError && (
+                    <p className="mt-1.5 text-xs text-red-600 font-medium">
+                      {language === 'zh' ? '密码错误，拒绝访问！' : 'Invalid passcode. Access Denied!'}
+                    </p>
+                  )}
+                  <p className="mt-2 text-[11px] text-slate-400">
+                    {language === 'zh' ? '默认初始密码为: 8888' : 'Default initial passcode: 8888'}
+                  </p>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="flex space-x-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPasscodeModalOpen(false)}
+                    className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs md:text-sm rounded-xl border border-slate-100 cursor-pointer transition-all"
+                  >
+                    {language === 'zh' ? '取消' : 'Cancel'}
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-xs md:text-sm rounded-xl cursor-pointer transition-all shadow-md active:scale-95"
+                  >
+                    {language === 'zh' ? '确认登录' : 'Confirm'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Seller Administration Dashboard */}
+      {isSellerDashboardOpen && (
+        <SellerDashboard
+          language={language}
+          onClose={() => setIsSellerDashboardOpen(false)}
+          products={products}
+          setProducts={setProducts}
+          orderHistory={orderHistory}
+          setOrderHistory={setOrderHistory}
+          isMaintenanceMode={isMaintenanceMode}
+          setIsMaintenanceMode={setIsMaintenanceMode}
+          freeShippingThreshold={freeShippingThreshold}
+          setFreeShippingThreshold={setFreeShippingThreshold}
+          localShippingRate={localShippingRate}
+          setLocalShippingRate={setLocalShippingRate}
+          outstationShippingRate={outstationShippingRate}
+          setOutstationShippingRate={setOutstationShippingRate}
+          storeAnnouncement={storeAnnouncement}
+          setStoreAnnouncement={setStoreAnnouncement}
+        />
+      )}
+
+      {/* MAINTENANCE MODE OVERLAY */}
+      {isMaintenanceMode && !isSellerDashboardOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900 text-white px-4 text-center">
+          <div className="max-w-md space-y-6 animate-fade-in">
+            <div className="mx-auto w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center text-amber-500 animate-pulse">
+              <svg className="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-3xl font-black tracking-tight font-sans">
+                {language === 'zh' ? '店铺捕捞休整中' : 'Shop Under Maintenance'}
+              </h1>
+              <p className="text-sm text-slate-400 leading-relaxed">
+                {language === 'zh'
+                  ? '我们正在特马鲁巴丁鱼网箱基地进行系统性维护，并升级冷链出货渠道。店铺暂时处于捕捞休整状态。如果您有紧急需求，请直接联系客服处理！'
+                  : 'We are currently performing scheduled maintenance on our cage aquaculture systems and streamlining our cold-chain distribution channels. New catalog orders are paused.'}
+              </p>
+            </div>
+            <div className="pt-4 border-t border-slate-800 flex flex-col space-y-3">
+              <a
+                href="https://wa.me/60187682528"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center space-x-2 w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-sm transition-all shadow-md"
+              >
+                <PhoneCall className="w-4 h-4" />
+                <span>{language === 'zh' ? '联系专员下单 (WhatsApp)' : 'Inquire via WhatsApp'}</span>
+              </a>
+              <button
+                onClick={handleSellerAccess}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer pt-2"
+              >
+                {language === 'zh' ? '【商家后台登录】' : '[Seller Portal Login]'}
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { X, MessageSquare, Truck, HelpCircle, CheckCircle, ShieldCheck, ClipboardCheck, Info } from 'lucide-react';
-import { CartItem, Language, DeliveryDetails } from '../types';
+import React, { useState, useEffect } from 'react';
+import { X, MessageSquare, Truck, HelpCircle, CheckCircle, ShieldCheck, ClipboardCheck, Info, Award } from 'lucide-react';
+import { CartItem, Language, DeliveryDetails, User } from '../types';
 
 interface CheckoutModalProps {
   cartItems: CartItem[];
@@ -9,6 +9,8 @@ interface CheckoutModalProps {
   shippingFee: number;
   totalAmount: number;
   onOrderSuccess: (order: { id: string; items: CartItem[]; details: DeliveryDetails; total: number; date: string }) => void;
+  currentUser: User | null;
+  onAuthClick: () => void;
 }
 
 export default function CheckoutModal({
@@ -18,6 +20,8 @@ export default function CheckoutModal({
   shippingFee,
   totalAmount,
   onOrderSuccess,
+  currentUser,
+  onAuthClick,
 }: CheckoutModalProps) {
   const isZh = language === 'zh';
 
@@ -30,6 +34,18 @@ export default function CheckoutModal({
   const [postcode, setPostcode] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Autofill if logged in
+  useEffect(() => {
+    if (currentUser) {
+      setFullName(currentUser.fullName || '');
+      setPhoneNumber(currentUser.phoneNumber || '');
+      setAddress(currentUser.address || '');
+      setCity(currentUser.city || '');
+      setState(currentUser.state || 'Pahang');
+      setPostcode(currentUser.postcode || '');
+    }
+  }, [currentUser]);
 
   // Validation feedback
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -192,6 +208,42 @@ export default function CheckoutModal({
           
           {/* Left Column: Form Inputs (7 Cols) */}
           <div className="md:col-span-7 space-y-4">
+            
+            {/* Member Club Autofill Banner */}
+            {currentUser ? (
+              <div className="bg-sky-50 border border-sky-100 p-3 rounded-xl flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="bg-sky-500 text-white p-1 rounded-lg">
+                    <Award className="w-4 h-4 text-amber-300" />
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-sky-600 font-bold block uppercase tracking-wider">{isZh ? '会员专享优惠中' : 'Member Logged In'}</span>
+                    <p className="text-[11px] text-slate-700 font-medium leading-tight">
+                      {isZh ? `已自动填妥资料 • 订单赠 ${Math.round(totalAmount)} 积分` : `Autofill active • Earns +${Math.round(totalAmount)} points`}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[9px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-bold">
+                  @{currentUser.username}
+                </span>
+              </div>
+            ) : (
+              <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <span className="text-[9px] text-slate-400 font-bold block uppercase tracking-wider">{isZh ? '专属会员专享' : 'Checkout Guest'}</span>
+                  <p className="text-[11px] text-slate-600 leading-tight">
+                    {isZh ? '登录或注册会员即可自动填单、累积专属积分！' : 'Sign in to automatically fill info & earn loyalty rewards.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onAuthClick}
+                  className="px-2.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-[10px] font-bold cursor-pointer shrink-0 transition-colors"
+                >
+                  {isZh ? '登录 / 注册' : 'Sign In'}
+                </button>
+              </div>
+            )}
             
             {/* Input Name */}
             <div className="space-y-1.5">

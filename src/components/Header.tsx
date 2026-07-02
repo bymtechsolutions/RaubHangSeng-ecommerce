@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Menu, X, ShoppingCart, Globe, PhoneCall } from 'lucide-react';
-import { Language } from '../types';
+import { Menu, X, ShoppingCart, Globe, PhoneCall, User as UserIcon, Award } from 'lucide-react';
+import { Language, User } from '../types';
 
 interface HeaderProps {
   language: Language;
@@ -9,6 +9,9 @@ interface HeaderProps {
   onCartClick: () => void;
   activeSection: string;
   setActiveSection: (sec: string) => void;
+  currentUser: User | null;
+  onAuthClick: () => void;
+  onSellerClick?: () => void;
 }
 
 export default function Header({
@@ -18,6 +21,9 @@ export default function Header({
   onCartClick,
   activeSection,
   setActiveSection,
+  currentUser,
+  onAuthClick,
+  onSellerClick,
 }: HeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -119,6 +125,21 @@ export default function Header({
 
           {/* Secondary Actions (Language, Contact, Cart) */}
           <div className="hidden md:flex items-center space-x-4">
+            {/* Seller Portal */}
+            {onSellerClick && (
+              <button
+                id="seller-portal-desktop"
+                onClick={onSellerClick}
+                className="flex items-center space-x-1 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 transition-colors cursor-pointer text-xs font-semibold"
+              >
+                <svg className="w-3.5 h-3.5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <span>{language === 'zh' ? '商家中心' : 'Seller Portal'}</span>
+              </button>
+            )}
+
             {/* Language Toggle */}
             <button
               id="lang-toggle-desktop"
@@ -141,6 +162,32 @@ export default function Header({
               <PhoneCall className="w-3.5 h-3.5" />
               <span className="font-mono">WhatsApp Support</span>
             </a>
+
+            {/* Member Account Button */}
+            {currentUser ? (
+              <button
+                id="auth-btn-desktop-logged"
+                onClick={onAuthClick}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-sky-100 bg-sky-50 hover:bg-sky-100 text-sky-700 font-semibold text-xs transition-colors cursor-pointer"
+              >
+                <Award className="w-3.5 h-3.5 text-amber-500" />
+                <span>{language === 'zh' ? '会员中心' : 'Member Club'}</span>
+                <span className="bg-sky-200/80 px-1.5 py-0.5 rounded-md font-bold font-mono text-[9px]">
+                  {currentUser.memberPoints}p
+                </span>
+              </button>
+            ) : (
+              <button
+                id="auth-btn-desktop-guest"
+                onClick={onAuthClick}
+                className="flex items-center space-x-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-950 hover:border-slate-300 transition-colors cursor-pointer text-xs"
+              >
+                <UserIcon className="w-3.5 h-3.5 text-slate-400" />
+                <span className="font-medium">
+                  {language === 'zh' ? '注册/登录' : 'Sign In'}
+                </span>
+              </button>
+            )}
 
             {/* Shopping Cart Button */}
             <button
@@ -166,6 +213,20 @@ export default function Header({
               className="flex items-center justify-center p-2 rounded-lg bg-slate-50 text-slate-700 border border-slate-200"
             >
               <Globe className="w-4 h-4 text-sky-500" />
+            </button>
+
+            {/* Member Button Mobile */}
+            <button
+              id="auth-btn-mobile"
+              onClick={onAuthClick}
+              className={`p-2 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
+                currentUser 
+                  ? 'bg-sky-50 text-sky-600 border-sky-200' 
+                  : 'bg-slate-50 text-slate-600 border-slate-200'
+              }`}
+              title={currentUser ? "Member Club" : "Login/Register"}
+            >
+              {currentUser ? <Award className="w-5 h-5 text-amber-500" /> : <UserIcon className="w-5 h-5" />}
             </button>
 
             {/* Cart Mobile */}
@@ -214,6 +275,38 @@ export default function Header({
           </div>
 
           <div className="pt-4 border-t border-slate-200 flex flex-col space-y-3">
+            {/* Member Toggle Button Mobile Menu */}
+            <button
+              id="auth-toggle-mobile-menu"
+              onClick={() => {
+                onAuthClick();
+                setIsOpen(false);
+              }}
+              className="flex items-center justify-between w-full px-4 py-2.5 rounded-lg border border-sky-100 bg-sky-50/50 text-sky-800 text-sm transition-all"
+            >
+              <span className="flex items-center space-x-2 font-medium">
+                <Award className="w-4 h-4 text-amber-500" />
+                <span>
+                  {currentUser
+                    ? language === 'zh'
+                      ? '恒升会员中心'
+                      : 'Member Account'
+                    : language === 'zh'
+                      ? '登录 / 注册会员'
+                      : 'Sign In / Register'}
+                </span>
+              </span>
+              {currentUser ? (
+                <span className="bg-sky-500 text-white font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
+                  {currentUser.memberPoints} pts
+                </span>
+              ) : (
+                <span className="text-xs text-sky-600 font-bold">
+                  {language === 'zh' ? '获100分' : '+100 pts'}
+                </span>
+              )}
+            </button>
+
             <button
               id="lang-toggle-mobile-menu"
               onClick={() => {
@@ -230,6 +323,26 @@ export default function Header({
                 {language === 'zh' ? 'English' : '简体中文'}
               </span>
             </button>
+
+            {onSellerClick && (
+              <button
+                id="seller-portal-mobile"
+                onClick={() => {
+                  onSellerClick();
+                  setIsOpen(false);
+                }}
+                className="flex items-center justify-between w-full px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm transition-all"
+              >
+                <span className="flex items-center space-x-2 font-medium">
+                  <svg className="w-4 h-4 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <span>{language === 'zh' ? '商家管理后台' : 'Seller Control Panel'}</span>
+                </span>
+                <span className="text-xs bg-amber-200 text-amber-800 font-bold px-2 py-0.5 rounded-md">8888</span>
+              </button>
+            )}
 
             <a
               href="https://wa.me/60187682528"

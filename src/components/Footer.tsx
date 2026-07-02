@@ -3,9 +3,10 @@ import { Language } from '../types';
 
 interface FooterProps {
   language: Language;
+  onPolicyClick?: (policyType: 'privacy' | 'terms' | 'refund') => void;
 }
 
-export default function Footer({ language }: FooterProps) {
+export default function Footer({ language, onPolicyClick }: FooterProps) {
   const isZh = language === 'zh';
 
   const links = [
@@ -156,7 +157,31 @@ export default function Footer({ language }: FooterProps) {
       </div>
 
       {/* Footer Bottom copyright info */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 border-t border-slate-200 text-center space-y-2">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 border-t border-slate-200 text-center space-y-3">
+        {onPolicyClick && (
+          <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-1.5 text-xs text-slate-500 font-medium">
+            <button
+              onClick={() => onPolicyClick('privacy')}
+              className="hover:text-sky-600 cursor-pointer transition-colors"
+            >
+              {isZh ? '隐私政策' : 'Privacy Policy'}
+            </button>
+            <span className="text-slate-300 select-none">•</span>
+            <button
+              onClick={() => onPolicyClick('terms')}
+              className="hover:text-sky-600 cursor-pointer transition-colors"
+            >
+              {isZh ? '服务条款' : 'Terms of Service'}
+            </button>
+            <span className="text-slate-300 select-none">•</span>
+            <button
+              onClick={() => onPolicyClick('refund')}
+              className="hover:text-sky-600 cursor-pointer transition-colors"
+            >
+              {isZh ? '退换货与退款政策' : 'Return & Refund Policy'}
+            </button>
+          </div>
+        )}
         <p className="text-[10px] text-slate-400 font-mono">
           © {new Date().getFullYear()} 彭亨河鱼 PAHANG RIVER FISH SELLER (MALAYSIA) CO. LTD. ALL RIGHTS RESERVED.
         </p>

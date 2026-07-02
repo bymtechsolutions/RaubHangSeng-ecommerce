@@ -5,13 +5,14 @@ import { PRODUCTS } from '../data/products';
 
 interface ProductsProps {
   language: Language;
+  products?: Product[];
   onProductClick: (product: Product) => void;
   onAddToCart: (product: Product, quantity: number, weightKg: number, cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet') => void;
 }
 
 type CategoryFilter = 'all' | 'premium' | 'wild' | 'aquaculture' | 'wellness';
 
-export default function Products({ language, onProductClick, onAddToCart }: ProductsProps) {
+export default function Products({ language, products = PRODUCTS, onProductClick, onAddToCart }: ProductsProps) {
   const isZh = language === 'zh';
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('all');
@@ -45,14 +46,14 @@ export default function Products({ language, onProductClick, onAddToCart }: Prod
     setCardSelections(prev => ({
       ...prev,
       [productId]: {
-        ...getCardSelection(PRODUCTS.find(p => p.id === productId)!),
+        ...getCardSelection(products.find(p => p.id === productId)!),
         ...updates,
       }
     }));
   };
 
   const filteredProducts = useMemo(() => {
-    let result = [...PRODUCTS];
+    let result = [...products];
 
     // Filter by Category
     if (selectedCategory !== 'all') {
@@ -101,6 +102,12 @@ export default function Products({ language, onProductClick, onAddToCart }: Prod
           zh: '季节稀缺',
           en: 'Seasonal Only',
           class: 'bg-red-50 text-red-600 border-red-200'
+        };
+      case 'out_of_stock' as any:
+        return {
+          zh: '暂时售罄',
+          en: 'Out of Stock',
+          class: 'bg-slate-100 text-slate-500 border-slate-200'
         };
     }
   };
@@ -346,14 +353,25 @@ export default function Products({ language, onProductClick, onAddToCart }: Prod
 
                       {/* Add to Cart Button */}
                       <button
-                        onClick={() => onAddToCart(product, selection.quantity, selection.weightKg, selection.cutType)}
-                        className="col-span-4 flex items-center justify-center space-x-1.5 md:space-x-2 px-3 py-2.5 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-bold text-xs md:text-sm rounded-xl transition-all cursor-pointer shadow-md active:scale-95 whitespace-nowrap"
+                        onClick={() => product.stockStatus === ('out_of_stock' as any) ? null : onAddToCart(product, selection.quantity, selection.weightKg, selection.cutType)}
+                        disabled={product.stockStatus === ('out_of_stock' as any)}
+                        className={`col-span-4 flex items-center justify-center space-x-1.5 md:space-x-2 px-3 py-2.5 rounded-xl transition-all whitespace-nowrap font-bold text-xs md:text-sm ${
+                          product.stockStatus === ('out_of_stock' as any)
+                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed border border-slate-200 shadow-none scale-100'
+                            : 'bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white cursor-pointer shadow-md active:scale-95'
+                        }`}
                       >
-                        <ShoppingCart className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span>{isZh ? '加入购物车' : 'Add To Cart'}</span>
-                        <span className="font-mono bg-sky-950/20 px-1.5 py-0.5 rounded ml-1 text-[10px] flex-shrink-0">
-                          RM {calculatedTotalPrice.toFixed(0)}
-                        </span>
+                        {product.stockStatus === ('out_of_stock' as any) ? (
+                          <span>{isZh ? '暂时售罄' : 'Sold Out'}</span>
+                        ) : (
+                          <>
+                            <ShoppingCart className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span>{isZh ? '加入购物车' : 'Add To Cart'}</span>
+                            <span className="font-mono bg-sky-950/20 px-1.5 py-0.5 rounded ml-1 text-[10px] flex-shrink-0">
+                              RM {calculatedTotalPrice.toFixed(0)}
+                            </span>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

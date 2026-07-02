@@ -57,3 +57,16 @@ export interface FAQ {
   answerZh: string;
   answerEn: string;
 }
+
+export interface User {
+  username: string;
+  fullName: string;
+  phoneNumber: string;
+  address: string;
+  city: string;
+  state: string;
+  postcode: string;
+  email: string;
+  memberPoints: number;
+}
+
