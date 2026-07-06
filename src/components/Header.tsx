@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Menu, X, ShoppingCart, Globe, PhoneCall, User as UserIcon, Award } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, Menu, X } from 'lucide-react';
 import { Language, User } from '../types';
 
 interface HeaderProps {
@@ -14,6 +14,8 @@ interface HeaderProps {
   onSellerClick?: () => void;
 }
 
+const logoImage = new URL('../../assets/raub-hang-seng-logo.jpg', import.meta.url).href;
+
 export default function Header({
   language,
   setLanguage,
@@ -26,333 +28,182 @@ export default function Header({
   onSellerClick,
 }: HeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 20) {
-        setScrolled(true);
-      } else {
-        setScrolled(false);
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  const [isProductMenuOpen, setIsProductMenuOpen] = useState(false);
+  const isZh = language === 'zh';
 
   const navItems = [
     { id: 'home', zh: '首页', en: 'Home' },
-    { id: 'products', zh: '产品系列', en: 'Products' },
+    { id: 'guarantees', zh: '关于我们', en: 'About' },
+    { id: 'collections', zh: '产品系列', en: 'Products' },
     { id: 'process', zh: '购物流程', en: 'How to Buy' },
     { id: 'delivery', zh: '配送方式', en: 'Delivery' },
-    { id: 'reviews', zh: '顾客好评', en: 'Reviews' },
-    { id: 'contact', zh: '联络我们', en: 'Contact' },
+    { id: 'contact', zh: '联系我们', en: 'Contact' },
+  ];
+
+  const productMenuItems = [
+    { id: 'products', zh: '全部河鱼', en: 'Shop All' },
+    { id: 'shop:premium', zh: '尊贵极品', en: 'Premium' },
+    { id: 'shop:wild', zh: '野生捕捞', en: 'Wild Caught' },
+    { id: 'shop:aquaculture', zh: '网箱养殖', en: 'Aquaculture' },
+    { id: 'shop:wellness', zh: '养生调理', en: 'Wellness' },
   ];
 
   const handleNavClick = (id: string) => {
     setActiveSection(id);
     setIsOpen(false);
-    const element = document.getElementById(id);
-    if (element) {
-      const yOffset = -80; // offset for sticky header
-      const y = element.getBoundingClientRect().top + window.scrollY + yOffset;
-      window.scrollTo({ top: y, behavior: 'smooth' });
-    }
+    setIsProductMenuOpen(false);
   };
 
   return (
     <header
       id="app-header"
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? 'bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm py-3'
-          : 'bg-white/40 backdrop-blur-xs py-5'
-      }`}
+      className="fixed top-0 left-0 right-0 z-50 h-[var(--rhs-topbar-height)] bg-[#063655] text-white border-b border-white/10 shadow-[0_7px_18px_rgba(2,21,35,0.22)]"
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between">
-          {/* Logo */}
-          <div
+      <div className="max-w-[1400px] h-full mx-auto px-4 md:px-6">
+        <div className="h-full flex items-center justify-between gap-4">
+          <button
             id="header-logo"
-            className="flex items-center space-x-2 cursor-pointer"
             onClick={() => handleNavClick('home')}
+            className="flex items-center gap-2.5 text-left cursor-pointer shrink-0"
+            aria-label={isZh ? '返回首页' : 'Back to home'}
           >
-            <div className="bg-gradient-to-tr from-sky-500 to-blue-600 p-2 rounded-xl shadow-lg border border-sky-400/30">
-              <svg
-                className="w-6 h-6 text-white"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 2c5 0 9 4 9 9s-4 9-9 9-9-4-9-9 4-9 9-9z" />
-                <path d="M12 22s-2-3-2-7 2-7 2-7 2 3 2 7-2 7-2 7z" />
-                <path d="M2 12h20" />
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-              </svg>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xl font-extrabold tracking-wide text-slate-800 font-sans flex items-center">
-                彭亨河鱼
-                <span className="text-xs bg-sky-500 text-white font-semibold px-1.5 py-0.5 rounded-md ml-2 uppercase tracking-widest scale-90">
-                  直供
-                </span>
+            <img
+              src={logoImage}
+              alt="Raub Hang Seng Fish Supplier"
+              className="w-11 h-11 md:w-[52px] md:h-[52px] rounded-full object-cover bg-[#314b59] border border-white/20 shadow-sm"
+            />
+            <span className="flex flex-col leading-none">
+              <span className="text-[18px] md:text-[24px] font-semibold tracking-[0.02em]">
+                RaubHangSeng
               </span>
-              <span className="text-[10px] font-medium tracking-[0.18em] text-sky-600 font-mono uppercase">
-                Pahang River Fish
+              <span className="mt-1.5 text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.14em] text-white/90">
+                Fish Supplier
               </span>
-            </div>
-          </div>
+            </span>
+          </button>
 
-          {/* Desktop Navigation */}
-          <nav id="desktop-nav" className="hidden lg:flex items-center space-x-1">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.id)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                  activeSection === item.id
-                    ? 'text-sky-600 bg-sky-50'
-                    : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
-                }`}
-              >
-                {language === 'zh' ? item.zh : item.en}
-              </button>
-            ))}
+          <nav id="desktop-nav" className="hidden lg:flex items-center justify-center gap-8 xl:gap-10 text-[14px] xl:text-[15px] font-semibold">
+            {navItems.map((item) => {
+              const isProductItem = item.id === 'collections';
+              const isActive = activeSection === item.id || (isProductItem && activeSection === 'products');
+
+              if (isProductItem) {
+                return (
+                  <div
+                    key={item.id}
+                    className="relative"
+                    onMouseEnter={() => setIsProductMenuOpen(true)}
+                    onMouseLeave={() => setIsProductMenuOpen(false)}
+                  >
+                    <button
+                      onClick={() => handleNavClick(item.id)}
+                      onFocus={() => setIsProductMenuOpen(true)}
+                      className={`inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                        isActive ? 'text-white' : 'text-white/90 hover:text-white'
+                      }`}
+                    >
+                      <span>{isZh ? item.zh : item.en}</span>
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 transition-transform ${isProductMenuOpen ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+
+                    {isProductMenuOpen && (
+                      <div className="absolute left-1/2 top-full z-[70] w-52 -translate-x-1/2 pt-4">
+                        <div className="overflow-hidden rounded-xl border border-[#b9d2d8] bg-[#f8fbfa] py-2 text-[#17323d] shadow-[0_18px_36px_rgba(3,30,49,0.22)]">
+                          {productMenuItems.map((menuItem) => (
+                            <button
+                              key={menuItem.id}
+                              onClick={() => handleNavClick(menuItem.id)}
+                              className="block w-full px-4 py-2.5 text-left text-sm font-semibold hover:bg-[#e4f0f1] hover:text-[#073c63] transition-colors cursor-pointer"
+                            >
+                              {isZh ? menuItem.zh : menuItem.en}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavClick(item.id)}
+                  className={`transition-colors cursor-pointer ${
+                    isActive
+                      ? 'text-white'
+                      : 'text-white/90 hover:text-white'
+                  }`}
+                >
+                  {isZh ? item.zh : item.en}
+                </button>
+              );
+            })}
           </nav>
 
-          {/* Secondary Actions (Language, Contact, Cart) */}
-          <div className="hidden md:flex items-center space-x-4">
-            {/* Seller Portal */}
-            {onSellerClick && (
-              <button
-                id="seller-portal-desktop"
-                onClick={onSellerClick}
-                className="flex items-center space-x-1 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 transition-colors cursor-pointer text-xs font-semibold"
-              >
-                <svg className="w-3.5 h-3.5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                <span>{language === 'zh' ? '商家中心' : 'Seller Portal'}</span>
-              </button>
-            )}
-
-            {/* Language Toggle */}
-            <button
-              id="lang-toggle-desktop"
-              onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
-              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-950 hover:border-slate-300 transition-colors cursor-pointer text-xs"
-            >
-              <Globe className="w-3.5 h-3.5 text-sky-500" />
-              <span className="font-medium">
-                {language === 'zh' ? 'English' : '简体中文'}
-              </span>
-            </button>
-
-            {/* Support Line */}
-            <a
-              href="https://wa.me/60187682528"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center space-x-1 text-xs text-emerald-600 hover:text-emerald-500 transition-colors"
-            >
-              <PhoneCall className="w-3.5 h-3.5" />
-              <span className="font-mono">WhatsApp Support</span>
-            </a>
-
-            {/* Member Account Button */}
-            {currentUser ? (
-              <button
-                id="auth-btn-desktop-logged"
-                onClick={onAuthClick}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-sky-100 bg-sky-50 hover:bg-sky-100 text-sky-700 font-semibold text-xs transition-colors cursor-pointer"
-              >
-                <Award className="w-3.5 h-3.5 text-amber-500" />
-                <span>{language === 'zh' ? '会员中心' : 'Member Club'}</span>
-                <span className="bg-sky-200/80 px-1.5 py-0.5 rounded-md font-bold font-mono text-[9px]">
-                  {currentUser.memberPoints}p
-                </span>
-              </button>
-            ) : (
-              <button
-                id="auth-btn-desktop-guest"
-                onClick={onAuthClick}
-                className="flex items-center space-x-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-950 hover:border-slate-300 transition-colors cursor-pointer text-xs"
-              >
-                <UserIcon className="w-3.5 h-3.5 text-slate-400" />
-                <span className="font-medium">
-                  {language === 'zh' ? '注册/登录' : 'Sign In'}
-                </span>
-              </button>
-            )}
-
-            {/* Shopping Cart Button */}
-            <button
-              id="cart-btn-desktop"
-              onClick={onCartClick}
-              className="relative p-2 rounded-xl bg-gradient-to-tr from-sky-50 to-blue-50 hover:from-sky-100 hover:to-blue-100 border border-sky-100 hover:border-sky-300 text-sky-600 hover:text-sky-700 transition-all cursor-pointer shadow-xs"
-            >
-              <ShoppingCart className="w-5 h-5" />
-              {cartCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white font-mono text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center border border-white animate-pulse">
-                  {cartCount}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Mobile Cart and Menu Button */}
-          <div className="flex lg:hidden items-center space-x-2">
-            {/* Language Toggle Mobile Inside top */}
-            <button
-              id="lang-toggle-mobile-top"
-              onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
-              className="flex items-center justify-center p-2 rounded-lg bg-slate-50 text-slate-700 border border-slate-200"
-            >
-              <Globe className="w-4 h-4 text-sky-500" />
-            </button>
-
-            {/* Member Button Mobile */}
-            <button
-              id="auth-btn-mobile"
-              onClick={onAuthClick}
-              className={`p-2 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
-                currentUser 
-                  ? 'bg-sky-50 text-sky-600 border-sky-200' 
-                  : 'bg-slate-50 text-slate-600 border-slate-200'
-              }`}
-              title={currentUser ? "Member Club" : "Login/Register"}
-            >
-              {currentUser ? <Award className="w-5 h-5 text-amber-500" /> : <UserIcon className="w-5 h-5" />}
-            </button>
-
-            {/* Cart Mobile */}
-            <button
-              id="cart-btn-mobile"
-              onClick={onCartClick}
-              className="relative p-2 rounded-lg bg-slate-50 text-sky-600 border border-slate-200"
-            >
-              <ShoppingCart className="w-5 h-5" />
-              {cartCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-orange-500 text-white font-mono text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {cartCount}
-                </span>
-              )}
-            </button>
-
-            {/* Hamburger */}
-            <button
-              id="hamburger-btn"
-              onClick={() => setIsOpen(!isOpen)}
-              className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:text-slate-900 border border-slate-200"
-            >
-              {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Mobile Menu Panel */}
+      <button
+        id="hamburger-btn"
+        onClick={() => setIsOpen(!isOpen)}
+        className="mobile-menu-button fixed right-4 top-3 z-[60] w-9 h-9 rounded-lg bg-white flex items-center justify-center text-[#063655] shadow-md cursor-pointer"
+        aria-label={isOpen ? 'Close menu' : 'Open menu'}
+      >
+        {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+      </button>
+
       {isOpen && (
-        <div id="mobile-menu" className="lg:hidden bg-white border-b border-slate-200 shadow-lg py-4 px-4 space-y-3">
-          <div className="flex flex-col space-y-1">
+        <div id="mobile-menu" className="lg:hidden bg-[#063655] border-t border-white/10 px-5 py-4 shadow-xl">
+          <div className="grid gap-1">
             {navItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.id)}
-                className={`w-full text-left px-4 py-2.5 rounded-lg text-base font-medium transition-colors ${
-                  activeSection === item.id
-                    ? 'text-sky-600 bg-sky-50'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                {language === 'zh' ? item.zh : item.en}
-              </button>
+              <div key={item.id}>
+                <button
+                  onClick={() => handleNavClick(item.id)}
+                  className="w-full text-left px-3 py-3 rounded-lg text-white/90 hover:bg-white/10 hover:text-white text-base font-semibold"
+                >
+                  {isZh ? item.zh : item.en}
+                </button>
+                {item.id === 'collections' && (
+                  <div className="grid grid-cols-2 gap-2 px-3 pb-2">
+                    {productMenuItems.map((menuItem) => (
+                      <button
+                        key={menuItem.id}
+                        onClick={() => handleNavClick(menuItem.id)}
+                        className="rounded-lg bg-white/10 px-3 py-2 text-left text-xs font-semibold text-white/80 hover:bg-white/20 hover:text-white transition-colors"
+                      >
+                        {isZh ? menuItem.zh : menuItem.en}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
-          <div className="pt-4 border-t border-slate-200 flex flex-col space-y-3">
-            {/* Member Toggle Button Mobile Menu */}
-            <button
-              id="auth-toggle-mobile-menu"
-              onClick={() => {
-                onAuthClick();
-                setIsOpen(false);
-              }}
-              className="flex items-center justify-between w-full px-4 py-2.5 rounded-lg border border-sky-100 bg-sky-50/50 text-sky-800 text-sm transition-all"
-            >
-              <span className="flex items-center space-x-2 font-medium">
-                <Award className="w-4 h-4 text-amber-500" />
-                <span>
-                  {currentUser
-                    ? language === 'zh'
-                      ? '恒升会员中心'
-                      : 'Member Account'
-                    : language === 'zh'
-                      ? '登录 / 注册会员'
-                      : 'Sign In / Register'}
-                </span>
-              </span>
-              {currentUser ? (
-                <span className="bg-sky-500 text-white font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
-                  {currentUser.memberPoints} pts
-                </span>
-              ) : (
-                <span className="text-xs text-sky-600 font-bold">
-                  {language === 'zh' ? '获100分' : '+100 pts'}
-                </span>
-              )}
-            </button>
-
-            <button
-              id="lang-toggle-mobile-menu"
-              onClick={() => {
-                setLanguage(language === 'zh' ? 'en' : 'zh');
-                setIsOpen(false);
-              }}
-              className="flex items-center justify-between w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 text-sm"
-            >
-              <span className="flex items-center space-x-2">
-                <Globe className="w-4 h-4 text-sky-500" />
-                <span>{language === 'zh' ? 'Switch Language' : '切换语言'}</span>
-              </span>
-              <span className="text-sky-600 font-semibold">
-                {language === 'zh' ? 'English' : '简体中文'}
-              </span>
-            </button>
-
-            {onSellerClick && (
+          <div className="mt-4 pt-4 border-t border-white/10 grid gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <button
-                id="seller-portal-mobile"
-                onClick={() => {
-                  onSellerClick();
-                  setIsOpen(false);
-                }}
-                className="flex items-center justify-between w-full px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm transition-all"
+                onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
+                className="py-2.5 rounded-lg bg-white/10 text-white text-sm font-semibold"
               >
-                <span className="flex items-center space-x-2 font-medium">
-                  <svg className="w-4 h-4 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <span>{language === 'zh' ? '商家管理后台' : 'Seller Control Panel'}</span>
-                </span>
-                <span className="text-xs bg-amber-200 text-amber-800 font-bold px-2 py-0.5 rounded-md">8888</span>
+                {isZh ? 'English' : '中文'}
               </button>
-            )}
-
-            <a
-              href="https://wa.me/60187682528"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-center space-x-2 w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-sm transition-colors shadow-md"
-            >
-              <PhoneCall className="w-4 h-4" />
-              <span>WhatsApp Order Support</span>
-            </a>
+              <button
+                onClick={onCartClick}
+                className="py-2.5 rounded-lg bg-white/10 text-white text-sm font-semibold"
+              >
+                {isZh ? `购物车 ${cartCount}` : `Cart ${cartCount}`}
+              </button>
+              <button
+                onClick={onAuthClick}
+                className="py-2.5 rounded-lg bg-white/10 text-white text-sm font-semibold"
+              >
+                {currentUser ? (isZh ? '会员' : 'Member') : isZh ? '登录' : 'Login'}
+              </button>
+            </div>
           </div>
         </div>
       )}

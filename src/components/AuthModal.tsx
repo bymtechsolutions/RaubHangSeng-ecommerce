@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, User as UserIcon, Lock, Mail, Phone, MapPin, Award, LogOut, Save, Eye, EyeOff, CheckCircle, Clock, ShoppingBag } from 'lucide-react';
 import { Language, User } from '../types';
+import { loginMember, registerMember, updateMemberProfile } from '../lib/api';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -74,7 +75,7 @@ export default function AuthModal({
   if (!isOpen) return null;
 
   // Handle Login submission
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -83,19 +84,16 @@ export default function AuthModal({
       return;
     }
 
-    // Retrieve saved members list
-    const storedMembersStr = localStorage.getItem('raub_hang_seng_members');
-    const members: Record<string, any> = storedMembersStr ? JSON.parse(storedMembersStr) : {};
-
-    const matchedUser = members[username.toLowerCase().trim()];
-
-    if (!matchedUser || matchedUser.password !== password) {
+    let userObj: User;
+    try {
+      const response = await loginMember(username.toLowerCase().trim(), password);
+      userObj = response.profile;
+    } catch {
       setError(isZh ? '用户名或密码不正确' : 'Invalid username or password');
       return;
     }
 
     // Success login
-    const userObj: User = matchedUser.profile;
     setCurrentUser(userObj);
     localStorage.setItem('raub_hang_seng_current_user', JSON.stringify(userObj));
     
@@ -107,7 +105,7 @@ export default function AuthModal({
   };
 
   // Handle Signup submission
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -121,15 +119,7 @@ export default function AuthModal({
       return;
     }
 
-    const storedMembersStr = localStorage.getItem('raub_hang_seng_members');
-    const members: Record<string, any> = storedMembersStr ? JSON.parse(storedMembersStr) : {};
-
     const key = username.toLowerCase().trim();
-    if (members[key]) {
-      setError(isZh ? '该用户名已被注册' : 'This username is already taken');
-      return;
-    }
-
     // Save member details
     const newProfile: User = {
       username: username.trim(),
@@ -143,14 +133,14 @@ export default function AuthModal({
       memberPoints: 100, // Welcome gift points!
     };
 
-    members[key] = {
-      password: password,
-      profile: newProfile,
-    };
-
-    localStorage.setItem('raub_hang_seng_members', JSON.stringify(members));
-    setCurrentUser(newProfile);
-    localStorage.setItem('raub_hang_seng_current_user', JSON.stringify(newProfile));
+    try {
+      const response = await registerMember(key, password, newProfile);
+      setCurrentUser(response.profile);
+      localStorage.setItem('raub_hang_seng_current_user', JSON.stringify(response.profile));
+    } catch {
+      setError(isZh ? '该用户名已被注册' : 'This username is already taken');
+      return;
+    }
 
     setSuccess(isZh ? '注册成功！赠送 100 迎新会员积分！' : 'Registration successful! 100 welcome loyalty points rewarded!');
     setTimeout(() => {
@@ -160,7 +150,7 @@ export default function AuthModal({
   };
 
   // Handle Profile Update
-  const handleUpdateProfile = (e: React.FormEvent) => {
+  const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
 
@@ -178,20 +168,14 @@ export default function AuthModal({
       email: email.trim(),
     };
 
-    // Update in members registry
-    const storedMembersStr = localStorage.getItem('raub_hang_seng_members');
-    if (storedMembersStr) {
-      const members = JSON.parse(storedMembersStr);
-      const key = currentUser.username.toLowerCase();
-      if (members[key]) {
-        members[key].profile = updatedProfile;
-        localStorage.setItem('raub_hang_seng_members', JSON.stringify(members));
-      }
+    try {
+      const response = await updateMemberProfile(currentUser.username, updatedProfile);
+      setCurrentUser(response.profile);
+      localStorage.setItem('raub_hang_seng_current_user', JSON.stringify(response.profile));
+    } catch {
+      setError(isZh ? 'ä¼šå‘˜èµ„æ–™æ›´æ–°å¤±è´¥ï¼Œè¯·é‡è¯•' : 'Unable to update profile. Please retry.');
+      return;
     }
-
-    // Update session
-    setCurrentUser(updatedProfile);
-    localStorage.setItem('raub_hang_seng_current_user', JSON.stringify(updatedProfile));
 
     setSuccess(isZh ? '会员资料更新成功！' : 'Member profile updated successfully!');
     setIsEditing(false);
@@ -229,10 +213,10 @@ export default function AuthModal({
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ duration: 0.2 }}
         id="auth-modal-content"
-        className="relative w-full max-w-lg bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xl z-10 my-8 flex flex-col max-h-[90vh]"
+        className="relative w-full max-w-lg rhs-panel border rounded-2xl overflow-hidden shadow-2xl z-10 my-8 flex flex-col max-h-[90vh]"
       >
         {/* Header */}
-        <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center flex-shrink-0">
+        <div className="p-5 border-b border-[#c4d5d9] rhs-panel-soft flex justify-between items-center flex-shrink-0">
           <div className="flex items-center space-x-2">
             <div className="bg-sky-500 text-white p-1.5 rounded-lg shadow-md">
               <Award className="w-5 h-5" />
@@ -281,7 +265,7 @@ export default function AuthModal({
         )}
 
         {/* Main Body */}
-        <div className="p-6 overflow-y-auto flex-grow space-y-5">
+        <div className="p-6 overflow-y-auto flex-grow space-y-5 rhs-panel">
           {currentUser ? (
             /* ============================================================== */
             /* PROFILE / DASHBOARD VIEW                                       */
@@ -330,7 +314,7 @@ export default function AuthModal({
               </div>
 
               {/* Profile Details (View & Edit Form) */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+              <div className="rhs-panel-soft border rounded-xl p-4 space-y-4">
                 <div className="flex justify-between items-center">
                   <h4 className="text-sm font-bold text-slate-800 flex items-center">
                     <MapPin className="w-4 h-4 text-sky-500 mr-1.5" />
@@ -482,7 +466,7 @@ export default function AuthModal({
                 </h4>
 
                 {userOrders.length === 0 ? (
-                  <div className="text-center py-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
+                  <div className="text-center py-6 rhs-panel-soft border border-dashed rounded-xl">
                     <Clock className="w-8 h-8 text-slate-300 mx-auto mb-1.5 animate-pulse" />
                     <p className="text-xs text-slate-400">
                       {isZh ? '您目前还没有提交过订单。' : 'No saved orders under this profile yet.'}
@@ -623,7 +607,7 @@ export default function AuthModal({
                 /* SIGNUP FORM */
                 <form onSubmit={handleSignup} className="space-y-4">
                   {/* Phase 1: Account credentials */}
-                  <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl space-y-3">
+                  <div className="rhs-panel-soft border p-3 rounded-xl space-y-3">
                     <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">
                       {isZh ? '1. 账户凭证' : '1. Account credentials'}
                     </span>
@@ -658,7 +642,7 @@ export default function AuthModal({
                   </div>
 
                   {/* Phase 2: Personal & Shipping details */}
-                  <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl space-y-3">
+                  <div className="rhs-panel-soft border p-3 rounded-xl space-y-3">
                     <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">
                       {isZh ? '2. 配送联络信息 (以便下单时一键自动填单)' : '2. Default shipping information (For fast checkout)'}
                     </span>

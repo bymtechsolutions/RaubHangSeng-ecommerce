@@ -1,4 +1,5 @@
 import { X, Trash2, ShoppingBag, Plus, Minus, Info, ShieldAlert, Truck } from 'lucide-react';
+import { motion } from 'motion/react';
 import { CartItem, Language } from '../types';
 
 interface CartProps {
@@ -11,6 +12,7 @@ interface CartProps {
   onCheckout: () => void;
   shippingState: 'local' | 'outstation';
   setShippingState: (state: 'local' | 'outstation') => void;
+  orderingPaused?: boolean;
 }
 
 export default function Cart({
@@ -23,6 +25,7 @@ export default function Cart({
   onCheckout,
   shippingState,
   setShippingState,
+  orderingPaused = false,
 }: CartProps) {
   const isZh = language === 'zh';
 
@@ -62,15 +65,28 @@ export default function Cart({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-xs">
+    <motion.div
+      className="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-xs"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
       {/* Click outside to close */}
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* Cart Drawer Container */}
-      <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full shadow-2xl flex flex-col justify-between z-10 overflow-hidden">
+      <motion.div
+        className="relative w-full max-w-md rhs-panel border-l h-full shadow-2xl flex flex-col justify-between z-10 overflow-hidden"
+        initial={{ x: '100%', scaleX: 0.94 }}
+        animate={{ x: 0, scaleX: 1 }}
+        exit={{ x: '100%', scaleX: 0.96 }}
+        transition={{ type: 'spring', stiffness: 360, damping: 34 }}
+        style={{ transformOrigin: 'right center' }}
+      >
         
         {/* Header */}
-        <div className="p-4 border-b border-slate-150 flex items-center justify-between bg-slate-50">
+        <div className="p-4 border-b border-[#c4d5d9] flex items-center justify-between rhs-panel-soft">
           <div className="flex items-center space-x-2">
             <ShoppingBag className="w-5 h-5 text-sky-500" />
             <h3 className="text-lg font-bold text-slate-950">
@@ -89,12 +105,19 @@ export default function Cart({
         </div>
 
         {/* Content Area */}
-        <div className="flex-grow overflow-y-auto p-4 space-y-4 bg-white">
+        <div className="flex-grow overflow-y-auto p-4 space-y-4 bg-[#edf5f4]">
+          {orderingPaused && (
+            <div className="bg-slate-100 p-3.5 rounded-xl border border-slate-200 text-xs font-semibold leading-5 text-slate-600">
+              {isZh
+                ? '店铺正在更新产品，暂时不能加入购物车或提交订单。您可以查看或清空现有购物车。'
+                : 'The catalog is being updated. Adding items and checkout are paused, but you can review or clear your cart.'}
+            </div>
+          )}
           
           {/* Empty Cart State */}
           {cartItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-80 text-center space-y-4">
-              <div className="p-4 bg-slate-50 rounded-full border border-slate-200 text-slate-400">
+              <div className="p-4 bg-[#f8fbfa] rounded-full border border-[#c4d5d9] text-slate-400">
                 <ShoppingBag className="w-12 h-12" />
               </div>
               <h4 className="text-base font-bold text-slate-800">
@@ -115,7 +138,7 @@ export default function Cart({
           ) : (
             <>
               {/* Free Shipping Alert/Progress */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+              <div className="bg-[#f8fbfa] p-3.5 rounded-xl border border-[#c4d5d9] space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-500 flex items-center">
                     <Truck className="w-3.5 h-3.5 mr-1.5 text-sky-500" />
@@ -163,7 +186,7 @@ export default function Cart({
                   return (
                     <div
                       key={index}
-                      className="flex bg-slate-50 border border-slate-200 rounded-xl p-3 gap-3 hover:border-slate-300 transition-all"
+                      className="flex bg-[#f8fbfa] border border-[#c4d5d9] rounded-xl p-3 gap-3 hover:border-[#a8c1c7] transition-all"
                     >
                       {/* Image */}
                       <img
@@ -203,7 +226,8 @@ export default function Cart({
                           <div className="flex items-center border border-slate-200 bg-white rounded-lg">
                             <button
                               onClick={() => onUpdateQuantity(index, item.quantity - 1)}
-                              className="p-1 text-slate-400 hover:text-slate-800 font-bold cursor-pointer"
+                              disabled={orderingPaused}
+                              className="p-1 text-slate-400 hover:text-slate-800 font-bold cursor-pointer disabled:text-slate-300 disabled:cursor-not-allowed"
                             >
                               <Minus className="w-3 h-3" />
                             </button>
@@ -212,7 +236,8 @@ export default function Cart({
                             </span>
                             <button
                               onClick={() => onUpdateQuantity(index, item.quantity + 1)}
-                              className="p-1 text-slate-400 hover:text-slate-800 font-bold cursor-pointer"
+                              disabled={orderingPaused}
+                              className="p-1 text-slate-400 hover:text-slate-800 font-bold cursor-pointer disabled:text-slate-300 disabled:cursor-not-allowed"
                             >
                               <Plus className="w-3 h-3" />
                             </button>
@@ -225,15 +250,18 @@ export default function Cart({
               </div>
 
               {/* Shipping Destination selector */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+              <div className="bg-[#f8fbfa] p-3.5 rounded-xl border border-[#c4d5d9] space-y-2">
                 <label className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">
                   {isZh ? '选择冷链配送目的地' : 'Select Cold Chain Destination'}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setShippingState('local')}
+                    disabled={orderingPaused}
                     className={`px-3 py-2 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
-                      shippingState === 'local'
+                      orderingPaused
+                        ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                        : shippingState === 'local'
                         ? 'bg-sky-50 text-sky-600 border-sky-200'
                         : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
                     }`}
@@ -242,8 +270,11 @@ export default function Cart({
                   </button>
                   <button
                     onClick={() => setShippingState('outstation')}
+                    disabled={orderingPaused}
                     className={`px-3 py-2 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
-                      shippingState === 'outstation'
+                      orderingPaused
+                        ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                        : shippingState === 'outstation'
                         ? 'bg-sky-50 text-sky-600 border-sky-200'
                         : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
                     }`}
@@ -258,7 +289,7 @@ export default function Cart({
 
         {/* Footer Billing & Checkout */}
         {cartItems.length > 0 && (
-          <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-4">
+          <div className="p-4 rhs-panel-soft border-t border-[#c4d5d9] space-y-4">
             
             {/* Bill Summary */}
             <div className="space-y-2 text-xs">
@@ -300,13 +331,18 @@ export default function Cart({
             {/* Main Action Check out */}
             <button
               onClick={onCheckout}
-              className="w-full flex items-center justify-center space-x-2 py-3.5 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-bold rounded-xl transition-all shadow-xs cursor-pointer text-sm"
+              disabled={orderingPaused}
+              className={`w-full flex items-center justify-center space-x-2 py-3.5 font-bold rounded-xl transition-all shadow-xs text-sm ${
+                orderingPaused
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white cursor-pointer'
+              }`}
             >
-              <span>{isZh ? '填写配送资料，立即下单' : 'Proceed to Checkout'}</span>
+              <span>{orderingPaused ? (isZh ? '维护中暂不可下单' : 'Checkout Paused') : (isZh ? '填写配送资料，立即下单' : 'Proceed to Checkout')}</span>
             </button>
           </div>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

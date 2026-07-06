@@ -98,22 +98,22 @@ export default function DeliveryChecker({ language }: DeliveryCheckerProps) {
   };
 
   return (
-    <section id="delivery" className="py-20 bg-slate-50 border-t border-slate-200">
+    <section id="delivery" className="py-20 rhs-section border-t border-[#c4d5d9]">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Main Card Grid wrapper */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 bg-white border border-slate-200 p-6 md:p-10 rounded-3xl shadow-sm items-center">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 rhs-panel border p-6 md:p-10 rounded-3xl shadow-sm items-center">
           
           {/* Left info column: 6 cols */}
           <div className="md:col-span-6 space-y-4">
-            <div className="inline-flex items-center space-x-2 bg-sky-50 border border-sky-100 px-3 py-1 rounded-full text-sky-600 text-xs font-semibold uppercase tracking-wider">
+            <div className="inline-flex items-center space-x-2 bg-[#e2f1f4] border border-[#bad2d8] px-3 py-1 rounded-full text-sky-700 text-xs font-semibold uppercase tracking-wider">
               <Truck className="w-3.5 h-3.5 text-sky-500" />
               <span>{isZh ? '西马冷藏车送货服务' : 'Peninsular Cold Chain Delivery'}</span>
             </div>
             <h3 className="text-2xl md:text-3xl font-black text-slate-950">
               {isZh ? '查询您的地址是否支持冷链' : 'Verify Your Cold Chain Coverage'}
             </h3>
-            <p className="text-xs md:text-sm text-slate-600 leading-relaxed font-normal">
+            <p className="text-xs md:text-sm text-[#536c74] leading-relaxed font-normal">
               {isZh
                 ? '因为新鲜河鱼在运输途中绝不能融化，我们坚持使用【全程专业冷藏温控货车】送货上门。西马 90% 以上主要城镇均可送达。输入您所在的 5 位邮政编码，一键查询！'
                 : 'Since premium river fish cannot thaw during transit, we deliver using strictly temperature-controlled logistics trucks. We cover 90% of West Malaysian suburbs. Enter your 5-digit postcode to check!'}
@@ -136,7 +136,7 @@ export default function DeliveryChecker({ language }: DeliveryCheckerProps) {
           </div>
 
           {/* Right Input Checker Form: 6 cols */}
-          <div className="md:col-span-6 bg-slate-50 border border-slate-200 p-5 md:p-6 rounded-2xl space-y-4">
+          <div className="md:col-span-6 rhs-panel-soft border p-5 md:p-6 rounded-2xl space-y-4">
             <form onSubmit={checkPostcode} className="space-y-2">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wide block">
                 {isZh ? '输入大马5位数邮政编码 (Postcode)' : 'Enter 5-digit Malaysia Postcode'}
@@ -149,7 +149,7 @@ export default function DeliveryChecker({ language }: DeliveryCheckerProps) {
                     onChange={(e) => setPostcode(e.target.value.replace(/\D/g, '').slice(0, 5))}
                     placeholder="e.g. 47500"
                     maxLength={5}
-                    className="w-full bg-white border border-slate-200 focus:border-sky-500 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none text-center font-mono tracking-widest text-base"
+                    className="w-full bg-[#f8fbfa] border border-[#c4d5d9] focus:border-sky-500 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none text-center font-mono tracking-widest text-base"
                   />
                 </div>
                 <button
@@ -175,7 +175,7 @@ export default function DeliveryChecker({ language }: DeliveryCheckerProps) {
             )}
 
             {!searching && result && (
-              <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-3 animate-fade-in text-xs leading-relaxed">
+              <div className="p-4 bg-[#f8fbfa] border border-[#c4d5d9] rounded-xl space-y-3 animate-fade-in text-xs leading-relaxed">
                 
                 {result.status === 'covered' && (
                   <>

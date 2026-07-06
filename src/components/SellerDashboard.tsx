@@ -26,17 +26,21 @@ import {
   ToggleLeft,
   ToggleRight,
   ChevronRight,
-  Info
+  Info,
+  Upload,
+  Image as ImageIcon,
+  Video
 } from 'lucide-react';
-import { Product, CartItem, Language, DeliveryDetails } from '../types';
+import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductVariant, ProductCutType, StoreSettings, CollectionDisplay, ProductCategory, OrderRecord } from '../types';
+import { normalizeCollectionDisplays } from '../data/collections';
 
 interface SellerDashboardProps {
   language: Language;
   onClose: () => void;
   products: Product[];
-  setProducts: (prods: Product[]) => void;
-  orderHistory: any[];
-  setOrderHistory: (orders: any[]) => void;
+  setProducts: (prods: Product[]) => void | Promise<void>;
+  orderHistory: OrderRecord[];
+  setOrderHistory: (orders: OrderRecord[]) => void | Promise<void>;
   isMaintenanceMode: boolean;
   setIsMaintenanceMode: (val: boolean) => void;
   freeShippingThreshold: number;
@@ -47,9 +51,27 @@ interface SellerDashboardProps {
   setOutstationShippingRate: (val: number) => void;
   storeAnnouncement: string;
   setStoreAnnouncement: (val: string) => void;
+  collectionDisplays: CollectionDisplay[];
+  onSaveSettings?: (settings: Partial<StoreSettings>) => void | Promise<void>;
 }
 
-type TabType = 'overview' | 'orders' | 'products' | 'collections' | 'shipping' | 'settings';
+type TabType = 'overview' | 'orders' | 'customers' | 'products' | 'collections' | 'shipping' | 'settings';
+
+type CustomerInsight = {
+  id: string;
+  displayName: string;
+  phoneNumber: string;
+  city: string;
+  state: string;
+  postcode: string;
+  address: string;
+  totalSpend: number;
+  orderCount: number;
+  itemCount: number;
+  lastOrderDate: string;
+  lastOrderTime: number;
+  lastOrderId: string;
+};
 
 export default function SellerDashboard({
   language,
@@ -68,6 +90,8 @@ export default function SellerDashboard({
   setOutstationShippingRate,
   storeAnnouncement,
   setStoreAnnouncement,
+  collectionDisplays,
+  onSaveSettings,
 }: SellerDashboardProps) {
   const isZh = language === 'zh';
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -75,7 +99,8 @@ export default function SellerDashboard({
   // Search & Filter state for Orders
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
-  const [selectedOrderDetail, setSelectedOrderDetail] = useState<any | null>(null);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<OrderRecord | null>(null);
+  const [customerSearch, setCustomerSearch] = useState('');
 
   // Search & Filter state for Products
   const [productSearch, setProductSearch] = useState('');
@@ -94,6 +119,8 @@ export default function SellerDashboard({
   const [formPricePerKg, setFormPricePerKg] = useState<number>(50);
   const [formAverageWeightKg, setFormAverageWeightKg] = useState<number>(1.2);
   const [formImage, setFormImage] = useState('');
+  const [formMedia, setFormMedia] = useState<ProductMedia[]>([]);
+  const [formVariants, setFormVariants] = useState<ProductVariant[]>([]);
   const [formTastingNotesZh, setFormTastingNotesZh] = useState('');
   const [formTastingNotesEn, setFormTastingNotesEn] = useState('');
   const [formCookingSuggestionsZh, setFormCookingSuggestionsZh] = useState('');
@@ -111,6 +138,11 @@ export default function SellerDashboard({
   const [testPostcode, setTestPostcode] = useState('');
   const [testState, setTestState] = useState('Pahang');
   const [testResult, setTestResult] = useState<{ eligible: boolean; fee: number; zone: string } | null>(null);
+  const [collectionDrafts, setCollectionDrafts] = useState<CollectionDisplay[]>(() => normalizeCollectionDisplays(collectionDisplays));
+
+  useEffect(() => {
+    setCollectionDrafts(normalizeCollectionDisplays(collectionDisplays));
+  }, [collectionDisplays]);
 
   // Auto-clear messages
   const triggerSuccess = (msg: string) => {
@@ -122,6 +154,139 @@ export default function SellerDashboard({
     setTimeout(() => setErrorMsg(null), 3000);
   };
 
+  const handleMaintenanceToggle = async () => {
+    const nextMaintenanceMode = !isMaintenanceMode;
+    await onSaveSettings?.({ maintenanceMode: nextMaintenanceMode });
+    setIsMaintenanceMode(nextMaintenanceMode);
+    triggerSuccess(
+      nextMaintenanceMode
+        ? (isZh ? '店面已切换到维护重组状态' : 'Storefront is now in maintenance mode.')
+        : (isZh ? '店面恢复正常营业状态' : 'Storefront is open again.')
+    );
+  };
+
+  const createMediaId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const fileToMedia = (file: File): Promise<ProductMedia> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        resolve({
+          id: createMediaId('media'),
+          url: String(reader.result),
+          type: file.type.startsWith('video/') ? 'video' : 'image',
+          name: file.name,
+        });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    try {
+      const uploadedMedia = await Promise.all(files.map(fileToMedia));
+      setFormMedia(prev => [...prev, ...uploadedMedia]);
+      const firstImage = uploadedMedia.find(media => media.type === 'image');
+      if (!formImage.trim() && firstImage) {
+        setFormImage(firstImage.url);
+      }
+      triggerSuccess(isZh ? '产品媒体已上传。' : 'Product media uploaded.');
+    } catch (error) {
+      triggerError(isZh ? '媒体上传失败，请重试。' : 'Media upload failed. Please retry.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveMedia = (mediaId: string) => {
+    setFormMedia(prev => prev.filter(media => media.id !== mediaId));
+  };
+
+  const handleAddVariant = () => {
+    const variantNumber = formVariants.length + 1;
+    const fallbackImage = formMedia.find(media => media.type === 'image')?.url || formImage.trim();
+    setFormVariants(prev => [
+      ...prev,
+      {
+        id: createMediaId('variant'),
+        nameZh: `规格 ${variantNumber}`,
+        nameEn: `Variant ${variantNumber}`,
+        weightKg: Number(formAverageWeightKg) || 1,
+        cutType: 'cleaned',
+        image: fallbackImage,
+      },
+    ]);
+  };
+
+  const handleUpdateVariant = (index: number, updates: Partial<ProductVariant>) => {
+    setFormVariants(prev => prev.map((variant, variantIndex) => (
+      variantIndex === index ? { ...variant, ...updates } : variant
+    )));
+  };
+
+  const handleRemoveVariant = (index: number) => {
+    setFormVariants(prev => prev.filter((_, variantIndex) => variantIndex !== index));
+  };
+
+  const handleVariantImageUpload = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      triggerError(isZh ? '每个规格只能上传一张图片。' : 'Each variant accepts one photo only.');
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const media = await fileToMedia(file);
+      handleUpdateVariant(index, { image: media.url });
+      triggerSuccess(isZh ? '规格图片已更新。' : 'Variant photo updated.');
+    } catch (error) {
+      triggerError(isZh ? '规格图片上传失败。' : 'Variant photo upload failed.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleUpdateCollectionDraft = (id: ProductCategory, updates: Partial<CollectionDisplay>) => {
+    setCollectionDrafts(prev => normalizeCollectionDisplays(
+      prev.map(collection => collection.id === id ? { ...collection, ...updates } : collection)
+    ));
+  };
+
+  const handleCollectionImageUpload = async (id: ProductCategory, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      triggerError(isZh ? '系列封面只支持图片。' : 'Collection cover accepts image files only.');
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const media = await fileToMedia(file);
+      handleUpdateCollectionDraft(id, { image: media.url });
+      triggerSuccess(isZh ? '系列封面已上传。' : 'Collection image uploaded.');
+    } catch {
+      triggerError(isZh ? '系列封面上传失败。' : 'Collection image upload failed.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleSaveCollections = async () => {
+    const normalizedCollections = normalizeCollectionDisplays(collectionDrafts);
+    await onSaveSettings?.({ collections: normalizedCollections });
+    setCollectionDrafts(normalizedCollections);
+    triggerSuccess(isZh ? '首页系列图片与裁切设置已保存。' : 'Landing collection images and crop settings saved.');
+  };
+
   // -------------------------------------------------------------
   // CALCULATED METRICS FOR OVERVIEW
   // -------------------------------------------------------------
@@ -130,7 +295,7 @@ export default function SellerDashboard({
     const validOrders = orderHistory.filter(o => o.status !== 'cancelled');
     const totalSales = validOrders.reduce((sum, o) => sum + o.total, 0);
     const totalOrders = orderHistory.length;
-    const avgOrderVal = totalOrders > 0 ? totalSales / validOrders.length : 0;
+    const avgOrderVal = validOrders.length > 0 ? totalSales / validOrders.length : 0;
     
     // Revenue by category
     const categoryRevenue: Record<string, number> = {
@@ -179,6 +344,79 @@ export default function SellerDashboard({
     };
   }, [orderHistory]);
 
+  const customerInsights = useMemo(() => {
+    const customerMap = new Map<string, CustomerInsight>();
+    const validOrders = orderHistory.filter(order => order.status !== 'cancelled');
+
+    validOrders.forEach(order => {
+      const details = order.details;
+      const phoneNumber = details?.phoneNumber?.trim() || '';
+      const normalizedPhone = phoneNumber.replace(/\D/g, '');
+      const fullName = details?.fullName?.trim() || '';
+      const memberKey = order.userId?.trim().toLowerCase();
+      const customerKey = memberKey
+        ? `member:${memberKey}`
+        : normalizedPhone
+          ? `phone:${normalizedPhone}`
+          : `order:${order.id}`;
+      const parsedDate = Date.parse(order.date || '');
+      const orderTime = Number.isNaN(parsedDate) ? 0 : parsedDate;
+      const itemCount = order.items?.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0) || 0;
+      const existing = customerMap.get(customerKey);
+
+      if (existing) {
+        existing.totalSpend += Number(order.total) || 0;
+        existing.orderCount += 1;
+        existing.itemCount += itemCount;
+        if (orderTime >= existing.lastOrderTime) {
+          existing.displayName = fullName || existing.displayName;
+          existing.phoneNumber = phoneNumber || existing.phoneNumber;
+          existing.city = details?.city || existing.city;
+          existing.state = details?.state || existing.state;
+          existing.postcode = details?.postcode || existing.postcode;
+          existing.address = details?.address || existing.address;
+          existing.lastOrderDate = order.date;
+          existing.lastOrderTime = orderTime;
+          existing.lastOrderId = order.id;
+        }
+        return;
+      }
+
+      customerMap.set(customerKey, {
+        id: customerKey,
+        displayName: fullName || (isZh ? '未命名客户' : 'Unnamed customer'),
+        phoneNumber: phoneNumber || '-',
+        city: details?.city || '-',
+        state: details?.state || '-',
+        postcode: details?.postcode || '-',
+        address: details?.address || '-',
+        totalSpend: Number(order.total) || 0,
+        orderCount: 1,
+        itemCount,
+        lastOrderDate: order.date,
+        lastOrderTime: orderTime,
+        lastOrderId: order.id,
+      });
+    });
+
+    const customers = Array.from(customerMap.values()).sort((a, b) => {
+      if (b.totalSpend !== a.totalSpend) return b.totalSpend - a.totalSpend;
+      return b.lastOrderTime - a.lastOrderTime;
+    });
+    const totalSpend = customers.reduce((sum, customer) => sum + customer.totalSpend, 0);
+    const totalOrders = customers.reduce((sum, customer) => sum + customer.orderCount, 0);
+    const repeatCustomers = customers.filter(customer => customer.orderCount > 1).length;
+
+    return {
+      customers,
+      totalSpend,
+      totalOrders,
+      repeatCustomers,
+      averageSpend: customers.length > 0 ? totalSpend / customers.length : 0,
+      topCustomer: customers[0] || null,
+    };
+  }, [orderHistory, isZh]);
+
   // Handle Edit Product click
   const handleEditClick = (product: Product) => {
     setEditingProduct(product);
@@ -195,6 +433,13 @@ export default function SellerDashboard({
     setFormPricePerKg(product.pricePerKg);
     setFormAverageWeightKg(product.averageWeightKg);
     setFormImage(product.image || '');
+    setFormMedia(product.media?.length ? product.media : product.image ? [{
+      id: createMediaId('media'),
+      url: product.image,
+      type: 'image',
+      name: 'Cover image',
+    }] : []);
+    setFormVariants(product.variants || []);
     setFormTastingNotesZh(product.tastingNotesZh || '');
     setFormTastingNotesEn(product.tastingNotesEn || '');
     setFormCookingSuggestionsZh(product.cookingSuggestionsZh ? product.cookingSuggestionsZh.join(', ') : '');
@@ -219,6 +464,8 @@ export default function SellerDashboard({
     setFormPricePerKg(50);
     setFormAverageWeightKg(1.2);
     setFormImage('');
+    setFormMedia([]);
+    setFormVariants([]);
     setFormTastingNotesZh('');
     setFormTastingNotesEn('');
     setFormCookingSuggestionsZh('');
@@ -230,7 +477,7 @@ export default function SellerDashboard({
   };
 
   // Handle Add/Save product
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formNameZh || !formNameEn || !formId || formPricePerKg <= 0) {
@@ -239,6 +486,22 @@ export default function SellerDashboard({
     }
 
     const cleanId = formId.toLowerCase().trim().replace(/\s+/g, '-');
+
+    const fallbackImage = 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=800&q=80';
+    const coverImage = formImage.trim() || formMedia.find(media => media.type === 'image')?.url || fallbackImage;
+    const normalizedMedia = formMedia.map(media => ({
+      ...media,
+      name: media.name?.trim() || undefined,
+    }));
+    const normalizedVariants = formVariants.map((variant, index) => ({
+      ...variant,
+      id: variant.id || createMediaId('variant'),
+      nameZh: variant.nameZh.trim() || `规格 ${index + 1}`,
+      nameEn: variant.nameEn.trim() || `Variant ${index + 1}`,
+      weightKg: Number(variant.weightKg) || Number(formAverageWeightKg) || 1,
+      cutType: variant.cutType,
+      image: variant.image || coverImage,
+    }));
 
     const formattedProduct: Product = {
       id: cleanId,
@@ -250,7 +513,9 @@ export default function SellerDashboard({
       descriptionEn: formDescriptionEn.trim(),
       pricePerKg: Number(formPricePerKg),
       averageWeightKg: Number(formAverageWeightKg),
-      image: formImage.trim() || 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=800&q=80',
+      image: coverImage,
+      media: normalizedMedia,
+      variants: normalizedVariants,
       tastingNotesZh: formTastingNotesZh.trim(),
       tastingNotesEn: formTastingNotesEn.trim(),
       cookingSuggestionsZh: formCookingSuggestionsZh.split(',').map(s => s.trim()).filter(Boolean),
@@ -262,6 +527,7 @@ export default function SellerDashboard({
     };
 
     let updatedProducts = [...products];
+    let successMessage = '';
 
     if (isAddingNew) {
       // Check duplicate ID
@@ -270,35 +536,41 @@ export default function SellerDashboard({
         return;
       }
       updatedProducts.push(formattedProduct);
-      triggerSuccess(isZh ? '全新河鱼产品已添加上架！' : 'New river fish product added successfully!');
+      successMessage = isZh ? '全新河鱼产品已添加上架！' : 'New river fish product added successfully!';
     } else {
       // Editing mode
       const index = products.findIndex(p => p.id === editingProduct?.id);
       if (index > -1) {
         updatedProducts[index] = formattedProduct;
-        triggerSuccess(isZh ? '产品信息更新成功！' : 'Product updated successfully!');
+        successMessage = isZh ? '产品信息更新成功！' : 'Product updated successfully!';
       } else {
         triggerError('Product not found in state catalog');
+        return;
       }
     }
 
-    setProducts(updatedProducts);
-    localStorage.setItem('raub_hang_seng_products', JSON.stringify(updatedProducts));
+    try {
+      await setProducts(updatedProducts);
+    } catch {
+      triggerError(isZh ? '媒体文件太大，浏览器本地储存空间不足。请减少视频或使用较小图片。' : 'Media is too large for browser storage. Use smaller images or fewer videos.');
+      return;
+    }
+
+    triggerSuccess(successMessage);
     resetProductForm();
   };
 
   // Handle Delete Product
-  const handleDeleteProduct = (pId: string) => {
+  const handleDeleteProduct = async (pId: string) => {
     if (confirm(isZh ? '确定要下架并删除此河鱼产品吗？' : 'Are you sure you want to delete and unlist this product?')) {
       const filtered = products.filter(p => p.id !== pId);
-      setProducts(filtered);
-      localStorage.setItem('raub_hang_seng_products', JSON.stringify(filtered));
+      await setProducts(filtered);
       triggerSuccess(isZh ? '产品已成功下架。' : 'Product unlisted successfully.');
     }
   };
 
   // Handle Order Status Update
-  const handleUpdateOrderStatus = (orderId: string, status: string) => {
+  const handleUpdateOrderStatus = async (orderId: string, status: string) => {
     const updatedOrders = orderHistory.map(order => {
       if (order.id === orderId) {
         return { ...order, status };
@@ -306,8 +578,7 @@ export default function SellerDashboard({
       return order;
     });
 
-    setOrderHistory(updatedOrders);
-    localStorage.setItem('pahang_river_fish_orders', JSON.stringify(updatedOrders));
+    await setOrderHistory(updatedOrders);
     triggerSuccess(isZh ? `订单 #${orderId} 状态已更新！` : `Order #${orderId} status updated!`);
     
     // Update active detail view if open
@@ -363,6 +634,20 @@ export default function SellerDashboard({
     });
   }, [orderHistory, orderSearch, orderStatusFilter]);
 
+  const filteredCustomers = useMemo(() => {
+    const searchLower = customerSearch.trim().toLowerCase();
+    if (!searchLower) return customerInsights.customers;
+
+    return customerInsights.customers.filter(customer => (
+      customer.displayName.toLowerCase().includes(searchLower) ||
+      customer.phoneNumber.toLowerCase().includes(searchLower) ||
+      customer.city.toLowerCase().includes(searchLower) ||
+      customer.state.toLowerCase().includes(searchLower) ||
+      customer.postcode.toLowerCase().includes(searchLower) ||
+      customer.lastOrderId.toLowerCase().includes(searchLower)
+    ));
+  }, [customerInsights.customers, customerSearch]);
+
   // Filtering products
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
@@ -380,18 +665,18 @@ export default function SellerDashboard({
   }, [products, productSearch, productCategoryFilter]);
 
   return (
-    <div id="seller-dashboard-overlay" className="fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-md flex items-center justify-center p-0 md:p-4 overflow-hidden">
-      <div className="bg-slate-50 w-full h-full md:max-w-7xl md:h-[92vh] md:rounded-2xl border border-slate-200 shadow-2xl flex flex-col overflow-hidden">
+    <div id="seller-dashboard-page" className="rhs-admin-shell min-h-screen bg-slate-100 text-slate-800 overflow-hidden">
+      <div className="rhs-admin-frame bg-slate-50 w-full min-h-screen flex flex-col overflow-hidden">
         
         {/* DASHBOARD HEADER */}
-        <div className="bg-slate-900 text-white p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 gap-4 flex-shrink-0">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-sky-500 text-slate-900 rounded-xl">
-              <Database className="w-6 h-6 text-white" />
+        <div className="rhs-admin-topbar bg-slate-900 text-white p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 gap-3 flex-shrink-0">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-1.5 bg-sky-500 text-white rounded-xl">
+              <Database className="w-5 h-5 text-white" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h2 className="text-lg font-black tracking-wide font-sans text-white">
+                <h2 className="text-base font-black tracking-wide font-sans text-white">
                   {isZh ? '恒升河鱼 • 商家管理后台' : 'Hang Seng River Fish - Admin Panel'}
                 </h2>
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
@@ -412,10 +697,7 @@ export default function SellerDashboard({
 
           <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
             <button
-              onClick={() => {
-                setIsMaintenanceMode(!isMaintenanceMode);
-                triggerSuccess(isMaintenanceMode ? '店面恢复正常营业状态' : '店面已切换到维护重组状态');
-              }}
+              onClick={handleMaintenanceToggle}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 isMaintenanceMode 
                   ? 'bg-amber-600 hover:bg-amber-500 text-white' 
@@ -437,13 +719,13 @@ export default function SellerDashboard({
 
         {/* FEEDBACK SYSTEM FLOATER BAR */}
         {successMsg && (
-          <div className="bg-emerald-500 text-white px-6 py-3 text-xs font-bold flex items-center space-x-2 animate-bounce flex-shrink-0 shadow-inner">
+          <div className="bg-emerald-500 text-white px-6 py-3 text-xs font-bold flex items-center space-x-2 flex-shrink-0 shadow-inner">
             <Check className="w-4 h-4 flex-shrink-0" />
             <span>{successMsg}</span>
           </div>
         )}
         {errorMsg && (
-          <div className="bg-rose-600 text-white px-6 py-3 text-xs font-bold flex items-center space-x-2 animate-bounce flex-shrink-0 shadow-inner">
+          <div className="bg-rose-600 text-white px-6 py-3 text-xs font-bold flex items-center space-x-2 flex-shrink-0 shadow-inner">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
             <span>{errorMsg}</span>
           </div>
@@ -453,13 +735,14 @@ export default function SellerDashboard({
         <div className="flex flex-1 overflow-hidden h-full flex-col md:flex-row">
           
           {/* LEFT RAIL NAVIGATION */}
-          <div className="w-full md:w-64 bg-slate-900 border-r border-slate-800 flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible shrink-0 p-2 md:p-4 gap-1 flex-shrink-0">
+          <div className="rhs-admin-sidebar w-full md:w-64 bg-slate-900 border-r border-slate-800 flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible shrink-0 p-2 md:p-4 gap-1 flex-shrink-0">
             <span className="hidden md:block text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-3 px-3">
               {isZh ? '商家中心管理分类' : 'Merchant Categories'}
             </span>
             {[
               { id: 'overview', zh: '销售分析 Overview', en: 'Sales Analysis', icon: TrendingUp },
               { id: 'orders', zh: '订单管理 Orders', en: 'Orders Manager', icon: ShoppingBag },
+              { id: 'customers', zh: '客户分析 Customers', en: 'Customer Spend', icon: UserIcon },
               { id: 'products', zh: '商品管理 Catalog', en: 'Product Manager', icon: Package },
               { id: 'collections', zh: '鱼类分类 Collections', en: 'Fish Categories', icon: Database },
               { id: 'shipping', zh: '物流物流 Shipping', en: 'Shipment Center', icon: Truck },
@@ -477,11 +760,11 @@ export default function SellerDashboard({
                   }}
                   className={`flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer transition-all ${
                     isActive 
-                      ? 'bg-sky-500 text-slate-950 font-extrabold shadow-md transform translate-x-1' 
+                      ? 'bg-sky-500 text-white font-extrabold shadow-md transform translate-x-1' 
                       : 'text-slate-400 hover:text-white hover:bg-slate-800'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-slate-950' : 'text-slate-500'}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-500'}`} />
                   <span>{isZh ? tab.zh : tab.en}</span>
                 </button>
               );
@@ -489,11 +772,9 @@ export default function SellerDashboard({
           </div>
 
           {/* RIGHT VIEWPORT CONTENT */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 min-h-0">
+          <div className="rhs-admin-main flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 min-h-0">
             
-            {/* ============================================================== */}
-            /* TAB: OVERVIEW                                                  */
-            /* ============================================================== */
+            {/* TAB: OVERVIEW */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
@@ -720,9 +1001,7 @@ export default function SellerDashboard({
               </div>
             )}
 
-            {/* ============================================================== */}
-            /* TAB: ORDERS MANAGER                                            */
-            /* ============================================================== */
+            {/* TAB: ORDERS MANAGER */}
             {activeTab === 'orders' && (
               <div className="space-y-6">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -957,9 +1236,226 @@ export default function SellerDashboard({
               </div>
             )}
 
-            {/* ============================================================== */}
-            /* TAB: PRODUCTS CATALOG MANAGER                                  */
-            /* ============================================================== */
+            {/* TAB: CUSTOMER SPEND ANALYSIS */}
+            {activeTab === 'customers' && (
+              <div className="space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">{isZh ? '客户消费分析' : 'Customer Spend Analysis'}</h3>
+                    <p className="text-xs text-slate-500">
+                      {isZh ? '根据有效订单汇总每位客户的累计消费、订单次数与最近购买记录。' : 'Summarize customer spend, order frequency, and latest purchase from active orders.'}
+                    </p>
+                  </div>
+                  <div className="text-xs font-mono bg-white px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600">
+                    {isZh ? '有效订单:' : 'Active orders:'} {customerInsights.totalOrders}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs flex items-center space-x-3">
+                    <div className="p-2.5 bg-sky-50 text-sky-600 rounded-lg">
+                      <UserIcon className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">{isZh ? '客户人数' : 'Customers'}</span>
+                      <strong className="text-lg font-mono font-black text-slate-950 block">{customerInsights.customers.length}</strong>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs flex items-center space-x-3">
+                    <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                      <DollarSign className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">{isZh ? '客户总消费' : 'Customer Spend'}</span>
+                      <strong className="text-lg font-mono font-black text-slate-950 block">RM {customerInsights.totalSpend.toFixed(2)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs flex items-center space-x-3">
+                    <div className="p-2.5 bg-amber-50 text-amber-600 rounded-lg">
+                      <Award className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">{isZh ? '回购客户' : 'Repeat Buyers'}</span>
+                      <strong className="text-lg font-mono font-black text-slate-950 block">{customerInsights.repeatCustomers}</strong>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-xs flex items-center space-x-3">
+                    <div className="p-2.5 bg-slate-100 text-slate-700 rounded-lg">
+                      <TrendingUp className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-bold">{isZh ? '人均消费' : 'Avg per Customer'}</span>
+                      <strong className="text-lg font-mono font-black text-slate-950 block">RM {customerInsights.averageSpend.toFixed(2)}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                  <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden xl:col-span-8">
+                    <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-800">{isZh ? '客户消费排行榜' : 'Customer Spend List'}</h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          {isZh ? '按累计消费排序，可搜索姓名、电话、城市或订单号。' : 'Sorted by lifetime spend. Search by name, phone, city, or order ID.'}
+                        </p>
+                      </div>
+                      <div className="relative w-full md:w-80">
+                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder={isZh ? '搜索客户、电话、地区...' : 'Search customer, phone, area...'}
+                          value={customerSearch}
+                          onChange={(e) => setCustomerSearch(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+                    </div>
+
+                    {filteredCustomers.length === 0 ? (
+                      <div className="p-10 text-center text-slate-400 text-xs">
+                        <UserIcon className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+                        {isZh ? '暂无客户消费记录。客户下单后会自动出现在这里。' : 'No customer spend records yet. Customers appear here after valid orders.'}
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 uppercase tracking-wider font-bold">
+                              <th className="p-3">{isZh ? '客户' : 'Customer'}</th>
+                              <th className="p-3">{isZh ? '地区' : 'Area'}</th>
+                              <th className="p-3 text-center">{isZh ? '订单' : 'Orders'}</th>
+                              <th className="p-3 text-right">{isZh ? '累计消费' : 'Spend'}</th>
+                              <th className="p-3 text-right">{isZh ? '最近订单' : 'Latest'}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {filteredCustomers.map((customer, index) => (
+                              <tr key={customer.id} className="hover:bg-slate-50/70 transition-colors">
+                                <td className="p-3 min-w-52">
+                                  <div className="flex items-center space-x-3">
+                                    <span className="w-7 h-7 rounded-full bg-sky-50 text-sky-700 border border-sky-100 flex items-center justify-center font-mono font-black text-[11px] shrink-0">
+                                      {index + 1}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <strong className="text-slate-900 block truncate">{customer.displayName}</strong>
+                                      <span className="text-[10px] text-slate-500 font-mono block truncate">{customer.phoneNumber}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="p-3 min-w-44">
+                                  <span className="text-slate-700 font-semibold block">{customer.city}, {customer.state}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono block">{customer.postcode}</span>
+                                </td>
+                                <td className="p-3 text-center">
+                                  <strong className="text-slate-900 font-mono block">{customer.orderCount}</strong>
+                                  <span className="text-[10px] text-slate-400">{customer.itemCount} {isZh ? '件商品' : 'items'}</span>
+                                </td>
+                                <td className="p-3 text-right">
+                                  <strong className="font-mono font-black text-emerald-600 block">RM {customer.totalSpend.toFixed(2)}</strong>
+                                  <span className="text-[10px] text-slate-400">
+                                    RM {(customer.totalSpend / customer.orderCount).toFixed(2)} {isZh ? '/ 单' : '/ order'}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-right min-w-36">
+                                  <span className="text-[10px] text-slate-500 font-mono block">{customer.lastOrderDate}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOrderSearch(customer.phoneNumber !== '-' ? customer.phoneNumber : customer.displayName);
+                                      setOrderStatusFilter('all');
+                                      setSelectedOrderDetail(null);
+                                      setActiveTab('orders');
+                                    }}
+                                    className="text-sky-600 hover:text-sky-500 font-bold text-[11px] underline cursor-pointer mt-1"
+                                  >
+                                    #{customer.lastOrderId}
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="xl:col-span-4 space-y-4">
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                      <h4 className="text-xs font-bold text-slate-800 mb-3">{isZh ? '最高消费客户' : 'Top Customer'}</h4>
+                      {customerInsights.topCustomer ? (
+                        <div className="space-y-4">
+                          <div className="flex items-start space-x-3">
+                            <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600">
+                              <Award className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <strong className="text-slate-900 block truncate">{customerInsights.topCustomer.displayName}</strong>
+                              <span className="text-[10px] text-slate-500 font-mono">{customerInsights.topCustomer.phoneNumber}</span>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
+                              <span className="text-slate-400 block text-[10px]">{isZh ? '累计消费' : 'Spend'}</span>
+                              <strong className="font-mono text-slate-900">RM {customerInsights.topCustomer.totalSpend.toFixed(2)}</strong>
+                            </div>
+                            <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
+                              <span className="text-slate-400 block text-[10px]">{isZh ? '订单次数' : 'Orders'}</span>
+                              <strong className="font-mono text-slate-900">{customerInsights.topCustomer.orderCount}</strong>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const topCustomer = customerInsights.topCustomer;
+                              if (!topCustomer) return;
+                              setOrderSearch(topCustomer.phoneNumber !== '-' ? topCustomer.phoneNumber : topCustomer.displayName);
+                              setOrderStatusFilter('all');
+                              setSelectedOrderDetail(null);
+                              setActiveTab('orders');
+                            }}
+                            className="w-full py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                          >
+                            {isZh ? '查看客户订单' : 'View Customer Orders'}
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400">{isZh ? '暂无客户数据。' : 'No customer data yet.'}</p>
+                      )}
+                    </div>
+
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                      <h4 className="text-xs font-bold text-slate-800 mb-3">{isZh ? '回购概况' : 'Repeat Buyer Snapshot'}</h4>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500">{isZh ? '回购率' : 'Repeat rate'}</span>
+                          <strong className="font-mono text-slate-900">
+                            {customerInsights.customers.length > 0 ? ((customerInsights.repeatCustomers / customerInsights.customers.length) * 100).toFixed(0) : 0}%
+                          </strong>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-500 rounded-full"
+                            style={{
+                              width: `${customerInsights.customers.length > 0 ? (customerInsights.repeatCustomers / customerInsights.customers.length) * 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-relaxed pt-2">
+                          {isZh
+                            ? '此分析来自订单记录，不包含已取消订单。可用于判断老客户回购与高消费客户。'
+                            : 'This view is derived from order records and excludes cancelled orders. Use it to spot repeat buyers and high-value customers.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: PRODUCTS CATALOG MANAGER */}
             {activeTab === 'products' && (
               <div className="space-y-6">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1042,6 +1538,9 @@ export default function SellerDashboard({
                             <p className="text-[10px] text-slate-400 font-mono italic truncate">{prod.scientificName}</p>
                             <p className="text-xs text-slate-950 font-bold font-mono mt-0.5">
                               RM {prod.pricePerKg}/kg <span className="text-[10px] text-slate-400 font-normal">({prod.averageWeightKg}kg/avg)</span>
+                            </p>
+                            <p className="text-[10px] text-slate-500 mt-1">
+                              {(prod.media?.length || 0)} {isZh ? '个媒体' : 'media'} · {(prod.variants?.length || 0)} {isZh ? '个规格图' : 'variant photos'}
                             </p>
                           </div>
 
@@ -1248,6 +1747,195 @@ export default function SellerDashboard({
                         />
                       </div>
 
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                              <ImageIcon className="w-3.5 h-3.5 text-sky-600" />
+                              {isZh ? '产品媒体图库' : 'Product Media Gallery'}
+                            </h5>
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              {isZh ? '可上传多张图片或视频；图片可设为产品封面。' : 'Upload multiple photos or videos; images can be used as the cover.'}
+                            </p>
+                          </div>
+                          <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-sky-300 text-slate-700 text-[11px] font-bold cursor-pointer">
+                            <Upload className="w-3.5 h-3.5 text-sky-600" />
+                            <span>{isZh ? '上传媒体' : 'Upload'}</span>
+                            <input
+                              type="file"
+                              accept="image/*,video/*"
+                              multiple
+                              onChange={handleMediaUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+
+                        {formMedia.length === 0 ? (
+                          <div className="border border-dashed border-slate-300 rounded-xl p-4 text-center text-[11px] text-slate-500">
+                            {isZh ? '还没有上传媒体。保存时会使用上方图片 URL 作为封面。' : 'No media uploaded yet. The image URL above will be used as the cover.'}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {formMedia.map(media => (
+                              <div key={media.id} className="relative rounded-lg overflow-hidden border border-slate-200 bg-white">
+                                <div className="aspect-[4/3] bg-slate-100">
+                                  {media.type === 'video' ? (
+                                    <video src={media.url} className="w-full h-full object-cover" muted />
+                                  ) : (
+                                    <img src={media.url} alt={media.name || 'Product media'} className="w-full h-full object-cover" />
+                                  )}
+                                </div>
+                                <div className="p-2 space-y-1.5">
+                                  <div className="flex items-center gap-1 text-[10px] text-slate-500 min-w-0">
+                                    {media.type === 'video' ? <Video className="w-3 h-3 shrink-0" /> : <ImageIcon className="w-3 h-3 shrink-0" />}
+                                    <span className="truncate">{media.name || media.type}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    {media.type === 'image' && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setFormImage(media.url)}
+                                        className={`flex-1 px-2 py-1 rounded-md text-[10px] font-bold border cursor-pointer ${
+                                          formImage === media.url
+                                            ? 'bg-sky-50 text-sky-700 border-sky-200'
+                                            : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300'
+                                        }`}
+                                      >
+                                        {formImage === media.url ? (isZh ? '封面' : 'Cover') : (isZh ? '设封面' : 'Set cover')}
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveMedia(media.id)}
+                                      className="px-2 py-1 rounded-md border border-slate-200 bg-white text-slate-500 hover:text-rose-600 hover:border-rose-200 cursor-pointer"
+                                      aria-label={isZh ? '删除媒体' : 'Remove media'}
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                              <Package className="w-3.5 h-3.5 text-emerald-600" />
+                              {isZh ? '规格图片' : 'Variant Photos'}
+                            </h5>
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              {isZh ? '每个规格保留一张照片，前台选择规格时会同步切换。' : 'Each variant keeps one photo and switches on the storefront when selected.'}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleAddVariant}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-emerald-300 text-slate-700 text-[11px] font-bold cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>{isZh ? '新增规格' : 'Add variant'}</span>
+                          </button>
+                        </div>
+
+                        {formVariants.length === 0 ? (
+                          <div className="border border-dashed border-slate-300 rounded-xl p-4 text-center text-[11px] text-slate-500">
+                            {isZh ? '没有规格图片时，前台会使用单条估重与清洗方式选择。' : 'Without variants, the storefront uses the standard weight and processing selectors.'}
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {formVariants.map((variant, index) => (
+                              <div key={variant.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                                <div className="flex gap-3">
+                                  <div className="w-24 shrink-0">
+                                    <div className="aspect-square rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+                                      {variant.image ? (
+                                        <img src={variant.image} alt={variant.nameEn || 'Variant'} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                          <ImageIcon className="w-7 h-7" />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <label className="mt-2 w-full inline-flex items-center justify-center px-2 py-1.5 rounded-md border border-slate-200 bg-slate-50 hover:border-sky-300 text-[10px] font-bold text-slate-600 cursor-pointer">
+                                      {isZh ? '上传照片' : 'Upload photo'}
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handleVariantImageUpload(index, e)}
+                                        className="hidden"
+                                      />
+                                    </label>
+                                  </div>
+
+                                  <div className="flex-1 min-w-0 space-y-2">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <input
+                                        type="text"
+                                        value={variant.nameZh}
+                                        onChange={(e) => handleUpdateVariant(index, { nameZh: e.target.value })}
+                                        placeholder={isZh ? '中文规格名' : 'Chinese label'}
+                                        className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={variant.nameEn}
+                                        onChange={(e) => handleUpdateVariant(index, { nameEn: e.target.value })}
+                                        placeholder="Variant label"
+                                        className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                      />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        value={variant.weightKg}
+                                        onChange={(e) => handleUpdateVariant(index, { weightKg: Number(e.target.value) })}
+                                        className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono"
+                                      />
+                                      <select
+                                        value={variant.cutType}
+                                        onChange={(e) => handleUpdateVariant(index, { cutType: e.target.value as ProductCutType })}
+                                        className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                      >
+                                        <option value="cleaned">{isZh ? '活杀去内脏' : 'Cleaned'}</option>
+                                        <option value="whole">{isZh ? '完整整条' : 'Whole'}</option>
+                                        <option value="steak">{isZh ? '厚段轮切' : 'Steak'}</option>
+                                        <option value="sliced">{isZh ? '薄切鱼片' : 'Sliced'}</option>
+                                        <option value="fillet">{isZh ? '去骨鱼片' : 'Fillet'}</option>
+                                      </select>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                      <input
+                                        type="text"
+                                        value={variant.image}
+                                        onChange={(e) => handleUpdateVariant(index, { image: e.target.value })}
+                                        placeholder={isZh ? '或贴上规格图片 URL' : 'Or paste variant photo URL'}
+                                        className="flex-1 min-w-0 text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveVariant(index)}
+                                        className="px-2.5 rounded-lg border border-slate-200 text-slate-500 hover:text-rose-600 hover:border-rose-200 cursor-pointer"
+                                        aria-label={isZh ? '删除规格' : 'Remove variant'}
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[10px] font-bold text-slate-500 uppercase">
@@ -1342,26 +2030,29 @@ export default function SellerDashboard({
               </div>
             )}
 
-            {/* ============================================================== */}
-            /* TAB: COLLECTIONS & CATEGORIES                                  */
-            /* ============================================================== */
+            {/* TAB: COLLECTIONS & CATEGORIES */}
             {activeTab === 'collections' && (
               <div className="space-y-6">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">{isZh ? '彭亨河鱼特许品类管理' : 'Fish Collections Management'}</h3>
-                  <p className="text-xs text-slate-500">{isZh ? '规划和查阅在售商品所属的彭亨分类。每一品类可统计库存覆盖情况' : 'Review active collections, total species listings and health status.'}</p>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">{isZh ? '首页系列展示管理' : 'Landing Collections Manager'}</h3>
+                    <p className="text-xs text-slate-500">{isZh ? '管理首页中段系列卡片。每个系列可设置专属图片、缩放比例与裁切焦点。' : 'Manage the landing-page collection cards. Each collection supports its own image, zoom, and crop focus.'}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveCollections}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-md cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{isZh ? '保存首页系列设置' : 'Save Landing Collections'}</span>
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {[
-                    { id: 'premium', titleZh: '尊贵极品 (Premium)', titleEn: 'Premium Imperial Collection', descZh: '大马最国宴级的顶级河鱼，如忘不了鱼 (Empurau) 和苏丹鱼 (Jelawat)，以果实为食，肉质细嫩，深受高端贵宾顾客及企业大宗礼盒送礼喜爱。', descEn: 'State-banquet caliber species feeding on specific riverine fruits, delivering unparalleled rich, fragrant fat and unique edible crispy scales.' },
-                    { id: 'wild', titleZh: '野生捕捞 (100% Wild Caught)', titleEn: '100% Mainstream Wild Caught', descZh: '纯由彭亨河当地原住民和熟练渔民在急流主流手工捕捉捕捞的鱼类。由于生长环境水流湍急，鱼肉富有弹性，无任何饲养痕迹和泥土杂味。', descEn: 'Hand-captured in fast currents by skilled local fishermen. Due to rapids, their bodies are hyper-muscled, completely avoiding any farm flavors or mud smell.' },
-                    { id: 'aquaculture', titleZh: '清泉网箱养殖 (Cage Aquaculture)', titleEn: 'Temerloh Spring Cage Aquaculture', descZh: '位于巴丁鱼之乡特马鲁（Temerloh）的主流高流速网箱养殖。引清澈湍急的河水冲刷，并以天然优质谷物精心科学喂养。性价比极高，家庭清蒸首选。', descEn: 'Cultured inside high-speed river pens in Temerloh, fed with specialized clean grain feed. Represents perfect household value and daily culinary delight.' },
-                    { id: 'wellness', titleZh: '养生调理 (Wellness Series)', titleEn: 'Maternity & Post-Op Wellness', descZh: '以野生生鱼 (Haruan/Channa) 为主打。由于生鱼体内富含促进人体组织快速生长复原的多种高价值氨基酸，历来为大马产后孕妇和外科术后调养必备。', descEn: 'Traditional health species led by swamp-caught Snakehead (Haruan), holding dense natural amino acids to assist skin cellular restoration.' },
-                  ].map(coll => {
+                  {collectionDrafts.map(coll => {
                     const matchedProds = products.filter(p => p.category === coll.id);
                     return (
-                      <div key={coll.id} className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-3">
+                      <div key={coll.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-4">
                         <div className="flex justify-between items-start">
                           <div>
                             <span className="text-[10px] text-slate-400 font-mono block">CATEGORY_KEY: {coll.id.toUpperCase()}</span>
@@ -1372,9 +2063,93 @@ export default function SellerDashboard({
                           </span>
                         </div>
 
-                        <p className="text-xs text-slate-600 leading-relaxed">
-                          {isZh ? coll.descZh : coll.descEn}
-                        </p>
+                        <div className="grid sm:grid-cols-[180px_1fr] gap-4">
+                          <div className="space-y-2">
+                            <div className="relative aspect-[5/4] overflow-hidden rounded-xl bg-slate-100 border border-slate-200">
+                              <img
+                                src={coll.image}
+                                alt={isZh ? coll.titleZh : coll.titleEn}
+                                className="absolute inset-0 w-full h-full object-cover"
+                                style={{
+                                  objectPosition: `${coll.imagePositionX}% ${coll.imagePositionY}%`,
+                                  transform: `scale(${coll.imageScale})`,
+                                  transformOrigin: `${coll.imagePositionX}% ${coll.imagePositionY}%`,
+                                }}
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
+                            <label className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-sky-300 text-slate-700 text-[11px] font-bold cursor-pointer">
+                              <Upload className="w-3.5 h-3.5 text-sky-600" />
+                              <span>{isZh ? '上传系列图片' : 'Upload image'}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleCollectionImageUpload(coll.id, e)}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                {isZh ? '首页图片 URL' : 'Landing image URL'}
+                              </label>
+                              <input
+                                type="text"
+                                value={coll.image}
+                                onChange={(e) => handleUpdateCollectionDraft(coll.id, { image: e.target.value })}
+                                className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <label className="block">
+                                <span className="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                  <span>{isZh ? '左右裁切' : 'Crop X'}</span>
+                                  <span>{Math.round(coll.imagePositionX)}%</span>
+                                </span>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  value={coll.imagePositionX}
+                                  onChange={(e) => handleUpdateCollectionDraft(coll.id, { imagePositionX: Number(e.target.value) })}
+                                  className="w-full accent-sky-600"
+                                />
+                              </label>
+                              <label className="block">
+                                <span className="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                  <span>{isZh ? '上下裁切' : 'Crop Y'}</span>
+                                  <span>{Math.round(coll.imagePositionY)}%</span>
+                                </span>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  value={coll.imagePositionY}
+                                  onChange={(e) => handleUpdateCollectionDraft(coll.id, { imagePositionY: Number(e.target.value) })}
+                                  className="w-full accent-sky-600"
+                                />
+                              </label>
+                              <label className="block">
+                                <span className="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                  <span>{isZh ? '缩放' : 'Zoom'}</span>
+                                  <span>{coll.imageScale.toFixed(2)}x</span>
+                                </span>
+                                <input
+                                  type="range"
+                                  min="1"
+                                  max="1.8"
+                                  step="0.05"
+                                  value={coll.imageScale}
+                                  onChange={(e) => handleUpdateCollectionDraft(coll.id, { imageScale: Number(e.target.value) })}
+                                  className="w-full accent-sky-600"
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        </div>
 
                         <div className="border-t border-slate-100 pt-3 flex flex-wrap gap-2">
                           <span className="text-[10px] text-slate-400 font-bold block w-full">{isZh ? '下辖主要产品:' : 'Active species under this collection:'}</span>
@@ -1391,9 +2166,7 @@ export default function SellerDashboard({
               </div>
             )}
 
-            {/* ============================================================== */}
-            /* TAB: SHIPPING RATES                                            */
-            /* ============================================================== */
+            {/* TAB: SHIPPING RATES */}
             {activeTab === 'shipping' && (
               <div className="space-y-6">
                 <div>
@@ -1447,10 +2220,12 @@ export default function SellerDashboard({
 
                       <button
                         type="button"
-                        onClick={() => {
-                          localStorage.setItem('raub_hang_seng_free_shipping', String(freeShippingThreshold));
-                          localStorage.setItem('raub_hang_seng_local_rate', String(localShippingRate));
-                          localStorage.setItem('raub_hang_seng_outstation_rate', String(outstationShippingRate));
+                        onClick={async () => {
+                          await onSaveSettings?.({
+                            freeShippingThreshold,
+                            localShippingRate,
+                            outstationShippingRate,
+                          });
                           triggerSuccess(isZh ? '西马物流配送价格微调同步成功！' : 'Shipping rates updated & saved successfully!');
                         }}
                         className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold cursor-pointer transition-colors mt-2"
@@ -1531,9 +2306,7 @@ export default function SellerDashboard({
               </div>
             )}
 
-            {/* ============================================================== */}
-            /* TAB: STOREFRONT SETTINGS                                       */
-            /* ============================================================== */
+            {/* TAB: STOREFRONT SETTINGS */}
             {activeTab === 'settings' && (
               <div className="space-y-6">
                 <div>
@@ -1552,12 +2325,7 @@ export default function SellerDashboard({
                   <div className="space-y-3">
                     <textarea
                       value={storeAnnouncement}
-                      onChange={(e) => setFormDescriptionZh(e.target.value)} // Temporary save state in existing text handler or update directly
-                      onBlur={() => {
-                        // Store the blur value as active announcement
-                        setStoreAnnouncement(formDescriptionZh);
-                        localStorage.setItem('raub_hang_seng_announcement', formDescriptionZh);
-                      }}
+                      onChange={(e) => setStoreAnnouncement(e.target.value)}
                       rows={3}
                       placeholder={isZh ? '输入公告。例：【公告】由于近期河水上涨，忘不了鱼捕捞量有限，下单前请WhatsApp客服核对现货！' : 'Enter announcement, e.g. Due to rapid river levels rising, Wild caught Empurau is strictly limited!'}
                       className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl"
@@ -1567,8 +2335,8 @@ export default function SellerDashboard({
                         {isZh ? '💡 输入完成后点击下方按钮将永久保存' : '💡 Values will lock to client memory when saved.'}
                       </span>
                       <button
-                        onClick={() => {
-                          localStorage.setItem('raub_hang_seng_announcement', storeAnnouncement);
+                        onClick={async () => {
+                          await onSaveSettings?.({ storeAnnouncement });
                           triggerSuccess(isZh ? '网站顶部公告更新成功！' : 'Top announcement banner synced successfully!');
                         }}
                         className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer"
@@ -1590,10 +2358,7 @@ export default function SellerDashboard({
                       </p>
                     </div>
                     <button
-                      onClick={() => {
-                        setIsMaintenanceMode(!isMaintenanceMode);
-                        triggerSuccess(isMaintenanceMode ? '店面开启运作' : '店面封存维护');
-                      }}
+                      onClick={handleMaintenanceToggle}
                       className={`px-4 py-2 rounded-xl font-bold whitespace-nowrap cursor-pointer transition-colors ${
                         isMaintenanceMode 
                           ? 'bg-amber-600 text-white hover:bg-amber-500' 

@@ -7,9 +7,10 @@ interface ProductDetailModalProps {
   language: Language;
   onClose: () => void;
   onAddToCart: (product: Product, quantity: number, weightKg: number, cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet') => void;
+  orderingPaused?: boolean;
 }
 
-export default function ProductDetailModal({ product, language, onClose, onAddToCart }: ProductDetailModalProps) {
+export default function ProductDetailModal({ product, language, onClose, onAddToCart, orderingPaused = false }: ProductDetailModalProps) {
   const isZh = language === 'zh';
 
   // Modal local settings
@@ -20,6 +21,8 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
   const calculatedTotalPrice = product.pricePerKg * weightKg * quantity;
 
   const handleAdd = () => {
+    if (orderingPaused) return;
+
     onAddToCart(product, quantity, weightKg, cutType);
     onClose();
   };
@@ -30,12 +33,12 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* Modal Container */}
-      <div className="relative w-full max-w-4xl bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xl z-10 my-8">
+      <div className="relative w-full max-w-4xl rhs-panel border rounded-2xl overflow-hidden shadow-2xl z-10 my-8">
         
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-20 p-2 rounded-full bg-white/80 hover:bg-white text-slate-500 hover:text-slate-850 border border-slate-200 transition-colors cursor-pointer"
+          className="absolute top-4 right-4 z-20 p-2 rounded-full bg-[#f8fbfa]/85 hover:bg-[#f8fbfa] text-slate-500 hover:text-slate-850 border border-[#c4d5d9] transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
@@ -48,7 +51,7 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
             <img
               src={product.image}
               alt={isZh ? product.nameZh : product.nameEn}
-              className="w-full h-full object-cover saturate-[0.9]"
+              className={`w-full h-full object-cover saturate-[0.9] ${orderingPaused ? 'grayscale opacity-70' : ''}`}
               referrerPolicy="no-referrer"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-100 via-transparent to-transparent opacity-90 md:bg-gradient-to-r md:from-transparent md:via-transparent md:to-slate-100/60" />
@@ -65,7 +68,7 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
           </div>
 
           {/* Right Column: Detailed info */}
-          <div className="p-6 md:p-8 md:col-span-7 flex flex-col justify-between space-y-6 max-h-[85vh] overflow-y-auto bg-white">
+          <div className="p-6 md:p-8 md:col-span-7 flex flex-col justify-between space-y-6 max-h-[85vh] overflow-y-auto rhs-panel">
             
             {/* Title block */}
             <div className="space-y-2">
@@ -87,7 +90,7 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
             </p>
 
             {/* Tasting Notes */}
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+            <div className="p-3.5 rhs-panel-soft rounded-xl border space-y-1">
               <span className="text-[10px] uppercase font-bold tracking-wider text-amber-600 font-mono flex items-center">
                 <Flame className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
                 {isZh ? '风味特征 & 肉质' : 'Flavor Profile & Texture'}
@@ -107,7 +110,7 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
                 {(isZh ? product.cookingSuggestionsZh : product.cookingSuggestionsEn).map((style, index) => (
                   <span
                     key={index}
-                    className="px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 rounded-lg text-xs font-semibold"
+                    className="px-3 py-1.5 bg-[#f8fbfa] border border-[#c4d5d9] hover:border-[#a8c1c7] text-slate-700 rounded-lg text-xs font-semibold"
                   >
                     {style}
                   </span>
@@ -126,7 +129,14 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
             </div>
 
             {/* Configuration selection parameters */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+            <div className="rhs-panel-soft p-4 rounded-xl border space-y-4">
+              {orderingPaused && (
+                <div className="rounded-lg border border-slate-200 bg-slate-100 p-3 text-xs font-semibold leading-5 text-slate-600">
+                  {isZh
+                    ? '产品更新维护中，暂时不能选择规格或加入购物车。'
+                    : 'Product update in progress. Selection and cart are temporarily paused.'}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 {/* Weight selector */}
                 <div className="space-y-1.5">
@@ -136,7 +146,8 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
                   <select
                     value={weightKg}
                     onChange={(e) => setWeightKg(parseFloat(e.target.value))}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-mono text-slate-850 text-xs focus:outline-none focus:border-sky-500 cursor-pointer focus:ring-1 focus:ring-sky-500"
+                    disabled={orderingPaused}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-mono text-slate-850 text-xs focus:outline-none focus:border-sky-500 cursor-pointer focus:ring-1 focus:ring-sky-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     <option value={product.averageWeightKg * 0.8}>
                       {(product.averageWeightKg * 0.8).toFixed(1)} kg ({isZh ? '小' : 'Small'})
@@ -150,6 +161,9 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
                     <option value={product.averageWeightKg * 1.6}>
                       {(product.averageWeightKg * 1.6).toFixed(1)} kg ({isZh ? '极品特大' : 'Extra Large'})
                     </option>
+                    <option value="whatsapp-custom-weight" disabled>
+                      {isZh ? '其他规格请 WhatsApp 客服' : 'Other size? Contact WhatsApp'}
+                    </option>
                   </select>
                 </div>
 
@@ -161,12 +175,16 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
                   <select
                     value={cutType}
                     onChange={(e) => setCutType(e.target.value as any)}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-slate-850 text-xs focus:outline-none focus:border-sky-500 cursor-pointer focus:ring-1 focus:ring-sky-500"
+                    disabled={orderingPaused}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-slate-850 text-xs focus:outline-none focus:border-sky-500 cursor-pointer focus:ring-1 focus:ring-sky-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     <option value="cleaned">{isZh ? '活杀去鳃去肚 (Cleaned)' : 'Gutted & Scaled'}</option>
                     <option value="whole">{isZh ? '完整整条 (Whole Fish)' : 'Whole intact'}</option>
                     <option value="steak">{isZh ? '切大厚片 (Steak Cut)' : 'Thick Steaks'}</option>
                     <option value="fillet">{isZh ? '无刺纯鱼片 (Fillet Cut)' : 'Boneless Fillet'}</option>
+                    <option value="whatsapp-custom-cut" disabled>
+                      {isZh ? '特殊处理请 WhatsApp 客服' : 'Custom cut? Contact WhatsApp'}
+                    </option>
                   </select>
                 </div>
               </div>
@@ -180,14 +198,16 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
                   <div className="flex items-center border border-slate-200 bg-white rounded-lg mt-1">
                     <button
                       onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="px-3 py-1.5 text-slate-500 hover:text-slate-800 font-bold cursor-pointer text-xs"
+                      disabled={orderingPaused}
+                      className="px-3 py-1.5 text-slate-500 hover:text-slate-800 font-bold cursor-pointer text-xs disabled:text-slate-300 disabled:cursor-not-allowed"
                     >
                       -
                     </button>
                     <span className="px-3 text-slate-800 font-mono font-bold text-xs">{quantity}</span>
                     <button
                       onClick={() => setQuantity(quantity + 1)}
-                      className="px-3 py-1.5 text-slate-500 hover:text-slate-800 font-bold cursor-pointer text-xs"
+                      disabled={orderingPaused}
+                      className="px-3 py-1.5 text-slate-500 hover:text-slate-800 font-bold cursor-pointer text-xs disabled:text-slate-300 disabled:cursor-not-allowed"
                     >
                       +
                     </button>
@@ -216,13 +236,20 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
               </button>
               <button
                 onClick={handleAdd}
-                className="w-2/3 flex items-center justify-center space-x-2 py-3 rounded-xl bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-bold text-xs md:text-sm cursor-pointer transition-all shadow-lg active:scale-95 shadow-xs"
+                disabled={orderingPaused}
+                className={`w-2/3 flex items-center justify-center space-x-2 py-3 rounded-xl font-bold text-xs md:text-sm transition-all shadow-xs ${
+                  orderingPaused
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white cursor-pointer shadow-lg active:scale-95'
+                }`}
               >
                 <ShoppingCart className="w-4 h-4" />
-                <span>{isZh ? '加入购物车' : 'Add To Cart'}</span>
-                <span className="font-mono bg-sky-950/20 px-2 py-0.5 rounded text-[10px] ml-1">
-                  RM {calculatedTotalPrice.toFixed(0)}
-                </span>
+                <span>{orderingPaused ? (isZh ? '维护中暂不可下单' : 'Ordering Paused') : (isZh ? '加入购物车' : 'Add To Cart')}</span>
+                {!orderingPaused && (
+                  <span className="font-mono bg-sky-950/20 px-2 py-0.5 rounded text-[10px] ml-1">
+                    RM {calculatedTotalPrice.toFixed(0)}
+                  </span>
+                )}
               </button>
             </div>
           </div>

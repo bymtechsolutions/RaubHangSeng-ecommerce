@@ -6,19 +6,29 @@ interface PolicyViewProps {
   initialPolicyType: 'privacy' | 'terms' | 'refund';
   language: Language;
   onClose: () => void;
+  onPolicyChange?: (policyType: 'privacy' | 'terms' | 'refund') => void;
 }
 
-export default function PolicyView({ initialPolicyType, language, onClose }: PolicyViewProps) {
+export default function PolicyView({ initialPolicyType, language, onClose, onPolicyChange }: PolicyViewProps) {
   const [activeTab, setActiveTab] = React.useState<'privacy' | 'terms' | 'refund'>(initialPolicyType);
   const isZh = language === 'zh';
+
+  const handleTabChange = (policyType: 'privacy' | 'terms' | 'refund') => {
+    setActiveTab(policyType);
+    onPolicyChange?.(policyType);
+  };
 
   // Automatically scroll to top when page opens or tab changes
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
 
+  useEffect(() => {
+    setActiveTab(initialPolicyType);
+  }, [initialPolicyType]);
+
   return (
-    <div className="min-h-screen bg-slate-50/60 pt-24 pb-20 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen rhs-page-shell pt-24 pb-20 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         
         {/* Back Button and Header Navigation */}
@@ -32,12 +42,12 @@ export default function PolicyView({ initialPolicyType, language, onClose }: Pol
           </button>
 
           {/* Inline Tab Navigation */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-inner">
+          <div className="flex bg-[#d2e1e3] p-1 rounded-xl border border-[#c4d5d9] shadow-inner">
             <button
-              onClick={() => setActiveTab('privacy')}
+              onClick={() => handleTabChange('privacy')}
               className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'privacy'
-                  ? 'bg-white text-sky-600 shadow-sm'
+                  ? 'rhs-panel text-sky-600 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -45,10 +55,10 @@ export default function PolicyView({ initialPolicyType, language, onClose }: Pol
               <span>{isZh ? '隐私政策' : 'Privacy'}</span>
             </button>
             <button
-              onClick={() => setActiveTab('terms')}
+              onClick={() => handleTabChange('terms')}
               className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'terms'
-                  ? 'bg-white text-sky-600 shadow-sm'
+                  ? 'rhs-panel text-sky-600 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -56,10 +66,10 @@ export default function PolicyView({ initialPolicyType, language, onClose }: Pol
               <span>{isZh ? '服务条款' : 'Terms'}</span>
             </button>
             <button
-              onClick={() => setActiveTab('refund')}
+              onClick={() => handleTabChange('refund')}
               className={`flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'refund'
-                  ? 'bg-white text-sky-600 shadow-sm'
+                  ? 'rhs-panel text-sky-600 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -70,7 +80,7 @@ export default function PolicyView({ initialPolicyType, language, onClose }: Pol
         </div>
 
         {/* Content Card */}
-        <div className="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden p-6 sm:p-10 md:p-12">
+        <div className="rhs-panel border rounded-3xl shadow-sm overflow-hidden p-6 sm:p-10 md:p-12">
           
           {/* TAB 1: PRIVACY POLICY */}
           {activeTab === 'privacy' && (

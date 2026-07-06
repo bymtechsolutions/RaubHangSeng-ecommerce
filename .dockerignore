@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-server
+server/data
+.git
+.env
+.env.*
+!.env.example
+*.log
+coverage
+qa-*.png
+design-qa.md
+Dockerfile
+docker-compose*.yml

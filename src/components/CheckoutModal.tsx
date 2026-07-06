@@ -180,18 +180,18 @@ export default function CheckoutModal({
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* Modal box */}
-      <div className="relative w-full max-w-3xl bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xl z-10 my-8">
+      <div className="relative w-full max-w-3xl rhs-panel border rounded-2xl overflow-hidden shadow-2xl z-10 my-8">
         
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-20 p-2 rounded-full bg-white/80 hover:bg-white text-slate-500 hover:text-slate-850 border border-slate-200 transition-colors cursor-pointer"
+          className="absolute top-4 right-4 z-20 p-2 rounded-full bg-[#f8fbfa]/85 hover:bg-[#f8fbfa] text-slate-500 hover:text-slate-850 border border-[#c4d5d9] transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Modal Header */}
-        <div className="p-5 border-b border-slate-150 bg-slate-50">
+        <div className="p-5 border-b border-[#c4d5d9] rhs-panel-soft">
           <h3 className="text-xl font-bold text-slate-900 flex items-center">
             <ClipboardCheck className="w-5 h-5 mr-2 text-sky-600" />
             {isZh ? '确认订单与配送资料' : 'Confirm Order & Delivery Details'}
@@ -204,7 +204,7 @@ export default function CheckoutModal({
         </div>
 
         {/* Form Body split into columns */}
-        <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6 max-h-[75vh] overflow-y-auto bg-white">
+        <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6 max-h-[75vh] overflow-y-auto rhs-panel">
           
           {/* Left Column: Form Inputs (7 Cols) */}
           <div className="md:col-span-7 space-y-4">
@@ -228,7 +228,7 @@ export default function CheckoutModal({
                 </span>
               </div>
             ) : (
-              <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between gap-3">
+              <div className="rhs-panel-soft border p-3 rounded-xl flex items-center justify-between gap-3">
                 <div className="space-y-0.5">
                   <span className="text-[9px] text-slate-400 font-bold block uppercase tracking-wider">{isZh ? '专属会员专享' : 'Checkout Guest'}</span>
                   <p className="text-[11px] text-slate-600 leading-tight">
@@ -408,7 +408,7 @@ export default function CheckoutModal({
           </div>
 
           {/* Right Column: Invoice Overview (5 Cols) */}
-          <div className="md:col-span-5 bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col justify-between space-y-4">
+          <div className="md:col-span-5 rhs-panel-soft border rounded-2xl p-4 flex flex-col justify-between space-y-4">
             
             {/* Title */}
             <div>
@@ -464,7 +464,7 @@ export default function CheckoutModal({
             </div>
 
             {/* WhatsApp guidelines note */}
-            <div className="bg-white border border-slate-200 rounded-xl p-3 text-[10px] text-slate-500 space-y-2">
+            <div className="bg-[#f8fbfa] border border-[#c4d5d9] rounded-xl p-3 text-[10px] text-slate-500 space-y-2">
               <p className="font-semibold text-sky-600 flex items-center uppercase">
                 <Info className="w-3.5 h-3.5 mr-1" />
                 {isZh ? '下单说明' : 'How Order Processing Works'}

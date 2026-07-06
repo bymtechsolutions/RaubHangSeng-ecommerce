@@ -38,7 +38,7 @@ export default function ContactUs({ language }: ContactUsProps) {
   };
 
   return (
-    <section id="contact" className="py-24 bg-white border-t border-slate-100">
+    <section id="contact" className="py-24 rhs-section border-t border-[#c4d5d9]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Contact/FAQ Header */}
@@ -68,7 +68,7 @@ export default function ContactUs({ language }: ContactUsProps) {
                 return (
                   <div
                     key={faq.id}
-                    className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden transition-all duration-200"
+                    className="rhs-panel-soft border rounded-2xl overflow-hidden transition-all duration-200"
                   >
                     <button
                       onClick={() => toggleFaq(faq.id)}
@@ -83,7 +83,7 @@ export default function ContactUs({ language }: ContactUsProps) {
                     </button>
 
                     {isOpen && (
-                      <div className="p-4 pt-0 border-t border-slate-200/50 text-xs md:text-sm text-slate-600 leading-relaxed bg-white/50">
+                      <div className="p-4 pt-0 border-t border-[#c4d5d9]/70 text-xs md:text-sm text-[#536c74] leading-relaxed bg-[#f8fbfa]/70">
                         {isZh ? faq.answerZh : faq.answerEn}
                       </div>
                     )}
@@ -97,8 +97,8 @@ export default function ContactUs({ language }: ContactUsProps) {
           <div className="lg:col-span-5 space-y-6">
             
             {/* Contact Details Card */}
-            <div className="bg-white border border-slate-200 p-6 rounded-2xl space-y-4 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
+            <div className="rhs-panel border p-6 rounded-2xl space-y-4 shadow-sm">
+              <h3 className="text-lg font-bold text-slate-900 uppercase tracking-wider border-b border-[#d6e3e5] pb-2">
                 {isZh ? '彭亨河鱼旗舰店' : 'Pahang River Fish MainHQ'}
               </h3>
 
@@ -129,10 +129,10 @@ export default function ContactUs({ language }: ContactUsProps) {
               </div>
 
               {/* Static Map indicator */}
-              <div className="relative aspect-[16/6] bg-slate-50 rounded-xl overflow-hidden border border-slate-200 flex items-center justify-center">
-                <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] opacity-80" />
+              <div className="relative aspect-[16/6] bg-[#e5eeee] rounded-xl overflow-hidden border border-[#c4d5d9] flex items-center justify-center">
+                <div className="absolute inset-0 bg-[radial-gradient(#c4d5d9_1px,transparent_1px)] [background-size:16px_16px] opacity-80" />
                 <div className="text-center z-10 p-4">
-                  <MapPin className="w-6 h-6 text-red-500 mx-auto animate-bounce mb-1" />
+                  <MapPin className="w-6 h-6 text-red-500 mx-auto mb-1" />
                   <p className="text-[10px] font-bold text-slate-700 uppercase tracking-widest font-mono">Raub, Pahang</p>
                   <p className="text-[9px] text-slate-500">{isZh ? '彭亨河鱼之家 • 实体集散仓' : 'Home of Authentic Pahang River Fish'}</p>
                 </div>
@@ -140,7 +140,7 @@ export default function ContactUs({ language }: ContactUsProps) {
             </div>
 
             {/* Quick Contact Form */}
-            <div className="bg-slate-50 border border-slate-200 p-6 rounded-2xl space-y-4">
+            <div className="rhs-panel-soft border p-6 rounded-2xl space-y-4">
               <h3 className="text-base font-bold text-slate-900">
                 {isZh ? '提交在线咨询' : 'Send Us a Quick Message'}
               </h3>
@@ -153,7 +153,7 @@ export default function ContactUs({ language }: ContactUsProps) {
                     onChange={(e) => setName(e.target.value)}
                     placeholder={isZh ? '您的名字 / Your Name' : 'Your name'}
                     required
-                    className="w-full bg-white border border-slate-200 focus:border-sky-500 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    className="w-full bg-[#f8fbfa] border border-[#c4d5d9] focus:border-sky-500 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
 
@@ -163,7 +163,7 @@ export default function ContactUs({ language }: ContactUsProps) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder={isZh ? '电子邮箱 (选填) / Email (Optional)' : 'Your email address'}
-                    className="w-full bg-white border border-slate-200 focus:border-sky-500 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    className="w-full bg-[#f8fbfa] border border-[#c4d5d9] focus:border-sky-500 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
 
@@ -174,7 +174,7 @@ export default function ContactUs({ language }: ContactUsProps) {
                     rows={3}
                     placeholder={isZh ? '请输入您的问题（如大宗餐饮采购、特定的河鱼种类预约、外州配送咨询等）...' : 'Enter your inquiry details (e.g., restaurant wholesale purchase, specific seasonal fish reservation)...'}
                     required
-                    className="w-full bg-white border border-slate-200 focus:border-sky-500 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    className="w-full bg-[#f8fbfa] border border-[#c4d5d9] focus:border-sky-500 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
 

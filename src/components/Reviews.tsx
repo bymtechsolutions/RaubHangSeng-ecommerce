@@ -10,7 +10,7 @@ export default function Reviews({ language }: ReviewsProps) {
   const isZh = language === 'zh';
 
   return (
-    <section id="reviews" className="py-24 bg-slate-50 border-t border-slate-200">
+    <section id="reviews" className="py-24 rhs-section-alt border-t border-[#c4d5d9]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Section Header */}
@@ -34,7 +34,7 @@ export default function Reviews({ language }: ReviewsProps) {
           {REVIEWS.map((review) => (
             <div
               key={review.id}
-              className="bg-white border border-slate-200 hover:border-sky-300 p-6 rounded-2xl flex flex-col justify-between space-y-4 shadow-sm hover:shadow-md transition-all group"
+              className="rhs-panel border hover:border-sky-300 p-6 rounded-2xl flex flex-col justify-between space-y-4 shadow-sm hover:shadow-md transition-all group"
             >
               {/* Star Rating & Quote mark */}
               <div className="flex justify-between items-center">
@@ -43,7 +43,7 @@ export default function Reviews({ language }: ReviewsProps) {
                     <Star key={i} className="w-4 h-4 text-amber-500 fill-amber-500" />
                   ))}
                 </div>
-                <Quote className="w-8 h-8 text-slate-100 group-hover:text-sky-100 transition-colors" />
+                <Quote className="w-8 h-8 text-[#d4e2e5] group-hover:text-sky-100 transition-colors" />
               </div>
 
               {/* Review Text */}
@@ -52,7 +52,7 @@ export default function Reviews({ language }: ReviewsProps) {
               </p>
 
               {/* Customer Info & Product Purchased */}
-              <div className="border-t border-slate-100 pt-4 flex items-center justify-between">
+              <div className="border-t border-[#d6e3e5] pt-4 flex items-center justify-between">
                 <div>
                   <h4 className="text-xs md:text-sm font-bold text-slate-900 group-hover:text-sky-600 transition-colors">
                     {review.userName}
@@ -60,7 +60,7 @@ export default function Reviews({ language }: ReviewsProps) {
                   <span className="text-[10px] text-slate-400">{review.date}</span>
                 </div>
 
-                <div className="bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-md">
+                <div className="bg-[#edf5f4] border border-[#d6e3e5] px-2.5 py-1 rounded-md">
                   <span className="text-[10px] font-bold text-slate-500">
                     🛍️ {isZh ? review.fishPurchasedZh : review.fishPurchasedEn}
                   </span>
@@ -71,19 +71,19 @@ export default function Reviews({ language }: ReviewsProps) {
         </div>
 
         {/* Satisfied Metrics Banner */}
-        <div className="mt-16 bg-white border border-slate-200 rounded-2xl p-6 md:p-8 flex flex-col sm:flex-row items-center justify-around gap-6 text-center shadow-sm">
+        <div className="mt-16 rhs-panel border rounded-2xl p-6 md:p-8 flex flex-col sm:flex-row items-center justify-around gap-6 text-center shadow-sm">
           <div className="space-y-1">
-            <span className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-blue-700 font-mono">10,000+</span>
+            <span className="text-3xl md:text-4xl font-black text-[#0a4267] font-mono">10,000+</span>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{isZh ? '西马配送订单' : 'Orders Shipped'}</p>
           </div>
-          <div className="h-px w-12 bg-slate-100 sm:h-12 sm:w-px" />
+          <div className="h-px w-12 bg-[#d6e3e5] sm:h-12 sm:w-px" />
           <div className="space-y-1">
-            <span className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-blue-700 font-mono">99.8%</span>
+            <span className="text-3xl md:text-4xl font-black text-[#0a4267] font-mono">99.8%</span>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{isZh ? '好评满意度' : 'Five-Star Reviews'}</p>
           </div>
-          <div className="h-px w-12 bg-slate-100 sm:h-12 sm:w-px" />
+          <div className="h-px w-12 bg-[#d6e3e5] sm:h-12 sm:w-px" />
           <div className="space-y-1">
-            <span className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-blue-700 font-mono">100%</span>
+            <span className="text-3xl md:text-4xl font-black text-[#0a4267] font-mono">100%</span>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{isZh ? '无沙无泥味保证' : 'No-Mud Taste Promise'}</p>
           </div>
         </div>

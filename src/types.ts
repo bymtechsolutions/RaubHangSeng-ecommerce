@@ -1,16 +1,49 @@
 export type Language = 'zh' | 'en';
+export type ProductMediaType = 'image' | 'video';
+export type ProductCutType = 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet';
+export type ProductCategory = 'premium' | 'wild' | 'aquaculture' | 'wellness';
+
+export interface CollectionDisplay {
+  id: ProductCategory;
+  titleZh: string;
+  titleEn: string;
+  descZh: string;
+  descEn: string;
+  image: string;
+  imagePositionX: number;
+  imagePositionY: number;
+  imageScale: number;
+}
+
+export interface ProductMedia {
+  id: string;
+  url: string;
+  type: ProductMediaType;
+  name?: string;
+}
+
+export interface ProductVariant {
+  id: string;
+  nameZh: string;
+  nameEn: string;
+  weightKg: number;
+  cutType: ProductCutType;
+  image: string;
+}
 
 export interface Product {
   id: string;
   nameZh: string;
   nameEn: string;
   scientificName: string;
-  category: 'premium' | 'wild' | 'aquaculture' | 'wellness';
+  category: ProductCategory;
   descriptionZh: string;
   descriptionEn: string;
   pricePerKg: number;
   averageWeightKg: number; // typical weight per fish
   image: string;
+  media?: ProductMedia[];
+  variants?: ProductVariant[];
   tastingNotesZh: string;
   tastingNotesEn: string;
   cookingSuggestionsZh: string[];
@@ -25,7 +58,33 @@ export interface CartItem {
   product: Product;
   quantity: number;
   selectedWeightKg: number;
-  cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet';
+  cutType: ProductCutType;
+}
+
+export interface OrderRecord {
+  id: string;
+  items: CartItem[];
+  details: DeliveryDetails;
+  total: number;
+  date: string;
+  status?: string;
+  userId?: string;
+}
+
+export interface StoreSettings {
+  maintenanceMode: boolean;
+  freeShippingThreshold: number;
+  localShippingRate: number;
+  outstationShippingRate: number;
+  storeAnnouncement: string;
+  collections: CollectionDisplay[];
+}
+
+export interface StoreState {
+  products: Product[];
+  draftProducts?: Product[];
+  orders: OrderRecord[];
+  settings: StoreSettings;
 }
 
 export interface DeliveryDetails {
