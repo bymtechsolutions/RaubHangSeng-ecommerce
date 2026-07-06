@@ -142,10 +142,10 @@ if ! awk -v route_file="$route_file" '
   exit 1
 fi
 
-mv "$tmp_file" "$PROXY_FILE"
+cat "$tmp_file" > "$PROXY_FILE"
 
 if ! docker exec "$PROXY_CONTAINER" nginx -t; then
-  cp "$backup_file" "$PROXY_FILE"
+  cat "$backup_file" > "$PROXY_FILE"
   echo "Nginx config test failed. Restored $backup_file." >&2
   exit 1
 fi
