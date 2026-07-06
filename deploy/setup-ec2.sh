@@ -44,8 +44,11 @@ install_packages() {
   fi
 
   if command -v dnf >/dev/null 2>&1; then
-    dnf install -y ca-certificates curl docker nginx certbot python3-certbot-nginx bind-utils || \
-      dnf install -y ca-certificates curl docker nginx certbot bind-utils
+    dnf install -y ca-certificates docker nginx certbot python3-certbot-nginx bind-utils || \
+      dnf install -y ca-certificates docker nginx certbot bind-utils
+    if ! command -v curl >/dev/null 2>&1; then
+      dnf install -y curl-minimal
+    fi
     return
   fi
 
