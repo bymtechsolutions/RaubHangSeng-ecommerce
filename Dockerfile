@@ -1,14 +1,14 @@
-FROM node:22-alpine AS build
+FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --include=optional
 
 COPY . .
 RUN npm run build:all
 
-FROM node:22-alpine AS runner
+FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ ENV PORT=3000
 ENV RHS_DATA_FILE=/app/data/store.json
 
 COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm ci --omit=dev --include=optional --ignore-scripts
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/dist-server ./dist-server
