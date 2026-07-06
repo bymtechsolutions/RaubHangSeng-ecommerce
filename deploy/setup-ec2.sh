@@ -71,6 +71,32 @@ enable_service() {
   fi
 }
 
+port_80_taken_by_other_proxy() {
+  if [[ "${SKIP_HOST_NGINX:-0}" == "1" ]]; then
+    log "Skipping host Nginx because SKIP_HOST_NGINX=1"
+    return 0
+  fi
+
+  if ! command -v ss >/dev/null 2>&1; then
+    return 1
+  fi
+
+  local listeners
+  listeners="$(ss -ltnp 2>/dev/null | grep -E '(:80)[[:space:]]' || true)"
+  if [[ -z "$listeners" ]]; then
+    return 1
+  fi
+
+  if grep -qi 'nginx' <<<"$listeners"; then
+    return 1
+  fi
+
+  log "Port 80 is already used by another process; host Nginx will not be started."
+  printf '%s\n' "$listeners"
+  log "The app is still available at 127.0.0.1:$HOST_PORT. Route rhsfish.com through the existing proxy."
+  return 0
+}
+
 load_or_create_env() {
   if [[ ! -f "$ROOT_DIR/.env" ]]; then
     log "Creating .env"
@@ -201,12 +227,16 @@ enable_https_if_ready() {
 
 install_packages
 enable_service docker
-enable_service nginx
 load_or_create_env
 run_container
 wait_for_app
-configure_nginx
-enable_https_if_ready
+if port_80_taken_by_other_proxy; then
+  log "Skipped host Nginx and Certbot because this server already has a public proxy on port 80."
+else
+  enable_service nginx
+  configure_nginx
+  enable_https_if_ready
+fi
 
 log "Done"
 printf 'Main site: https://%s\n' "$MAIN_DOMAIN"

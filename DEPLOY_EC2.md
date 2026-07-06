@@ -61,6 +61,55 @@ That command will:
 
 If DNS has not propagated yet, the script keeps HTTP working and skips HTTPS. Rerun the same command after DNS is ready.
 
+If another Docker proxy already owns port `80`, the script still starts this app on `127.0.0.1:9999`, then skips host Nginx. In that setup, route `rhsfish.com` from the existing proxy instead.
+
+## Existing MySellerBase Proxy
+
+If `docker ps` shows `mysellerbase-prod-proxy-1` publishing `0.0.0.0:80->80/tcp`, do not start a second public Nginx. Add `rhsfish.com` to the MySellerBase proxy.
+
+In the MySellerBase `docker-compose.prod.yml`, add this under the `proxy` service:
+
+```yaml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+```
+
+In the MySellerBase `deploy/reverse-proxy.conf`, add these server blocks before the `default_server` storefront block:
+
+```nginx
+server {
+  listen 80;
+  server_name raubfish.com www.raubfish.com;
+  return 301 http://rhsfish.com$request_uri;
+}
+
+server {
+  listen 80;
+  server_name rhsfish.com www.rhsfish.com;
+  client_max_body_size 25m;
+  location / {
+    proxy_pass http://host.docker.internal:9999;
+    proxy_http_version 1.1;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $msb_fwd_proto;
+    proxy_set_header X-Forwarded-Host  $host;
+    proxy_set_header Upgrade           $http_upgrade;
+    proxy_set_header Connection        $msb_conn_upgrade;
+  }
+}
+```
+
+Then restart only the MySellerBase proxy:
+
+```bash
+cd /path/to/MySellerBase
+docker compose --env-file .env.prod -f docker-compose.prod.yml --profile proxy up -d proxy
+docker exec mysellerbase-prod-proxy-1 nginx -t
+docker restart mysellerbase-prod-proxy-1
+```
+
 ## Verify
 
 ```bash
