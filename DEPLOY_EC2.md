@@ -1,13 +1,26 @@
-# Deploy RaubHangSeng to AWS EC2
+# One-Command EC2 Deploy
 
 This deployment runs the app in Docker on host port `9999`, then uses host Nginx to serve:
 
-- `rhsfish.com`
-- `www.rhsfish.com`
+- `rhsfish.com` as the main website
+- `www.rhsfish.com` as the same website
+- `raubfish.com` redirected to `https://rhsfish.com`
+- `www.raubfish.com` redirected to `https://rhsfish.com`
 
-If your real subdomain is not `www.rhsfish.com`, replace it in `deploy/nginx/rhsfish.com.conf`.
+The app port `9999` is bound to `127.0.0.1` only, so it does not conflict with other projects on the same EC2 instance and is not public.
 
-## 1. EC2 Security Group
+## DNS Records
+
+Create these records at your DNS provider:
+
+```text
+rhsfish.com       A     54.251.150.167
+www.rhsfish.com   A     54.251.150.167
+raubfish.com      A     54.251.150.167
+www.raubfish.com  A     54.251.150.167
+```
+
+## AWS Security Group
 
 Open inbound:
 
@@ -15,31 +28,9 @@ Open inbound:
 - `443` HTTPS
 - `22` SSH, restricted to your IP
 
-Do not open `9999` publicly. Docker binds it to `127.0.0.1` only.
+Do not open `9999`.
 
-## 2. DNS
-
-Point both records to the EC2 public IPv4:
-
-```text
-rhsfish.com      A     <EC2_PUBLIC_IP>
-www.rhsfish.com  A     <EC2_PUBLIC_IP>
-```
-
-## 3. Install Docker and Nginx
-
-Ubuntu example:
-
-```bash
-sudo apt update
-sudo apt install -y docker.io docker-compose-plugin nginx certbot python3-certbot-nginx
-sudo systemctl enable --now docker nginx
-sudo usermod -aG docker $USER
-```
-
-Log out and back in after `usermod`.
-
-## 4. Upload Or Clone The Project
+## Upload Or Clone The Project
 
 Example path:
 
@@ -51,65 +42,64 @@ cd /opt/rhsfish
 
 Copy this repository into `/opt/rhsfish`.
 
-Create the production env file:
+## One Command
+
+Run this from the project root on EC2:
 
 ```bash
-cat > .env <<'EOF'
-SELLER_PASSCODE=change-this-passcode
-EOF
+sudo env SELLER_PASSCODE='change-this-passcode' CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
 ```
 
-## 5. Start The App On Port 9999
+That command will:
+
+- Install Docker, Nginx, Certbot, and required tools.
+- Build the Docker image.
+- Run the app container on `127.0.0.1:9999`.
+- Install `/etc/nginx/conf.d/rhsfish.com.conf`.
+- Reload Nginx.
+- Enable HTTPS if all four DNS names already resolve to `54.251.150.167`.
+
+If DNS has not propagated yet, the script keeps HTTP working and skips HTTPS. Rerun the same command after DNS is ready.
+
+## Verify
 
 ```bash
-docker compose up -d --build
-docker compose ps
 curl http://127.0.0.1:9999/api/health
+curl -I http://rhsfish.com
+curl -I http://raubfish.com
 ```
 
-Expected health response:
+Expected local health response:
 
 ```json
 {"ok":true}
 ```
 
-Persistent app data is stored in the Docker volume `rhsfish_data`.
+Expected redirect:
 
-## 6. Add Nginx Reverse Proxy
-
-```bash
-sudo cp deploy/nginx/rhsfish.com.conf /etc/nginx/sites-available/rhsfish.com.conf
-sudo ln -s /etc/nginx/sites-available/rhsfish.com.conf /etc/nginx/sites-enabled/rhsfish.com.conf
-sudo nginx -t
-sudo systemctl reload nginx
+```text
+raubfish.com -> https://rhsfish.com
 ```
 
-If another project already uses Nginx on this EC2 instance, keep its server block. Nginx will route by `server_name`.
-
-## 7. Enable HTTPS
-
-After DNS points to the server:
-
-```bash
-sudo certbot --nginx -d rhsfish.com -d www.rhsfish.com
-sudo systemctl reload nginx
-```
-
-## 8. Update Deployment
+## Update Deployment
 
 From `/opt/rhsfish`:
 
 ```bash
 git pull
-docker compose up -d --build
+sudo env SELLER_PASSCODE='change-this-passcode' CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
 docker image prune -f
 ```
 
 ## Useful Commands
 
 ```bash
-docker compose logs -f rhsfish
-docker compose restart rhsfish
-docker compose down
-docker compose exec rhsfish node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>r.text()).then(console.log)"
+docker logs -f rhsfish-app
+docker restart rhsfish-app
+docker rm -f rhsfish-app
+docker exec rhsfish-app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>r.text()).then(console.log)"
+sudo nginx -t
+sudo systemctl reload nginx
 ```
+
+Persistent app data is stored in the Docker volume `rhsfish_data`.
