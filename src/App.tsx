@@ -20,7 +20,7 @@ import { PRODUCTS } from './data/products';
 import { DEFAULT_COLLECTIONS, normalizeCollectionDisplays } from './data/collections';
 import SellerDashboard from './components/SellerDashboard';
 import PolicyView from './components/PolicyView';
-import { createOrder, fetchStore, replaceOrders, replaceProducts, updateSettings, verifySellerPasscode } from './lib/api';
+import { createOrder, fetchStore, replaceOrders, replaceProducts, updateSellerPasscode, updateSettings, verifySellerPasscode } from './lib/api';
 
 type AppRoute = 'home' | 'shop' | 'product' | 'seller' | 'privacy' | 'terms' | 'refund';
 
@@ -543,6 +543,10 @@ export default function App() {
     }
   };
 
+  const handleChangeSellerPasscode = async (currentPasscode: string, nextPasscode: string) => {
+    await updateSellerPasscode(currentPasscode, nextPasscode);
+  };
+
   const handleSetActiveSection = (section: string) => {
     const shopCategoryMatch = section.match(/^shop:(premium|wild|aquaculture|wellness)$/);
     if (shopCategoryMatch) {
@@ -597,6 +601,7 @@ export default function App() {
         setStoreAnnouncement={setStoreAnnouncement}
         collectionDisplays={collectionDisplays}
         onSaveSettings={persistSettings}
+        onChangeSellerPasscode={handleChangeSellerPasscode}
       />
     );
   }
@@ -739,9 +744,6 @@ export default function App() {
                       {language === 'zh' ? '密码错误，拒绝访问！' : 'Invalid passcode. Access denied.'}
                     </p>
                   )}
-                  <p className="mt-2 text-[11px] text-slate-500">
-                    {language === 'zh' ? '默认初始密码为: 8888' : 'Default initial passcode: 8888'}
-                  </p>
                 </div>
 
                 <button
@@ -1008,9 +1010,6 @@ export default function App() {
                       {language === 'zh' ? '密码错误，拒绝访问！' : 'Invalid passcode. Access Denied!'}
                     </p>
                   )}
-                  <p className="mt-2 text-[11px] text-slate-400">
-                    {language === 'zh' ? '默认初始密码为: 8888' : 'Default initial passcode: 8888'}
-                  </p>
                 </div>
 
                 {/* Footer Actions */}

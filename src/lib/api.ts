@@ -56,6 +56,13 @@ export const verifySellerPasscode = (passcode: string) => (
   })
 );
 
+export const updateSellerPasscode = (currentPasscode: string, nextPasscode: string) => (
+  requestJson<{ ok: boolean }>('/api/seller/passcode', {
+    method: 'PATCH',
+    body: JSON.stringify({ currentPasscode, nextPasscode }),
+  })
+);
+
 export const loginMember = (username: string, password: string) => (
   requestJson<{ profile: User }>('/api/members/login', {
     method: 'POST',

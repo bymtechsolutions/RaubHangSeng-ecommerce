@@ -47,7 +47,7 @@ Copy this repository into `/opt/rhsfish`.
 Run this from the project root on EC2:
 
 ```bash
-sudo env SELLER_PASSCODE='change-this-passcode' CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
+sudo env SELLER_PASSCODE='8888' CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
 ```
 
 That command will:
@@ -87,7 +87,7 @@ From `/opt/rhsfish`:
 
 ```bash
 git pull
-sudo env SELLER_PASSCODE='change-this-passcode' CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
+sudo env SELLER_PASSCODE='8888' CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
 docker image prune -f
 ```
 

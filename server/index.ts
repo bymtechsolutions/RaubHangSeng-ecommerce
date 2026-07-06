@@ -13,8 +13,11 @@ interface MemberRecord {
   profile: User;
 }
 
+type PasscodeRecord = Pick<MemberRecord, 'passwordHash' | 'salt'>;
+
 interface PersistedStore extends StoreState {
   members: Record<string, MemberRecord>;
+  sellerPasscode?: PasscodeRecord;
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,6 +53,9 @@ const ensureStoreShape = (value: Partial<PersistedStore> | null | undefined): Pe
     collections: normalizeCollectionDisplays(value?.settings?.collections),
   },
   members: value?.members && typeof value.members === 'object' ? value.members : {},
+  sellerPasscode: value?.sellerPasscode?.passwordHash && value?.sellerPasscode?.salt
+    ? value.sellerPasscode
+    : undefined,
 });
 
 const publicStore = (store: PersistedStore): StoreState => ({
@@ -64,10 +70,18 @@ const hashPassword = (password: string, salt = crypto.randomBytes(16).toString('
   passwordHash: crypto.scryptSync(password, salt, 64).toString('hex'),
 });
 
-const verifyPassword = (password: string, member: MemberRecord) => {
+const verifyPassword = (password: string, member: PasscodeRecord) => {
   const candidate = crypto.scryptSync(password, member.salt, 64);
   const stored = Buffer.from(member.passwordHash, 'hex');
   return stored.length === candidate.length && crypto.timingSafeEqual(stored, candidate);
+};
+
+const verifySellerPasscodeValue = (passcode: string, store: PersistedStore) => {
+  if (store.sellerPasscode) {
+    return verifyPassword(passcode, store.sellerPasscode);
+  }
+
+  return passcode === (process.env.SELLER_PASSCODE || '8888');
 };
 
 const readStore = async (): Promise<PersistedStore> => {
@@ -234,14 +248,46 @@ app.patch('/api/settings', async (req, res, next) => {
   }
 });
 
-app.post('/api/seller/verify-passcode', (req, res) => {
-  const configuredPasscode = process.env.SELLER_PASSCODE || '8888';
-  if (String(req.body?.passcode || '') !== configuredPasscode) {
-    res.status(401).json({ ok: false });
-    return;
-  }
+app.post('/api/seller/verify-passcode', async (req, res, next) => {
+  try {
+    const passcode = String(req.body?.passcode || '');
+    const store = await readStore();
+    if (!verifySellerPasscodeValue(passcode, store)) {
+      res.status(401).json({ ok: false });
+      return;
+    }
 
-  res.json({ ok: true });
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch('/api/seller/passcode', async (req, res, next) => {
+  try {
+    const currentPasscode = String(req.body?.currentPasscode || '');
+    const nextPasscode = String(req.body?.nextPasscode || '').trim();
+    const store = await readStore();
+
+    if (!verifySellerPasscodeValue(currentPasscode, store)) {
+      res.status(401).json({ error: 'current passcode is invalid' });
+      return;
+    }
+
+    if (nextPasscode.length < 4) {
+      res.status(400).json({ error: 'new passcode must be at least 4 characters' });
+      return;
+    }
+
+    await updateStore(current => ({
+      ...current,
+      sellerPasscode: hashPassword(nextPasscode),
+    }));
+
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post('/api/members/register', async (req, res, next) => {
