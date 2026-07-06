@@ -97,6 +97,26 @@ port_80_taken_by_other_proxy() {
   return 0
 }
 
+connect_existing_proxy_network() {
+  local proxy_container="${EXISTING_PROXY_CONTAINER:-mysellerbase-prod-proxy-1}"
+
+  if ! docker ps --format '{{.Names}}' | grep -qx "$proxy_container"; then
+    return
+  fi
+
+  log "Connecting $CONTAINER_NAME to $proxy_container Docker network"
+  local networks
+  networks="$(docker inspect "$proxy_container" --format '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' 2>/dev/null || true)"
+
+  while IFS= read -r network; do
+    [[ -z "$network" ]] && continue
+    if docker inspect "$CONTAINER_NAME" --format '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' | grep -qx "$network"; then
+      continue
+    fi
+    docker network connect "$network" "$CONTAINER_NAME"
+  done <<< "$networks"
+}
+
 load_or_create_env() {
   if [[ ! -f "$ROOT_DIR/.env" ]]; then
     log "Creating .env"
@@ -230,8 +250,10 @@ enable_service docker
 load_or_create_env
 run_container
 wait_for_app
+connect_existing_proxy_network
 if port_80_taken_by_other_proxy; then
   log "Skipped host Nginx and Certbot because this server already has a public proxy on port 80."
+  log "Next, route the domains through MySellerBase: bash deploy/configure-mysellerbase-proxy.sh /path/to/MySellerBase"
 else
   enable_service nginx
   configure_nginx

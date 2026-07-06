@@ -65,22 +65,19 @@ If another Docker proxy already owns port `80`, the script still starts this app
 
 ## Existing MySellerBase Proxy
 
-If `docker ps` shows `mysellerbase-prod-proxy-1` publishing `0.0.0.0:80->80/tcp`, do not start a second public Nginx. Add `rhsfish.com` to the MySellerBase proxy.
+If `docker ps` shows `mysellerbase-prod-proxy-1` publishing `0.0.0.0:80->80/tcp`, do not start a second public Nginx. Run this after `deploy/setup-ec2.sh`:
 
-In the MySellerBase `docker-compose.prod.yml`, add this under the `proxy` service:
-
-```yaml
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+```bash
+bash deploy/configure-mysellerbase-proxy.sh /path/to/MySellerBase
 ```
 
-In the MySellerBase `deploy/reverse-proxy.conf`, add these server blocks before the `default_server` storefront block:
+The script connects `rhsfish-app` to the MySellerBase proxy Docker network, then inserts these routes into MySellerBase `deploy/reverse-proxy.conf` before the storefront `default_server` block:
 
 ```nginx
 server {
   listen 80;
   server_name raubfish.com www.raubfish.com;
-  return 301 http://rhsfish.com$request_uri;
+  return 301 https://rhsfish.com$request_uri;
 }
 
 server {
@@ -88,7 +85,8 @@ server {
   server_name rhsfish.com www.rhsfish.com;
   client_max_body_size 25m;
   location / {
-    proxy_pass http://host.docker.internal:9999;
+    set $rhsfish_upstream "http://rhsfish-app:3000";
+    proxy_pass $rhsfish_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host              $host;
     proxy_set_header X-Real-IP         $remote_addr;
@@ -101,13 +99,14 @@ server {
 }
 ```
 
-Then restart only the MySellerBase proxy:
+If MySellerBase terminates TLS through Cloudflare, add `rhsfish.com`, `www.rhsfish.com`, `raubfish.com`, and `www.raubfish.com` in Cloudflare as proxied A records to this EC2 public IP. If these records are DNS-only and no service listens on port `443`, browser HTTPS requests will fail.
+
+To reload the MySellerBase proxy manually:
 
 ```bash
 cd /path/to/MySellerBase
-docker compose --env-file .env.prod -f docker-compose.prod.yml --profile proxy up -d proxy
 docker exec mysellerbase-prod-proxy-1 nginx -t
-docker restart mysellerbase-prod-proxy-1
+docker exec mysellerbase-prod-proxy-1 nginx -s reload
 ```
 
 ## Verify
