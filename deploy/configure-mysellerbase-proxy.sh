@@ -27,6 +27,15 @@ detect_msb_dir() {
       return
     fi
   done
+
+  if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -qx "$PROXY_CONTAINER"; then
+    local proxy_source
+    proxy_source="$(docker inspect "$PROXY_CONTAINER" --format '{{range .Mounts}}{{if eq .Destination "/etc/nginx/conf.d/default.conf"}}{{println .Source}}{{end}}{{end}}' 2>/dev/null || true)"
+    if [[ -n "$proxy_source" && -f "$proxy_source" ]]; then
+      printf '%s\n' "$(cd "$(dirname "$proxy_source")/.." && pwd)"
+      return
+    fi
+  fi
 }
 
 if [[ -z "$MSB_DIR" ]]; then
