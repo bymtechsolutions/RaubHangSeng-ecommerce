@@ -55,7 +55,7 @@ That command will:
 - Install Docker, Nginx, Certbot, and required tools.
 - Build the Docker image.
 - Run the app container on `127.0.0.1:9999`.
-- Install `/etc/nginx/conf.d/rhsfish.com.conf`.
+- Install `/etc/nginx/conf.d/00-rhsfish.com.conf`.
 - Reload Nginx.
 - Enable HTTPS if all four DNS names already resolve to `54.251.150.167`.
 
@@ -79,6 +79,23 @@ Expected redirect:
 
 ```text
 raubfish.com -> https://rhsfish.com
+```
+
+## If You Still See MySellerBase
+
+This means Nginx is still routing `rhsfish.com` to the old project, or the new config has not been loaded on the EC2 server. Run these on EC2, not on Windows:
+
+```bash
+curl http://127.0.0.1:9999/api/health
+sudo grep -RInE 'rhsfish\.com|raubfish\.com|store-unavailable|mysellerbase' /etc/nginx
+sudo nginx -T | grep -nE 'server_name|proxy_pass|rhsfish\.com|raubfish\.com'
+```
+
+Only `/etc/nginx/conf.d/00-rhsfish.com.conf` should own `rhsfish.com` and `raubfish.com`. If another MySellerBase config also contains those domains, remove those domain names from the old config, then reload Nginx:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
 ## Update Deployment

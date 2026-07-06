@@ -15,7 +15,8 @@ PUBLIC_IP="54.251.150.167"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NGINX_SOURCE="$ROOT_DIR/deploy/nginx/rhsfish.com.conf"
-NGINX_TARGET="/etc/nginx/conf.d/rhsfish.com.conf"
+NGINX_TARGET="/etc/nginx/conf.d/00-rhsfish.com.conf"
+LEGACY_NGINX_TARGET="/etc/nginx/conf.d/rhsfish.com.conf"
 
 log() {
   printf '\n[%s] %s\n' "$APP_NAME" "$*"
@@ -124,7 +125,18 @@ wait_for_app() {
 configure_nginx() {
   log "Installing Nginx config"
   mkdir -p /etc/nginx/conf.d
+  if [[ -f "$LEGACY_NGINX_TARGET" && "$LEGACY_NGINX_TARGET" != "$NGINX_TARGET" ]]; then
+    rm -f "$LEGACY_NGINX_TARGET"
+  fi
   cp "$NGINX_SOURCE" "$NGINX_TARGET"
+
+  local conflicts
+  conflicts="$(grep -RIlE 'server_name[[:space:]][^;]*(rhsfish\.com|raubfish\.com)' /etc/nginx 2>/dev/null | grep -vFx "$NGINX_TARGET" || true)"
+  if [[ -n "$conflicts" ]]; then
+    log "WARNING: These Nginx files also mention rhsfish.com or raubfish.com:"
+    printf '%s\n' "$conflicts"
+    log "Remove those domains from the old site config, then rerun this script if rhsfish.com still opens another project."
+  fi
 
   nginx -t
 
