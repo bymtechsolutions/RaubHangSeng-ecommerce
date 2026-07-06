@@ -3,7 +3,8 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --include=optional
+COPY deploy/install-linux-native-optionals.cjs ./deploy/install-linux-native-optionals.cjs
+RUN npm ci --include=optional && node deploy/install-linux-native-optionals.cjs
 
 COPY . .
 RUN npm run build:all
