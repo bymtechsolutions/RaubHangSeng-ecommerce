@@ -90,6 +90,12 @@ type CustomerInsight = {
   lastOrderId: string;
 };
 
+type MediaPickerTarget =
+  | { kind: 'product-media' }
+  | { kind: 'product-cover' }
+  | { kind: 'variant-image'; index: number }
+  | { kind: 'collection-image'; id: ProductCategory };
+
 export default function SellerDashboard({
   language,
   onClose,
@@ -163,6 +169,7 @@ export default function SellerDashboard({
   const [currentSellerPasscode, setCurrentSellerPasscode] = useState('');
   const [newSellerPasscode, setNewSellerPasscode] = useState('');
   const [confirmSellerPasscode, setConfirmSellerPasscode] = useState('');
+  const [mediaPickerTarget, setMediaPickerTarget] = useState<MediaPickerTarget | null>(null);
   const [editingDiscountId, setEditingDiscountId] = useState<string | null>(null);
   const [discountTitleZh, setDiscountTitleZh] = useState('');
   const [discountTitleEn, setDiscountTitleEn] = useState('');
@@ -449,35 +456,90 @@ export default function SellerDashboard({
     return response.media;
   };
 
-  const handleAddExistingMediaToProduct = (mediaUrl: string) => {
-    const media = mediaLibrary.find(item => item.url === mediaUrl);
-    if (!media) return;
+  const isMediaPickerImageOnly = mediaPickerTarget?.kind !== 'product-media';
+  const visibleGalleryMedia = isMediaPickerImageOnly ? mediaLibraryImages : mediaLibrary;
 
-    setFormMedia(prev => prev.some(item => item.url === media.url) ? prev : [...prev, media]);
-    if (media.type === 'image' && !formImage.trim()) {
+  const getMediaPickerTitle = () => {
+    if (!mediaPickerTarget) return isZh ? '媒体图库' : 'Media Gallery';
+    if (mediaPickerTarget.kind === 'product-media') return isZh ? '选择产品媒体' : 'Select Product Media';
+    if (mediaPickerTarget.kind === 'product-cover') return isZh ? '选择产品封面' : 'Select Product Cover';
+    if (mediaPickerTarget.kind === 'variant-image') return isZh ? '选择规格图片' : 'Select Variant Image';
+    return isZh ? '选择系列封面' : 'Select Collection Cover';
+  };
+
+  const isGalleryMediaSelected = (media: ProductMedia) => {
+    if (!mediaPickerTarget) return false;
+    if (mediaPickerTarget.kind === 'product-media') return formMedia.some(item => item.url === media.url);
+    if (mediaPickerTarget.kind === 'product-cover') return formImage === media.url;
+    if (mediaPickerTarget.kind === 'variant-image') return formVariants[mediaPickerTarget.index]?.image === media.url;
+    return collectionDrafts.find(collection => collection.id === mediaPickerTarget.id)?.image === media.url;
+  };
+
+  const applyGalleryMediaSelection = (media: ProductMedia) => {
+    if (!mediaPickerTarget) return;
+
+    if (isMediaPickerImageOnly && media.type !== 'image') {
+      triggerError(isZh ? '此位置只能选择图片。' : 'This field only accepts images.');
+      return;
+    }
+
+    if (mediaPickerTarget.kind === 'product-media') {
+      setFormMedia(prev => prev.some(item => item.url === media.url) ? prev : [...prev, media]);
+      if (media.type === 'image' && !formImage.trim()) {
+        setFormImage(media.url);
+      }
+      triggerSuccess(isZh ? '媒体已加入产品图库。' : 'Media added to product gallery.');
+      return;
+    }
+
+    if (mediaPickerTarget.kind === 'product-cover') {
       setFormImage(media.url);
+      setMediaPickerTarget(null);
+      triggerSuccess(isZh ? '产品封面已选择。' : 'Product cover selected.');
+      return;
+    }
+
+    if (mediaPickerTarget.kind === 'variant-image') {
+      handleUpdateVariant(mediaPickerTarget.index, { image: media.url });
+      setMediaPickerTarget(null);
+      triggerSuccess(isZh ? '规格图片已选择。' : 'Variant image selected.');
+      return;
+    }
+
+    handleUpdateCollectionDraft(mediaPickerTarget.id, { image: media.url });
+    setMediaPickerTarget(null);
+    triggerSuccess(isZh ? '系列封面已选择。' : 'Collection cover selected.');
+  };
+
+  const applyUploadedGalleryMedia = (uploadedMedia: ProductMedia[]) => {
+    if (!mediaPickerTarget || uploadedMedia.length === 0) return;
+
+    if (mediaPickerTarget.kind === 'product-media') {
+      setFormMedia(prev => {
+        const mediaByUrl = new Map<string, ProductMedia>();
+        [...prev, ...uploadedMedia].forEach(media => mediaByUrl.set(media.url, media));
+        return Array.from(mediaByUrl.values());
+      });
+
+      const firstImage = uploadedMedia.find(media => media.type === 'image');
+      if (!formImage.trim() && firstImage) {
+        setFormImage(firstImage.url);
+      }
+      return;
+    }
+
+    const firstImage = uploadedMedia.find(media => media.type === 'image');
+    if (firstImage) {
+      applyGalleryMediaSelection(firstImage);
     }
   };
 
-  const handleUseExistingVariantImage = (index: number, mediaUrl: string) => {
-    const media = mediaLibraryImages.find(item => item.url === mediaUrl);
-    if (media) {
-      handleUpdateVariant(index, { image: media.url });
-    }
-  };
-
-  const handleUseExistingCollectionImage = (id: ProductCategory, mediaUrl: string) => {
-    const media = mediaLibraryImages.find(item => item.url === mediaUrl);
-    if (media) {
-      handleUpdateCollectionDraft(id, { image: media.url });
-    }
-  };
-
-  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files: File[] = e.currentTarget.files ? Array.from(e.currentTarget.files) : [];
     if (files.length === 0) return;
 
-    const validationMessage = files.map(file => getUploadValidationMessage(file, false)).find(Boolean);
+    const imageOnly = isMediaPickerImageOnly;
+    const validationMessage = files.map(file => getUploadValidationMessage(file, imageOnly)).find(Boolean);
     if (validationMessage) {
       triggerError(validationMessage);
       e.target.value = '';
@@ -487,12 +549,8 @@ export default function SellerDashboard({
     try {
       const uploadedMedia = await Promise.all(files.map(fileToMedia));
       await saveMediaLibrary(uploadedMedia);
-      setFormMedia(prev => [...prev, ...uploadedMedia]);
-      const firstImage = uploadedMedia.find(media => media.type === 'image');
-      if (!formImage.trim() && firstImage) {
-        setFormImage(firstImage.url);
-      }
-      triggerSuccess(isZh ? '产品媒体已上传。' : 'Product media uploaded.');
+      applyUploadedGalleryMedia(uploadedMedia);
+      triggerSuccess(isZh ? '媒体已上传到图库。' : 'Media uploaded to gallery.');
     } catch (error) {
       triggerError(isZh ? '媒体上传失败，请重试。' : 'Media upload failed. Please retry.');
     } finally {
@@ -528,29 +586,6 @@ export default function SellerDashboard({
 
   const handleRemoveVariant = (index: number) => {
     setFormVariants(prev => prev.filter((_, variantIndex) => variantIndex !== index));
-  };
-
-  const handleVariantImageUpload = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const validationMessage = getUploadValidationMessage(file, true);
-    if (validationMessage) {
-      triggerError(validationMessage);
-      e.target.value = '';
-      return;
-    }
-
-    try {
-      const media = await fileToMedia(file);
-      await saveMediaLibrary([media]);
-      handleUpdateVariant(index, { image: media.url });
-      triggerSuccess(isZh ? '规格图片已更新。' : 'Variant photo updated.');
-    } catch (error) {
-      triggerError(isZh ? '规格图片上传失败。' : 'Variant photo upload failed.');
-    } finally {
-      e.target.value = '';
-    }
   };
 
   const handleUpdateCollectionDraft = (id: ProductCategory, updates: Partial<CollectionDisplay>) => {
@@ -629,29 +664,6 @@ export default function SellerDashboard({
       setFormCategory(remainingCollections[0]?.id || 'wild');
     }
     triggerSuccess(isZh ? '系列已删除。请保存系列设置同步到前台。' : 'Collection removed. Save collections to sync the storefront.');
-  };
-
-  const handleCollectionImageUpload = async (id: ProductCategory, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const validationMessage = getUploadValidationMessage(file, true);
-    if (validationMessage) {
-      triggerError(validationMessage);
-      e.target.value = '';
-      return;
-    }
-
-    try {
-      const media = await fileToMedia(file);
-      await saveMediaLibrary([media]);
-      handleUpdateCollectionDraft(id, { image: media.url });
-      triggerSuccess(isZh ? '系列封面已上传。' : 'Collection image uploaded.');
-    } catch {
-      triggerError(isZh ? '系列封面上传失败。' : 'Collection image upload failed.');
-    } finally {
-      e.target.value = '';
-    }
   };
 
   const handleSaveCollections = async () => {
@@ -2310,13 +2322,22 @@ export default function SellerDashboard({
                         <label className="block text-[10px] font-bold text-slate-500 uppercase">
                           {isZh ? '河鱼产品美图 URL' : 'Image URL'}
                         </label>
-                        <input
-                          type="text"
-                          value={formImage}
-                          onChange={(e) => setFormImage(e.target.value)}
-                          placeholder="https://images.unsplash.com/photo-..."
-                          className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
-                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={formImage}
+                            onChange={(e) => setFormImage(e.target.value)}
+                            placeholder="https://images.unsplash.com/photo-..."
+                            className="flex-1 min-w-0 text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setMediaPickerTarget({ kind: 'product-cover' })}
+                            className="px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-sky-300 text-slate-700 text-[11px] font-bold cursor-pointer"
+                          >
+                            {isZh ? '图库' : 'Gallery'}
+                          </button>
+                        </div>
                       </div>
 
                       <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-3">
@@ -2330,37 +2351,14 @@ export default function SellerDashboard({
                               {uploadGuidanceText[isZh ? 'zh' : 'en']}
                             </p>
                           </div>
-                          <div className="flex flex-wrap justify-end gap-2">
-                            {mediaLibrary.length > 0 && (
-                              <select
-                                value=""
-                                onChange={(e) => {
-                                  handleAddExistingMediaToProduct(e.target.value);
-                                  e.target.value = '';
-                                }}
-                                className="max-w-44 rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] font-bold text-slate-700 focus:outline-none focus:border-sky-500"
-                                aria-label={isZh ? '选择已有媒体' : 'Choose existing media'}
-                              >
-                                <option value="">{isZh ? '选择已有媒体' : 'Choose existing'}</option>
-                                {mediaLibrary.map(media => (
-                                  <option key={media.url} value={media.url}>
-                                    {media.name || media.type} {formatMediaSize(media.size)}
-                                  </option>
-                                ))}
-                              </select>
-                            )}
-                            <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-sky-300 text-slate-700 text-[11px] font-bold cursor-pointer">
-                              <Upload className="w-3.5 h-3.5 text-sky-600" />
-                              <span>{isZh ? '上传新媒体' : 'Upload new'}</span>
-                              <input
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
-                                multiple
-                                onChange={handleMediaUpload}
-                                className="hidden"
-                              />
-                            </label>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setMediaPickerTarget({ kind: 'product-media' })}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-sky-300 text-slate-700 text-[11px] font-bold cursor-pointer"
+                          >
+                            <ImageIcon className="w-3.5 h-3.5 text-sky-600" />
+                            <span>{isZh ? '打开图库' : 'Open gallery'}</span>
+                          </button>
                         </div>
 
                         {formMedia.length === 0 ? (
@@ -2456,33 +2454,13 @@ export default function SellerDashboard({
                                         </div>
                                       )}
                                     </div>
-                                    <label className="mt-2 w-full inline-flex items-center justify-center px-2 py-1.5 rounded-md border border-slate-200 bg-slate-50 hover:border-sky-300 text-[10px] font-bold text-slate-600 cursor-pointer">
-                                      {isZh ? '上传新图' : 'Upload new'}
-                                      <input
-                                        type="file"
-                                        accept="image/jpeg,image/png,image/webp,image/gif"
-                                        onChange={(e) => handleVariantImageUpload(index, e)}
-                                        className="hidden"
-                                      />
-                                    </label>
-                                    {mediaLibraryImages.length > 0 && (
-                                      <select
-                                        value=""
-                                        onChange={(e) => {
-                                          handleUseExistingVariantImage(index, e.target.value);
-                                          e.target.value = '';
-                                        }}
-                                        className="mt-2 w-full rounded-md border border-slate-200 bg-white px-1.5 py-1.5 text-[10px] font-bold text-slate-600 focus:outline-none focus:border-sky-500"
-                                        aria-label={isZh ? '选择已有规格图片' : 'Choose existing variant image'}
-                                      >
-                                        <option value="">{isZh ? '选择已有' : 'Choose existing'}</option>
-                                        {mediaLibraryImages.map(media => (
-                                          <option key={media.url} value={media.url}>
-                                            {media.name || 'Image'} {formatMediaSize(media.size)}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setMediaPickerTarget({ kind: 'variant-image', index })}
+                                      className="mt-2 w-full inline-flex items-center justify-center px-2 py-1.5 rounded-md border border-slate-200 bg-slate-50 hover:border-sky-300 text-[10px] font-bold text-slate-600 cursor-pointer"
+                                    >
+                                      {isZh ? '打开图库' : 'Open gallery'}
+                                    </button>
                                   </div>
 
                                   <div className="flex-1 min-w-0 space-y-2">
@@ -2711,34 +2689,14 @@ export default function SellerDashboard({
                                 referrerPolicy="no-referrer"
                               />
                             </div>
-                            <label className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-sky-300 text-slate-700 text-[11px] font-bold cursor-pointer">
-                              <Upload className="w-3.5 h-3.5 text-sky-600" />
-                              <span>{isZh ? '上传新图' : 'Upload new'}</span>
-                              <input
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp,image/gif"
-                                onChange={(e) => handleCollectionImageUpload(coll.id, e)}
-                                className="hidden"
-                              />
-                            </label>
-                            {mediaLibraryImages.length > 0 && (
-                              <select
-                                value=""
-                                onChange={(e) => {
-                                  handleUseExistingCollectionImage(coll.id, e.target.value);
-                                  e.target.value = '';
-                                }}
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] font-bold text-slate-700 focus:outline-none focus:border-sky-500"
-                                aria-label={isZh ? '选择已有系列图片' : 'Choose existing collection image'}
-                              >
-                                <option value="">{isZh ? '选择已有图片' : 'Choose existing image'}</option>
-                                {mediaLibraryImages.map(media => (
-                                  <option key={media.url} value={media.url}>
-                                    {media.name || 'Image'} {formatMediaSize(media.size)}
-                                  </option>
-                                ))}
-                              </select>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => setMediaPickerTarget({ kind: 'collection-image', id: coll.id })}
+                              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-sky-300 text-slate-700 text-[11px] font-bold cursor-pointer"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5 text-sky-600" />
+                              <span>{isZh ? '打开图库' : 'Open gallery'}</span>
+                            </button>
                             <p className="text-[10px] leading-4 text-slate-500">
                               {imageUploadGuidanceText[isZh ? 'zh' : 'en']}
                             </p>
@@ -3382,6 +3340,110 @@ export default function SellerDashboard({
         </div>
 
       </div>
+
+      {mediaPickerTarget && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="absolute inset-0" onClick={() => setMediaPickerTarget(null)} />
+          <div className="relative z-10 w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl flex flex-col">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-800 bg-slate-900 px-5 py-4">
+              <div>
+                <h3 className="text-sm font-black text-white">{getMediaPickerTitle()}</h3>
+                <p className="mt-1 text-[11px] leading-5 text-slate-400">
+                  {isMediaPickerImageOnly
+                    ? (isZh ? '此位置只接受图片。可上传新图片到图库，或选择已上传图片。' : 'This field accepts images only. Upload a new image to the gallery or select an existing one.')
+                    : (isZh ? '可选择图片或视频加入产品媒体。上传的新媒体会保存到共用图库。' : 'Select images or videos for product media. New uploads are saved to the shared gallery.')}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2 text-[11px] font-bold text-white hover:bg-sky-500 cursor-pointer">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{isZh ? '上传到图库' : 'Upload to gallery'}</span>
+                  <input
+                    type="file"
+                    accept={isMediaPickerImageOnly ? 'image/jpeg,image/png,image/webp,image/gif' : 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime'}
+                    multiple={!isMediaPickerImageOnly}
+                    onChange={handleGalleryUpload}
+                    className="hidden"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setMediaPickerTarget(null)}
+                  className="rounded-lg border border-slate-700 bg-slate-800 p-2 text-slate-300 hover:text-white cursor-pointer"
+                  aria-label={isZh ? '关闭图库' : 'Close gallery'}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto p-5">
+              {visibleGalleryMedia.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900 p-10 text-center">
+                  <ImageIcon className="mx-auto h-10 w-10 text-slate-600" />
+                  <p className="mt-3 text-xs font-bold text-slate-300">
+                    {isZh ? '图库还没有可选择的媒体' : 'No selectable media in the gallery yet'}
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {isZh ? '点击上方「上传到图库」加入媒体。' : 'Use Upload to gallery above to add media.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {visibleGalleryMedia.map((media) => {
+                    const isSelected = isGalleryMediaSelected(media);
+                    return (
+                      <div key={media.url} className={`overflow-hidden rounded-xl border bg-slate-900 ${
+                        isSelected ? 'border-sky-400' : 'border-slate-800'
+                      }`}>
+                        <div className="aspect-video bg-slate-950">
+                          {media.type === 'video' ? (
+                            <video
+                              src={media.url}
+                              className="h-full w-full object-contain"
+                              controls
+                              muted
+                              playsInline
+                              preload="metadata"
+                            />
+                          ) : (
+                            <img
+                              src={media.url}
+                              alt={media.name || 'Media'}
+                              className="h-full w-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="space-y-2 p-3">
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 min-w-0">
+                            {media.type === 'video' ? <Video className="w-3.5 h-3.5 shrink-0" /> : <ImageIcon className="w-3.5 h-3.5 shrink-0" />}
+                            <span className="truncate">{media.name || media.type}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[9px] text-slate-500">{formatMediaSize(media.size)}</span>
+                            <button
+                              type="button"
+                              onClick={() => applyGalleryMediaSelection(media)}
+                              disabled={isSelected && mediaPickerTarget.kind === 'product-media'}
+                              className={`rounded-lg px-2.5 py-1.5 text-[10px] font-bold cursor-pointer disabled:cursor-not-allowed ${
+                                isSelected
+                                  ? 'bg-sky-500/20 text-sky-200'
+                                  : 'bg-white text-slate-900 hover:bg-sky-100'
+                              }`}
+                            >
+                              {isSelected ? (isZh ? '已选择' : 'Selected') : (isZh ? '选择' : 'Select')}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
