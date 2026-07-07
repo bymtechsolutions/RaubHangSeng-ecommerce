@@ -700,8 +700,8 @@ export default function SellerDashboard({
   }, [products, productSearch, productCategoryFilter]);
 
   return (
-    <div id="seller-dashboard-page" className="rhs-admin-shell min-h-screen bg-slate-100 text-slate-800 overflow-hidden">
-      <div className="rhs-admin-frame bg-slate-50 w-full min-h-screen flex flex-col overflow-hidden">
+    <div id="seller-dashboard-page" className="rhs-admin-shell h-screen min-h-screen bg-slate-100 text-slate-800 overflow-hidden">
+      <div className="rhs-admin-frame bg-slate-50 w-full h-full min-h-0 flex flex-col overflow-hidden">
         
         {/* DASHBOARD HEADER */}
         <div className="rhs-admin-topbar bg-slate-900 text-white p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 gap-3 flex-shrink-0">
@@ -767,10 +767,10 @@ export default function SellerDashboard({
         )}
 
         {/* MAIN BODY: SPLIT VIEW FOR DESKTOP / RESPONSIVE FOR MOBILE */}
-        <div className="flex flex-1 overflow-hidden h-full flex-col md:flex-row">
+        <div className="flex flex-1 min-h-0 overflow-hidden flex-col md:flex-row">
           
           {/* LEFT RAIL NAVIGATION */}
-          <div className="rhs-admin-sidebar w-full md:w-64 bg-slate-900 border-r border-slate-800 flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible shrink-0 p-2 md:p-4 gap-1 flex-shrink-0">
+          <div className="rhs-admin-sidebar w-full md:w-64 bg-slate-900 border-r border-slate-800 flex flex-row md:flex-col overflow-x-auto overflow-y-hidden md:overflow-x-hidden md:overflow-y-auto shrink-0 p-2 md:p-4 gap-1 flex-shrink-0 min-h-0">
             <span className="hidden md:block text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-3 px-3">
               {isZh ? '商家中心管理分类' : 'Merchant Categories'}
             </span>
