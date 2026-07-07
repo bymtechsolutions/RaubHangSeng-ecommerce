@@ -20,7 +20,7 @@ import { Product, CartItem, Language, DeliveryDetails, User, OrderRecord, StoreS
 import { X, CheckCircle, Lock } from 'lucide-react';
 import { PRODUCTS } from './data/products';
 import { DEFAULT_COLLECTIONS, normalizeCollectionDisplays } from './data/collections';
-import SellerDashboard from './components/SellerDashboard';
+import SellerDashboard, { type SellerDashboardTab } from './components/SellerDashboard';
 import PolicyView from './components/PolicyView';
 import { createOrder, fetchStore, replaceOrders, replaceProducts, updateSellerPasscode, updateSettings, verifySellerPasscode } from './lib/api';
 import { calculateDiscounts } from './lib/discounts';
@@ -28,6 +28,8 @@ import { calculateDiscounts } from './lib/discounts';
 type AppRoute = 'home' | 'shop' | 'product' | 'about' | 'business-order' | 'login' | 'seller' | 'privacy' | 'terms' | 'refund';
 
 const PRODUCT_ROUTE_PREFIX = '/product/';
+const SELLER_ROUTE_PREFIX = '/seller';
+const SELLER_TABS: SellerDashboardTab[] = ['overview', 'orders', 'customers', 'products', 'collections', 'discounts', 'shipping', 'settings'];
 const DEFAULT_STORE_ANNOUNCEMENT = '【恒升河鱼公告】彭亨河主流特马鲁网箱及野生巴丁/苏丹鱼每日捕捞，西马冷链送达，消费满 RM250 免运费！';
 const getRouteFromPath = (): AppRoute => {
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
@@ -36,7 +38,7 @@ const getRouteFromPath = (): AppRoute => {
   if (path === '/business-order') return 'business-order';
   if (path === '/login') return 'login';
   if (path.startsWith(PRODUCT_ROUTE_PREFIX) && path.length > PRODUCT_ROUTE_PREFIX.length) return 'product';
-  if (path === '/seller') return 'seller';
+  if (path === SELLER_ROUTE_PREFIX || path.startsWith(`${SELLER_ROUTE_PREFIX}/`)) return 'seller';
   if (path === '/privacy') return 'privacy';
   if (path === '/terms') return 'terms';
   if (path === '/refund') return 'refund';
@@ -51,9 +53,18 @@ const getProductIdFromPath = () => {
   return productId ? decodeURIComponent(productId) : null;
 };
 
-const routeToPath = (route: AppRoute, productId?: string | null) => {
+const getSellerTabFromPath = (): SellerDashboardTab => {
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  if (!path.startsWith(`${SELLER_ROUTE_PREFIX}/`)) return 'overview';
+
+  const tab = decodeURIComponent(path.slice(SELLER_ROUTE_PREFIX.length + 1)).split('/')[0];
+  return SELLER_TABS.includes(tab as SellerDashboardTab) ? tab as SellerDashboardTab : 'overview';
+};
+
+const routeToPath = (route: AppRoute, productId?: string | null, sellerTab?: SellerDashboardTab | null) => {
   if (route === 'home') return '/';
   if (route === 'product') return productId ? `/product/${encodeURIComponent(productId)}` : '/shop';
+  if (route === 'seller') return sellerTab ? `/seller/${sellerTab}` : '/seller';
   return `/${route}`;
 };
 
@@ -71,6 +82,7 @@ export default function App() {
   // Main states
   const [route, setRoute] = useState<AppRoute>(() => getRouteFromPath());
   const [activeProductId, setActiveProductId] = useState<string | null>(() => getProductIdFromPath());
+  const [sellerTab, setSellerTab] = useState<SellerDashboardTab>(() => getSellerTabFromPath());
   const [language, setLanguage] = useState<Language>(() => {
     const savedLanguage = localStorage.getItem('raub_hang_seng_language');
     return savedLanguage === 'en' || savedLanguage === 'zh' ? savedLanguage : 'zh';
@@ -249,6 +261,7 @@ export default function App() {
       const nextRoute = getRouteFromPath();
       setRoute(nextRoute);
       setActiveProductId(getProductIdFromPath());
+      setSellerTab(getSellerTabFromPath());
       setActiveSection(routeToActiveSection(nextRoute));
       setSelectedProduct(null);
       setIsCartOpen(false);
@@ -522,8 +535,8 @@ export default function App() {
   const shippingFee = discountTotals.shippingFee;
   const totalAmount = discountTotals.totalAmount;
 
-  const navigateToRoute = (nextRoute: AppRoute, options?: { replace?: boolean; scrollTop?: boolean; productId?: string }) => {
-    const nextPath = routeToPath(nextRoute, options?.productId);
+  const navigateToRoute = (nextRoute: AppRoute, options?: { replace?: boolean; scrollTop?: boolean; productId?: string; sellerTab?: SellerDashboardTab }) => {
+    const nextPath = routeToPath(nextRoute, options?.productId, options?.sellerTab);
     if (window.location.pathname !== nextPath) {
       if (options?.replace) {
         window.history.replaceState(null, '', nextPath);
@@ -534,6 +547,7 @@ export default function App() {
 
     setRoute(nextRoute);
     setActiveProductId(nextRoute === 'product' ? options?.productId ?? null : null);
+    setSellerTab(nextRoute === 'seller' ? options?.sellerTab ?? 'overview' : 'overview');
     setActiveSection(routeToActiveSection(nextRoute));
     setSelectedProduct(null);
     setIsCartOpen(false);
@@ -619,6 +633,17 @@ export default function App() {
     await updateSellerPasscode(currentPasscode, nextPasscode);
   };
 
+  const handleSellerTabChange = (tab: SellerDashboardTab) => {
+    const nextPath = routeToPath('seller', null, tab);
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState(null, '', nextPath);
+    }
+
+    setSellerTab(tab);
+    setRoute('seller');
+    setActiveSection('seller');
+  };
+
   const handleSetActiveSection = (section: string) => {
     const shopCategoryMatch = section.match(/^shop:(.+)$/);
     if (shopCategoryMatch) {
@@ -667,6 +692,8 @@ export default function App() {
         onClose={() => {
           navigateToRoute('home');
         }}
+        initialTab={sellerTab}
+        onTabChange={handleSellerTabChange}
         products={isMaintenanceMode ? draftProducts || products : products}
         setProducts={persistProducts}
         orderHistory={orderHistory}

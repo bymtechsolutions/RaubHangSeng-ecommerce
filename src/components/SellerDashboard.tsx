@@ -39,6 +39,8 @@ import { uploadStorefrontMedia } from '../lib/api';
 interface SellerDashboardProps {
   language: Language;
   onClose: () => void;
+  initialTab?: SellerDashboardTab;
+  onTabChange?: (tab: SellerDashboardTab) => void;
   products: Product[];
   setProducts: (prods: Product[]) => void | Promise<void>;
   orderHistory: OrderRecord[];
@@ -61,7 +63,7 @@ interface SellerDashboardProps {
   onChangeSellerPasscode?: (currentPasscode: string, nextPasscode: string) => void | Promise<void>;
 }
 
-type TabType = 'overview' | 'orders' | 'customers' | 'products' | 'collections' | 'discounts' | 'shipping' | 'settings';
+export type SellerDashboardTab = 'overview' | 'orders' | 'customers' | 'products' | 'collections' | 'discounts' | 'shipping' | 'settings';
 
 const imageUploadMaxBytes = 2 * 1024 * 1024;
 const videoUploadMaxBytes = 10 * 1024 * 1024;
@@ -99,6 +101,8 @@ type MediaPickerTarget =
 export default function SellerDashboard({
   language,
   onClose,
+  initialTab = 'overview',
+  onTabChange,
   products,
   setProducts,
   orderHistory,
@@ -121,7 +125,7 @@ export default function SellerDashboard({
   onChangeSellerPasscode,
 }: SellerDashboardProps) {
   const isZh = language === 'zh';
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<SellerDashboardTab>(initialTab);
 
   // Search & Filter state for Orders
   const [orderSearch, setOrderSearch] = useState('');
@@ -858,6 +862,22 @@ export default function SellerDashboard({
     setFormStockStatus('available');
   };
 
+  const handleTabChange = (tab: SellerDashboardTab) => {
+    setActiveTab(tab);
+    setSelectedOrderDetail(null);
+    resetProductForm();
+    resetDiscountForm();
+    onTabChange?.(tab);
+  };
+
+  useEffect(() => {
+    if (initialTab === activeTab) return;
+    setActiveTab(initialTab);
+    setSelectedOrderDetail(null);
+    resetProductForm();
+    resetDiscountForm();
+  }, [initialTab]);
+
   // Handle Add/Save product
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1217,10 +1237,7 @@ export default function SellerDashboard({
                 <button
                   key={tab.id}
                   onClick={() => {
-                    setActiveTab(tab.id as TabType);
-                    setSelectedOrderDetail(null);
-                    resetProductForm();
-                    resetDiscountForm();
+                    handleTabChange(tab.id as SellerDashboardTab);
                   }}
                   className={`flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer transition-all ${
                     isActive 
@@ -1949,7 +1966,7 @@ export default function SellerDashboard({
                                       setOrderSearch(customer.phoneNumber !== '-' ? customer.phoneNumber : customer.displayName);
                                       setOrderStatusFilter('all');
                                       setSelectedOrderDetail(null);
-                                      setActiveTab('orders');
+                                      handleTabChange('orders');
                                     }}
                                     className="text-sky-600 hover:text-sky-500 font-bold text-[11px] underline cursor-pointer mt-1"
                                   >
@@ -1996,7 +2013,7 @@ export default function SellerDashboard({
                               setOrderSearch(topCustomer.phoneNumber !== '-' ? topCustomer.phoneNumber : topCustomer.displayName);
                               setOrderStatusFilter('all');
                               setSelectedOrderDetail(null);
-                              setActiveTab('orders');
+                              handleTabChange('orders');
                             }}
                             className="w-full py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors"
                           >
