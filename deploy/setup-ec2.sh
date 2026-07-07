@@ -111,9 +111,9 @@ connect_existing_proxy_network() {
   while IFS= read -r network; do
     [[ -z "$network" ]] && continue
     if docker inspect "$CONTAINER_NAME" --format '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' | grep -qx "$network"; then
-      continue
+      docker network disconnect "$network" "$CONTAINER_NAME"
     fi
-    docker network connect "$network" "$CONTAINER_NAME"
+    docker network connect --alias "$CONTAINER_NAME" "$network" "$CONTAINER_NAME"
   done <<< "$networks"
 }
 
