@@ -39,6 +39,22 @@ export default function Products({ language, products = PRODUCTS, initialCategor
     { id: 'wellness', zh: '养生调理', en: 'Health & Wellness' },
   ];
 
+  const categoryCounts = useMemo(() => {
+    const counts: Record<CategoryFilter, number> = {
+      all: products.length,
+      premium: 0,
+      wild: 0,
+      aquaculture: 0,
+      wellness: 0,
+    };
+
+    products.forEach((product) => {
+      counts[product.category] += 1;
+    });
+
+    return counts;
+  }, [products]);
+
   // Initialize selection settings for a product card if not set yet
   const getCardSelection = (product: Product) => {
     return cardSelections[product.id] || {
@@ -87,7 +103,7 @@ export default function Products({ language, products = PRODUCTS, initialCategor
     }
 
     return result;
-  }, [selectedCategory, searchQuery, sortBy]);
+  }, [products, selectedCategory, searchQuery, sortBy]);
 
   const getStockStatusLabel = (status: Product['stockStatus']) => {
     switch (status) {
@@ -119,18 +135,18 @@ export default function Products({ language, products = PRODUCTS, initialCategor
   };
 
   return (
-    <section id="products" className="py-24 rhs-section-alt border-t border-[#c4d5d9]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section id="products" className="py-12 md:py-16 rhs-section-alt border-t border-[#c4d5d9]">
+      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Section Header */}
-        <div className="text-center space-y-3 max-w-3xl mx-auto mb-16">
+        <div className="space-y-3 max-w-3xl mb-8">
           <h2 className="text-sm font-semibold uppercase tracking-widest text-sky-600">
             {isZh ? '天然彭亨河鲜网店' : 'Pahang Premium River Delicacies'}
           </h2>
-          <p className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
+          <p className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
             {isZh ? '严选彭亨上品河鱼' : 'Browse Our Selected Fresh River Catch'}
           </p>
-          <div className="h-1.5 w-16 bg-gradient-to-r from-sky-500 to-blue-600 mx-auto rounded-full" />
+          <div className="h-1.5 w-16 bg-gradient-to-r from-sky-500 to-blue-600 rounded-full" />
           <p className="text-[#536c74] text-sm md:text-base">
             {isZh
               ? '我们的河鱼起捕后一律由特聘老师傅即时活杀处理，剔除腥源。真空密封锁鲜，在最短的时间内送达您的府上。'
@@ -138,69 +154,99 @@ export default function Products({ language, products = PRODUCTS, initialCategor
           </p>
         </div>
 
-        {/* Filter Toolbar */}
-        <div className="rhs-panel border rounded-2xl p-4 md:p-6 mb-10 shadow-sm space-y-4 md:space-y-0 md:flex md:items-center md:justify-between gap-4">
+        {/* Catalog Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6 lg:gap-8 items-start">
+          <aside className="rhs-panel border rounded-2xl p-4 md:p-5 shadow-sm space-y-6 lg:sticky lg:top-[calc(var(--rhs-topbar-height)+24px)]">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                {isZh ? '筛选商品' : 'Filter Products'}
+              </h3>
+              <p className="text-xs text-[#536c74] mt-1">
+                {isZh ? `${filteredProducts.length} 个商品` : `${filteredProducts.length} products`}
+              </p>
+            </div>
           
-          {/* Search Box */}
-          <div className="relative flex-grow max-w-md">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-              <Search className="w-4 h-4" />
+            {/* Search Box */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Search className="w-4 h-4" />
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={isZh ? '搜索河鱼、巴丁、苏丹鱼...' : 'Search fish, patin, sultan...'}
+                className="w-full bg-[#edf5f4] border border-[#c4d5d9] focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-500 transition-colors focus:outline-none"
+              />
             </div>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={isZh ? '搜索河鱼、巴丁、苏丹鱼、科学分类...' : 'Search fish, patin, sultan, tilapia, scientific name...'}
-              className="w-full bg-[#edf5f4] border border-[#c4d5d9] focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-850 placeholder-slate-500 transition-colors focus:outline-none"
-            />
-          </div>
 
-          {/* Sorters and Settings */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center space-x-2 text-xs font-semibold text-slate-500">
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>{isZh ? '排序' : 'Sort By'}</span>
+            {/* Sorters and Settings */}
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2 text-xs font-semibold text-slate-500">
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>{isZh ? '排序' : 'Sort By'}</span>
+              </div>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-xl px-3 py-2.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-sky-500 transition-colors"
+              >
+                <option value="default">{isZh ? '默认推荐' : 'Recommended'}</option>
+                <option value="priceAsc">{isZh ? '价格：从低到高' : 'Price: Low to High'}</option>
+                <option value="priceDesc">{isZh ? '价格：从高到低' : 'Price: High to Low'}</option>
+              </select>
             </div>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-[#edf5f4] border border-[#c4d5d9] rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:border-sky-500 transition-colors"
-            >
-              <option value="default">{isZh ? '默认推荐' : 'Recommended'}</option>
-              <option value="priceAsc">{isZh ? '价格：从低到高' : 'Price: Low to High'}</option>
-              <option value="priceDesc">{isZh ? '价格：从高到低' : 'Price: High to Low'}</option>
-            </select>
-          </div>
-        </div>
 
-        {/* Categories Tab Bar */}
-        <div className="flex overflow-x-auto pb-4 mb-10 -mx-4 px-4 sm:mx-0 sm:px-0 gap-2 scrollbar-none">
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id as CategoryFilter)}
-              className={`flex-shrink-0 px-4 py-2.5 rounded-full text-xs md:text-sm font-semibold transition-all border cursor-pointer ${
-                selectedCategory === cat.id
-                  ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white border-transparent shadow-md scale-105'
-                  : 'bg-[#f4f8f7] text-slate-600 border-[#c4d5d9] hover:text-sky-600 hover:border-sky-300'
-              }`}
-            >
-              {isZh ? cat.zh : cat.en}
-            </button>
-          ))}
-        </div>
+            {/* Categories Tab Bar */}
+            <div className="space-y-2 border-t border-[#d6e3e5] pt-5">
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id as CategoryFilter)}
+                  className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-xs md:text-sm font-semibold transition-all border cursor-pointer ${
+                    selectedCategory === cat.id
+                      ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white border-transparent shadow-md'
+                      : 'bg-[#f4f8f7] text-slate-600 border-[#c4d5d9] hover:text-sky-600 hover:border-sky-300'
+                  }`}
+                >
+                  <span>{isZh ? cat.zh : cat.en}</span>
+                  <span className={`text-[11px] font-mono ${selectedCategory === cat.id ? 'text-white/85' : 'text-slate-400'}`}>
+                    {categoryCounts[cat.id as CategoryFilter]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </aside>
 
-        {/* Products Grid */}
-        {filteredProducts.length === 0 ? (
-          <div className="text-center py-20 rhs-panel border border-dashed rounded-3xl p-8">
-            <AlertCircle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-slate-800">{isZh ? '没有找到相关河鱼' : 'No Fish Matches Found'}</h3>
-            <p className="text-slate-500 text-sm mt-1">
-              {isZh ? '建议您换一个搜索关键词或切换品类。' : 'Try adjusting your search criteria or selecting another category.'}
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
+              <div>
+                <h3 className="text-lg md:text-xl font-extrabold text-slate-900">
+                  {selectedCategory === 'all'
+                    ? (isZh ? '全部商品' : 'All Products')
+                    : (isZh
+                      ? categories.find((cat) => cat.id === selectedCategory)?.zh
+                      : categories.find((cat) => cat.id === selectedCategory)?.en)}
+                </h3>
+                <p className="text-xs text-[#536c74] mt-1">
+                  {isZh
+                    ? `显示 ${filteredProducts.length} / ${products.length} 个商品`
+                    : `Showing ${filteredProducts.length} of ${products.length} products`}
+                </p>
+              </div>
+            </div>
+
+            {/* Products Grid */}
+            {filteredProducts.length === 0 ? (
+              <div className="text-center py-20 rhs-panel border border-dashed rounded-3xl p-8">
+                <AlertCircle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-slate-800">{isZh ? '没有找到相关河鱼' : 'No Fish Matches Found'}</h3>
+                <p className="text-slate-500 text-sm mt-1">
+                  {isZh ? '建议您换一个搜索关键词或切换品类。' : 'Try adjusting your search criteria or selecting another category.'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
             {filteredProducts.map((product) => {
               const selection = getCardSelection(product);
               const status = getStockStatusLabel(product.stockStatus);
@@ -436,8 +482,10 @@ export default function Products({ language, products = PRODUCTS, initialCategor
                 </div>
               );
             })}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </section>
   );
