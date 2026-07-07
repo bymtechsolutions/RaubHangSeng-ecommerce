@@ -30,6 +30,7 @@ export default function ProductPage({
   const [quantity, setQuantity] = useState(1);
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [isMediaOverrideActive, setIsMediaOverrideActive] = useState(false);
 
   useEffect(() => {
     if (!product) return;
@@ -39,6 +40,7 @@ export default function ProductPage({
     setQuantity(1);
     setSelectedMediaId(product.media?.[0]?.id ?? null);
     setSelectedVariantId(firstVariant?.id ?? null);
+    setIsMediaOverrideActive(false);
   }, [product]);
 
   if (!product) {
@@ -79,9 +81,12 @@ export default function ProductPage({
   const hasVariants = Boolean(product.variants?.length);
   const selectedVariant = product.variants?.find((variant) => variant.id === selectedVariantId);
   const isCustomVariantInquiry = selectedVariantId === CUSTOM_VARIANT_INQUIRY_ID;
-  const heroMedia = selectedVariant?.image
+  const selectedVariantMedia = selectedVariant?.image
     ? { url: selectedVariant.image, type: 'image' as const }
-    : selectedMedia;
+    : null;
+  const heroMedia = isMediaOverrideActive
+    ? selectedMedia
+    : selectedVariantMedia || selectedMedia;
 
   const stockLabel = {
     available: isZh ? '常备现货' : 'Ready Stock',
@@ -132,10 +137,13 @@ export default function ProductPage({
               <div className="relative min-h-[320px] md:min-h-[520px] bg-slate-900 overflow-hidden">
                 {heroMedia?.type === 'video' ? (
                   <video
+                    key={heroMedia.url}
                     src={heroMedia.url}
-                    className="absolute inset-0 w-full h-full object-cover saturate-[0.9]"
+                    className="absolute inset-0 w-full h-full object-contain bg-slate-950 saturate-[0.9]"
                     controls
                     muted
+                    playsInline
+                    preload="metadata"
                   />
                 ) : (
                   <img
@@ -148,8 +156,10 @@ export default function ProductPage({
                 {orderingPaused && (
                   <div className="absolute inset-0 z-10 bg-slate-200/20 pointer-events-none" />
                 )}
-                <div className="absolute inset-0 bg-linear-to-t from-[#092942]/88 via-[#092942]/24 to-transparent" />
-                <div className="absolute left-5 right-5 bottom-5 md:left-8 md:right-8 md:bottom-8 text-white">
+                <div className="absolute inset-0 pointer-events-none bg-linear-to-t from-[#092942]/88 via-[#092942]/24 to-transparent" />
+                <div className={`absolute left-5 right-5 md:left-8 md:right-8 text-white pointer-events-none ${
+                  heroMedia?.type === 'video' ? 'bottom-16 md:bottom-16' : 'bottom-5 md:bottom-8'
+                }`}>
                   <div className="flex flex-wrap gap-2 mb-4">
                     <span className="px-3 py-1 rounded-lg bg-white text-[#073c63] text-xs font-bold">
                       {product.isWild ? (isZh ? '彭亨野生捕捞' : 'Pahang Wild Catch') : (isZh ? '彭亨河水养殖' : 'Pahang River Raised')}
@@ -177,15 +187,13 @@ export default function ProductPage({
                 <div className="px-5 md:px-8 py-4 border-b border-[#c4d5d9] bg-[#edf5f4]">
                   <div className="flex gap-3 overflow-x-auto pb-1">
                     {mediaItems.map((media) => {
-                      const isActive = !selectedVariantId && media.id === selectedMedia?.id;
+                      const isActive = isMediaOverrideActive && media.id === selectedMedia?.id;
                       return (
                         <button
                           key={media.id}
                           onClick={() => {
-                            if (!hasVariants) {
-                              setSelectedVariantId(null);
-                            }
                             setSelectedMediaId(media.id);
+                            setIsMediaOverrideActive(true);
                           }}
                           className={`relative w-24 h-20 shrink-0 rounded-xl overflow-hidden border-2 bg-slate-100 cursor-pointer transition-all ${
                             isActive ? 'border-sky-500 shadow-md' : 'border-white hover:border-sky-300'
@@ -194,7 +202,7 @@ export default function ProductPage({
                         >
                           {media.type === 'video' ? (
                             <>
-                              <video src={media.url} className="w-full h-full object-cover" muted />
+                              <video src={media.url} className="w-full h-full object-cover" muted playsInline preload="metadata" />
                               <span className="absolute bottom-1 left-1 rounded bg-slate-950/70 px-1.5 py-0.5 text-[9px] font-bold text-white">
                                 Video
                               </span>
@@ -332,6 +340,7 @@ export default function ProductPage({
                               setSelectedVariantId(variant.id);
                               setWeightKg(variant.weightKg);
                               setCutType(variant.cutType);
+                              setIsMediaOverrideActive(false);
                             }}
                             disabled={orderingPaused}
                             className={`text-left min-h-24 rounded-xl border p-3 transition-all cursor-pointer ${
