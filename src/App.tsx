@@ -32,6 +32,7 @@ const PRODUCT_ROUTE_PREFIX = '/product/';
 const SELLER_ROUTE_PREFIX = '/seller';
 const SELLER_TABS: SellerDashboardTab[] = ['overview', 'orders', 'customers', 'products', 'collections', 'discounts', 'shipping', 'settings'];
 const DEFAULT_STORE_ANNOUNCEMENT = '【恒升河鱼公告】彭亨河主流特马鲁网箱及野生巴丁/苏丹鱼每日捕捞，西马冷链送达，消费满 RM250 免运费！';
+const DEFAULT_BANK_TRANSFER_INSTRUCTIONS = 'Transfer the exact total amount, then upload your payment slip before submitting the order.';
 const getRouteFromPath = (): AppRoute => {
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
   if (path === '/shop') return 'shop';
@@ -122,6 +123,10 @@ export default function App() {
   const [localShippingRate, setLocalShippingRate] = useState(20);
   const [outstationShippingRate, setOutstationShippingRate] = useState(30);
   const [storeAnnouncement, setStoreAnnouncement] = useState(DEFAULT_STORE_ANNOUNCEMENT);
+  const [bankName, setBankName] = useState('');
+  const [bankAccountHolder, setBankAccountHolder] = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [bankTransferInstructions, setBankTransferInstructions] = useState(DEFAULT_BANK_TRANSFER_INSTRUCTIONS);
   const [collectionDisplays, setCollectionDisplays] = useState<CollectionDisplay[]>(DEFAULT_COLLECTIONS);
   const [mediaLibrary, setMediaLibrary] = useState<ProductMedia[]>([]);
   const [discounts, setDiscounts] = useState<StoreDiscount[]>([]);
@@ -132,6 +137,10 @@ export default function App() {
     setLocalShippingRate(Number(settings.localShippingRate) || 20);
     setOutstationShippingRate(Number(settings.outstationShippingRate) || 30);
     setStoreAnnouncement(settings.storeAnnouncement || DEFAULT_STORE_ANNOUNCEMENT);
+    setBankName(settings.bankName || '');
+    setBankAccountHolder(settings.bankAccountHolder || '');
+    setBankAccountNumber(settings.bankAccountNumber || '');
+    setBankTransferInstructions(settings.bankTransferInstructions || DEFAULT_BANK_TRANSFER_INSTRUCTIONS);
     setCollectionDisplays(normalizeCollectionDisplays(settings.collections));
     setMediaLibrary(Array.isArray(settings.mediaLibrary) ? normalizeMediaLibraryUrls(settings.mediaLibrary) : []);
     setDiscounts(Array.isArray(settings.discounts) ? settings.discounts : []);
@@ -225,6 +234,10 @@ export default function App() {
         localShippingRate: Number(localStorage.getItem('raub_hang_seng_local_rate')) || 20,
         outstationShippingRate: Number(localStorage.getItem('raub_hang_seng_outstation_rate')) || 30,
         storeAnnouncement: localStorage.getItem('raub_hang_seng_announcement') || DEFAULT_STORE_ANNOUNCEMENT,
+        bankName: localStorage.getItem('raub_hang_seng_bank_name') || '',
+        bankAccountHolder: localStorage.getItem('raub_hang_seng_bank_holder') || '',
+        bankAccountNumber: localStorage.getItem('raub_hang_seng_bank_number') || '',
+        bankTransferInstructions: localStorage.getItem('raub_hang_seng_bank_instructions') || DEFAULT_BANK_TRANSFER_INSTRUCTIONS,
         collections: savedCollections,
         mediaLibrary: savedMediaLibrary,
         discounts: savedDiscounts,
@@ -252,6 +265,10 @@ export default function App() {
         localStorage.setItem('raub_hang_seng_local_rate', String(store.settings.localShippingRate));
         localStorage.setItem('raub_hang_seng_outstation_rate', String(store.settings.outstationShippingRate));
         localStorage.setItem('raub_hang_seng_announcement', store.settings.storeAnnouncement);
+        localStorage.setItem('raub_hang_seng_bank_name', store.settings.bankName || '');
+        localStorage.setItem('raub_hang_seng_bank_holder', store.settings.bankAccountHolder || '');
+        localStorage.setItem('raub_hang_seng_bank_number', store.settings.bankAccountNumber || '');
+        localStorage.setItem('raub_hang_seng_bank_instructions', store.settings.bankTransferInstructions || DEFAULT_BANK_TRANSFER_INSTRUCTIONS);
         localStorage.setItem('raub_hang_seng_collections', JSON.stringify(normalizeCollectionDisplays(store.settings.collections)));
         localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(normalizeMediaLibraryUrls(store.settings.mediaLibrary || [])));
         localStorage.setItem('raub_hang_seng_discounts', JSON.stringify(store.settings.discounts || []));
@@ -391,6 +408,22 @@ export default function App() {
       setStoreAnnouncement(settingsPatch.storeAnnouncement);
       localStorage.setItem('raub_hang_seng_announcement', settingsPatch.storeAnnouncement);
     }
+    if (settingsPatch.bankName !== undefined) {
+      setBankName(settingsPatch.bankName);
+      localStorage.setItem('raub_hang_seng_bank_name', settingsPatch.bankName);
+    }
+    if (settingsPatch.bankAccountHolder !== undefined) {
+      setBankAccountHolder(settingsPatch.bankAccountHolder);
+      localStorage.setItem('raub_hang_seng_bank_holder', settingsPatch.bankAccountHolder);
+    }
+    if (settingsPatch.bankAccountNumber !== undefined) {
+      setBankAccountNumber(settingsPatch.bankAccountNumber);
+      localStorage.setItem('raub_hang_seng_bank_number', settingsPatch.bankAccountNumber);
+    }
+    if (settingsPatch.bankTransferInstructions !== undefined) {
+      setBankTransferInstructions(settingsPatch.bankTransferInstructions);
+      localStorage.setItem('raub_hang_seng_bank_instructions', settingsPatch.bankTransferInstructions);
+    }
     if (settingsPatch.collections !== undefined) {
       const normalizedCollections = normalizeCollectionDisplays(settingsPatch.collections);
       setCollectionDisplays(normalizedCollections);
@@ -415,6 +448,10 @@ export default function App() {
       localStorage.setItem('raub_hang_seng_local_rate', String(response.settings.localShippingRate));
       localStorage.setItem('raub_hang_seng_outstation_rate', String(response.settings.outstationShippingRate));
       localStorage.setItem('raub_hang_seng_announcement', response.settings.storeAnnouncement);
+      localStorage.setItem('raub_hang_seng_bank_name', response.settings.bankName || '');
+      localStorage.setItem('raub_hang_seng_bank_holder', response.settings.bankAccountHolder || '');
+      localStorage.setItem('raub_hang_seng_bank_number', response.settings.bankAccountNumber || '');
+      localStorage.setItem('raub_hang_seng_bank_instructions', response.settings.bankTransferInstructions || DEFAULT_BANK_TRANSFER_INSTRUCTIONS);
       localStorage.setItem('raub_hang_seng_collections', JSON.stringify(normalizeCollectionDisplays(response.settings.collections)));
       localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(normalizeMediaLibraryUrls(response.settings.mediaLibrary || [])));
       localStorage.setItem('raub_hang_seng_discounts', JSON.stringify(response.settings.discounts || []));
@@ -716,6 +753,14 @@ export default function App() {
         setOutstationShippingRate={setOutstationShippingRate}
         storeAnnouncement={storeAnnouncement}
         setStoreAnnouncement={setStoreAnnouncement}
+        bankName={bankName}
+        setBankName={setBankName}
+        bankAccountHolder={bankAccountHolder}
+        setBankAccountHolder={setBankAccountHolder}
+        bankAccountNumber={bankAccountNumber}
+        setBankAccountNumber={setBankAccountNumber}
+        bankTransferInstructions={bankTransferInstructions}
+        setBankTransferInstructions={setBankTransferInstructions}
         collectionDisplays={collectionDisplays}
         mediaLibrary={mediaLibrary}
         discounts={discounts}
@@ -965,7 +1010,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* MODAL: Form Checkout & WhatsApp order builder */}
+      {/* MODAL: Checkout order submission */}
       {!isOrderingPaused && isCheckoutOpen && (
         <CheckoutModal
           cartItems={cartItems}
@@ -984,6 +1029,12 @@ export default function App() {
           itemDiscountTotal={discountTotals.itemDiscountTotal}
           shippingDiscountTotal={discountTotals.shippingDiscountTotal}
           discountApplications={discountTotals.applications}
+          bankTransferSettings={{
+            bankName,
+            accountHolder: bankAccountHolder,
+            accountNumber: bankAccountNumber,
+            instructions: bankTransferInstructions,
+          }}
         />
       )}
 
@@ -1005,8 +1056,8 @@ export default function App() {
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               {language === 'zh'
-                ? '我们已在新窗口为您唤醒 WhatsApp。请点击【发送】把订单清单发给客服。您上传的银行转账水单会保存在订单中，商家核对付款后会在后台确认并安排配送。'
-                : 'WhatsApp has opened with your order summary. Please press Send. Your uploaded bank transfer slip is saved with the order, and the seller will confirm payment in the dashboard before dispatch.'}
+                ? '订单已保存到商家后台。您上传的银行转账水单会等待商家核对，确认收到款项后会更新订单状态并安排配送。'
+                : 'Your order has been saved to the seller dashboard. The uploaded bank transfer slip is waiting for seller review; once payment is confirmed, the order status will update for dispatch.'}
             </p>
             <div className="rhs-panel-soft border p-3 rounded-lg text-left text-[11px] font-mono text-slate-700">
               <span className="font-bold text-sky-600">Order ID: #{latestOrder}</span>

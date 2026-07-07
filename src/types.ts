@@ -104,6 +104,7 @@ export interface PaymentRecord {
   amount: number;
   bankName?: string;
   accountHolder?: string;
+  accountNumber?: string;
   reference?: string;
   slip?: PaymentSlip;
   confirmedAt?: string;
@@ -134,6 +135,10 @@ export interface StoreSettings {
   localShippingRate: number;
   outstationShippingRate: number;
   storeAnnouncement: string;
+  bankName: string;
+  bankAccountHolder: string;
+  bankAccountNumber: string;
+  bankTransferInstructions: string;
   collections: CollectionDisplay[];
   mediaLibrary: ProductMedia[];
   discounts: StoreDiscount[];
@@ -149,6 +154,7 @@ export interface StoreState {
 export interface DeliveryDetails {
   fullName: string;
   phoneNumber: string;
+  email?: string;
   address: string;
   city: string;
   state: string;

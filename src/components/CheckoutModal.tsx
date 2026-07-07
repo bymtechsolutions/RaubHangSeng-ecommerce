@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, MessageSquare, ShieldCheck, ClipboardCheck, Info, Award, Upload, FileCheck2 } from 'lucide-react';
+import { X, ShieldCheck, ClipboardCheck, Info, Award, Upload, FileCheck2, Landmark } from 'lucide-react';
 import { AppliedDiscount, CartItem, Language, DeliveryDetails, User, OrderRecord, PaymentSlip } from '../types';
 import { getDiscountLabel } from '../lib/discounts';
 
@@ -14,6 +14,12 @@ interface CheckoutModalProps {
   itemDiscountTotal: number;
   shippingDiscountTotal: number;
   discountApplications: AppliedDiscount[];
+  bankTransferSettings: {
+    bankName: string;
+    accountHolder: string;
+    accountNumber: string;
+    instructions: string;
+  };
   onOrderSuccess: (order: OrderRecord) => void;
   currentUser: User | null;
   onAuthClick: () => void;
@@ -30,6 +36,7 @@ export default function CheckoutModal({
   itemDiscountTotal,
   shippingDiscountTotal,
   discountApplications,
+  bankTransferSettings,
   onOrderSuccess,
   currentUser,
   onAuthClick,
@@ -39,6 +46,7 @@ export default function CheckoutModal({
   // Form states
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('Selangor');
@@ -52,6 +60,7 @@ export default function CheckoutModal({
     if (currentUser) {
       setFullName(currentUser.fullName || '');
       setPhoneNumber(currentUser.phoneNumber || '');
+      setEmail(currentUser.email || '');
       setAddress(currentUser.address || '');
       setCity(currentUser.city || '');
       setState(currentUser.state || 'Pahang');
@@ -145,6 +154,9 @@ export default function CheckoutModal({
     const newErrors: Record<string, string> = {};
     if (!fullName.trim()) newErrors.fullName = isZh ? '请填写姓名' : 'Full Name is required';
     if (!phoneNumber.trim()) newErrors.phoneNumber = isZh ? '请填写联系电话' : 'Phone Number is required';
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      newErrors.email = isZh ? '请输入有效的 Email，或留空。' : 'Enter a valid email address, or leave it blank.';
+    }
     if (!address.trim()) newErrors.address = isZh ? '请填写详细配送地址' : 'Delivery Address is required';
     if (!city.trim()) newErrors.city = isZh ? '请填写城市' : 'City is required';
     if (!postcode.trim() || postcode.length !== 5) {
@@ -153,6 +165,9 @@ export default function CheckoutModal({
       newErrors.postcode = isZh ? '抱歉，此地区冷链物流暂未覆盖' : 'Sorry, cold-chain is not available for this area';
     }
     if (!deliveryDate) newErrors.deliveryDate = isZh ? '请选择期望送达日期' : 'Select a delivery date';
+    if (!bankTransferSettings.bankName.trim() || !bankTransferSettings.accountHolder.trim() || !bankTransferSettings.accountNumber.trim()) {
+      newErrors.bankTransfer = isZh ? '商家尚未设置完整银行转账资料，请稍后再下单。' : 'Bank transfer details are not fully configured yet. Please order after the seller configures them.';
+    }
     if (!paymentSlip) newErrors.paymentSlip = isZh ? '请上传银行转账水单。' : 'Upload your bank transfer payment slip.';
 
     setErrors(newErrors);
@@ -180,6 +195,7 @@ export default function CheckoutModal({
     const details: DeliveryDetails = {
       fullName,
       phoneNumber,
+      email: email.trim() || undefined,
       address,
       city,
       state,
@@ -188,46 +204,7 @@ export default function CheckoutModal({
       notes,
     };
 
-    // 2. Generate WhatsApp Text Invoice
-    let waText = `🐟 *【彭亨河鱼 PAHANG RIVER FISH】新订单* 🐟\n`;
-    waText += `===============================\n`;
-    waText += `🆔 *订单编号:* #${orderId}\n`;
-    waText += `📅 *下单日期:* ${currentDate}\n\n`;
-    
-    waText += `👤 *顾客姓名:* ${fullName}\n`;
-    waText += `📞 *联系电话:* ${phoneNumber}\n`;
-    waText += `📍 *配送地址:* ${address}, ${city}, ${postcode}, ${state}\n`;
-    waText += `🚚 *期望送达:* ${deliveryDate}\n`;
-    if (notes.trim()) {
-      waText += `✍️ *备注说明:* ${notes}\n`;
-    }
-    waText += `===============================\n`;
-    waText += `🛒 *选购商品明细:*\n\n`;
-
-    cartItems.forEach((item, index) => {
-      const itemSubtotal = item.product.pricePerKg * item.selectedWeightKg * item.quantity;
-      const name = isZh ? item.product.nameZh : item.product.nameEn;
-      waText += `${index + 1}. *${name}*\n`;
-      waText += `   规格: ~${item.selectedWeightKg.toFixed(1)}kg/条 • ${getCutTypeLabel(item.cutType)}\n`;
-      waText += `   单价: RM ${item.product.pricePerKg}/kg\n`;
-      waText += `   数量: ${item.quantity} 条\n`;
-      waText += `   小计: *RM ${itemSubtotal.toFixed(2)}*\n\n`;
-    });
-
-    waText += `===============================\n`;
-    waText += `💵 *商品小计:* RM ${subtotal.toFixed(2)}\n`;
-    discountApplications.forEach((discount) => {
-      waText += `🏷️ *${getDiscountLabel(discount, isZh)}:* -RM ${discount.amount.toFixed(2)}\n`;
-    });
-    waText += `🚚 *冷链运费:* ${shippingFee === 0 ? 'FREE (免运费)' : `RM ${shippingFee.toFixed(2)}`}\n`;
-    waText += `💰 *应付总额:* *RM ${totalAmount.toFixed(2)}*\n\n`;
-    waText += `🏦 *付款方式:* Manual Bank Transfer\n`;
-    waText += `📎 *付款水单:* ${paymentSlip?.name || '-'}\n`;
-    waText += `⏳ *付款状态:* 已上传水单，等待商家后台确认\n\n`;
-    waText += `===============================\n`;
-    waText += `*💡 温馨说明:* 请发送此消息给客服。您已在网站上传银行转账水单，商家会在后台核对付款并确认订单，然后安排冷链发货。感谢您的惠顾！`;
-
-    // 3. Callback order creation to parent (triggers state clean and saves in order list)
+    // 2. Create website order. Seller confirms payment after reviewing the uploaded slip.
     onOrderSuccess({
       id: orderId,
       items: cartItems,
@@ -244,15 +221,12 @@ export default function CheckoutModal({
         method: 'bank_transfer',
         status: 'pending_review',
         amount: totalAmount,
-        bankName: 'Manual Bank Transfer',
+        bankName: bankTransferSettings.bankName,
+        accountHolder: bankTransferSettings.accountHolder,
+        accountNumber: bankTransferSettings.accountNumber,
         slip: paymentSlip || undefined,
       },
     });
-
-    // 4. Trigger redirect to Merchant WhatsApp (Malaysia phone +60187682528, formatted standard merchant line)
-    const encoded = encodeURIComponent(waText);
-    const whatsappUrl = `https://wa.me/60187682528?text=${encoded}`;
-    window.open(whatsappUrl, '_blank');
   };
 
   return (
@@ -279,8 +253,8 @@ export default function CheckoutModal({
           </h3>
           <p className="text-xs text-slate-500 mt-1">
             {isZh
-              ? '请填写以下真实资料，系统将自动汇总报价并生成格式化清单发送到微信/WhatsApp客服进行确认。'
-              : 'Please enter your shipping information. System will generate a formatted invoice to send to our WhatsApp representative.'}
+              ? '请填写配送资料，完成银行转账后上传水单。订单会直接保存到商家后台等待付款确认。'
+              : 'Enter delivery details, upload your bank transfer slip, and submit the order directly to the seller dashboard.'}
           </p>
         </div>
 
@@ -300,7 +274,7 @@ export default function CheckoutModal({
                   <div>
                     <span className="text-[9px] text-sky-600 font-bold block uppercase tracking-wider">{isZh ? '会员专享优惠中' : 'Member Logged In'}</span>
                     <p className="text-[11px] text-slate-700 font-medium leading-tight">
-                      {isZh ? `已自动填妥资料 • 订单赠 ${Math.round(totalAmount)} 积分` : `Autofill active • Earns +${Math.round(totalAmount)} points`}
+                      {isZh ? '已自动填妥会员配送资料' : 'Autofill active for your delivery details'}
                     </p>
                   </div>
                 </div>
@@ -346,7 +320,7 @@ export default function CheckoutModal({
             {/* Input Phone */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 block uppercase tracking-wide">
-                {isZh ? '联系电话 (WhatsApp)' : 'Phone Number (WhatsApp)'} <span className="text-red-500">*</span>
+                {isZh ? '联系电话' : 'Phone Number'} <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -358,6 +332,22 @@ export default function CheckoutModal({
                 }`}
               />
               {errors.phoneNumber && <p className="text-[10px] text-red-500">{errors.phoneNumber}</p>}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 block uppercase tracking-wide">
+                {isZh ? 'Email（接收订单更新，可选）' : 'Email for order updates (optional)'}
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={isZh ? '例如: customer@email.com' : 'e.g. customer@email.com'}
+                className={`w-full bg-white border rounded-xl px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-1 focus:ring-sky-500 transition-colors ${
+                  errors.email ? 'border-red-500 focus:border-red-500' : 'border-slate-200 focus:border-sky-500'
+                }`}
+              />
+              {errors.email && <p className="text-[10px] text-red-500">{errors.email}</p>}
             </div>
 
             {/* State selection */}
@@ -483,8 +473,35 @@ export default function CheckoutModal({
                   {isZh
                     ? '请完成手动银行转账后上传水单。商家会在后台核对付款后确认订单。'
                     : 'Upload your payment slip after manual bank transfer. Seller will confirm payment from the dashboard.'}
-                </p>
+                  </p>
               </div>
+
+              <div className={`rounded-xl border p-3 text-xs ${
+                errors.bankTransfer ? 'border-rose-200 bg-rose-50' : 'border-sky-200 bg-white'
+              }`}>
+                <div className="flex items-start gap-2">
+                  <Landmark className={`mt-0.5 h-4 w-4 shrink-0 ${errors.bankTransfer ? 'text-rose-600' : 'text-sky-600'}`} />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-slate-400">{isZh ? '银行' : 'Bank'}</span>
+                      <strong className="text-right text-slate-800">{bankTransferSettings.bankName || '-'}</strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-slate-400">{isZh ? '户口名' : 'Account holder'}</span>
+                      <strong className="text-right text-slate-800">{bankTransferSettings.accountHolder || '-'}</strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-slate-400">{isZh ? '户口号' : 'Account no.'}</span>
+                      <strong className="text-right font-mono text-slate-900">{bankTransferSettings.accountNumber || '-'}</strong>
+                    </div>
+                    <p className="border-t border-slate-100 pt-2 text-[10px] leading-5 text-slate-500">
+                      {bankTransferSettings.instructions || (isZh ? '请转账准确总额，并上传付款水单。' : 'Transfer the exact total and upload the payment slip.')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {errors.bankTransfer && <p className="text-[10px] text-red-500">{errors.bankTransfer}</p>}
 
               <label className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-sky-300 bg-white px-3 py-3 text-xs cursor-pointer hover:border-sky-500 transition-colors">
                 <div className="flex items-center gap-2 min-w-0">
@@ -611,17 +628,17 @@ export default function CheckoutModal({
               </div>
             </div>
 
-            {/* WhatsApp guidelines note */}
+            {/* Order processing note */}
             <div className="bg-[#f8fbfa] border border-[#c4d5d9] rounded-xl p-3 text-[10px] text-slate-500 space-y-2">
               <p className="font-semibold text-sky-600 flex items-center uppercase">
                 <Info className="w-3.5 h-3.5 mr-1" />
                 {isZh ? '下单说明' : 'How Order Processing Works'}
               </p>
               <ol className="list-decimal pl-3.5 space-y-1">
-                <li>{isZh ? '点击下方按钮，会自动为您唤醒手机或电脑上的 WhatsApp API' : 'Click the submit button to launch WhatsApp with the generated message.'}</li>
-                <li>{isZh ? '请先完成手动银行转账，并在左侧上传付款水单。' : 'Complete manual bank transfer first and upload the payment slip on the left.'}</li>
-                <li>{isZh ? '直接发送已生成的发票信息给我们的客服专员。' : 'Send the auto-written invoice text to our support representative.'}</li>
-                <li>{isZh ? '商家会在后台核对水单并确认订单，再安排冷链配送。' : 'Seller reviews the slip in the dashboard, confirms payment, then arranges cold-chain delivery.'}</li>
+                <li>{isZh ? '请先按左侧银行资料完成手动转账。' : 'Transfer manually using the bank details on the left.'}</li>
+                <li>{isZh ? '上传付款水单后提交订单，系统会保存到商家后台。' : 'Upload the payment slip and submit; the order is saved to the seller dashboard.'}</li>
+                <li>{isZh ? '付款状态会先显示为等待核对。' : 'Payment status starts as awaiting review.'}</li>
+                <li>{isZh ? '商家确认收到款项后，会把订单更新为处理中并安排冷链配送。' : 'After the seller confirms receipt, the order moves to processing for cold-chain dispatch.'}</li>
               </ol>
             </div>
 
@@ -631,8 +648,8 @@ export default function CheckoutModal({
                 type="submit"
                 className="w-full flex items-center justify-center space-x-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-bold rounded-xl transition-all shadow-xs cursor-pointer text-sm"
               >
-                <MessageSquare className="w-4 h-4 text-emerald-100" />
-                <span>{isZh ? '提交订单与付款水单' : 'Submit Order & Payment Slip'}</span>
+                <ClipboardCheck className="w-4 h-4 text-emerald-100" />
+                <span>{isZh ? '提交订单与付款水单' : 'Submit Website Order'}</span>
               </button>
               
               <button

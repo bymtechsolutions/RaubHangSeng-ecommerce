@@ -56,6 +56,14 @@ interface SellerDashboardProps {
   setOutstationShippingRate: (val: number) => void;
   storeAnnouncement: string;
   setStoreAnnouncement: (val: string) => void;
+  bankName: string;
+  setBankName: (val: string) => void;
+  bankAccountHolder: string;
+  setBankAccountHolder: (val: string) => void;
+  bankAccountNumber: string;
+  setBankAccountNumber: (val: string) => void;
+  bankTransferInstructions: string;
+  setBankTransferInstructions: (val: string) => void;
   collectionDisplays: CollectionDisplay[];
   mediaLibrary: ProductMedia[];
   discounts: StoreDiscount[];
@@ -118,6 +126,14 @@ export default function SellerDashboard({
   setOutstationShippingRate,
   storeAnnouncement,
   setStoreAnnouncement,
+  bankName,
+  setBankName,
+  bankAccountHolder,
+  setBankAccountHolder,
+  bankAccountNumber,
+  setBankAccountNumber,
+  bankTransferInstructions,
+  setBankTransferInstructions,
   collectionDisplays,
   mediaLibrary,
   discounts,
@@ -1630,6 +1646,9 @@ export default function SellerDashboard({
                           <div className="space-y-1 text-slate-600 leading-relaxed font-sans">
                             <p className="flex justify-between"><span className="text-slate-400">{isZh ? '客户姓名:' : 'Name:'}</span> <strong>{selectedOrderDetail.details?.fullName}</strong></p>
                             <p className="flex justify-between"><span className="text-slate-400">{isZh ? '联络电话:' : 'Phone:'}</span> <strong className="font-mono text-sky-700">{selectedOrderDetail.details?.phoneNumber}</strong></p>
+                            {selectedOrderDetail.details?.email && (
+                              <p className="flex justify-between gap-3"><span className="text-slate-400">Email:</span> <strong className="truncate font-mono text-sky-700">{selectedOrderDetail.details.email}</strong></p>
+                            )}
                             <p className="flex justify-between"><span className="text-slate-400">{isZh ? '预定日期:' : 'Target Date:'}</span> <strong className="font-mono text-amber-600">{selectedOrderDetail.details?.deliveryDate || '-'}</strong></p>
                             <p className="flex justify-between"><span className="text-slate-400">{isZh ? '邮政编码:' : 'Postcode:'}</span> <strong className="font-mono">{selectedOrderDetail.details?.postcode}</strong></p>
                             <p className="flex justify-between"><span className="text-slate-400">{isZh ? '配送城市:' : 'City/State:'}</span> <strong className="font-mono">{selectedOrderDetail.details?.city}, {selectedOrderDetail.details?.state}</strong></p>
@@ -1678,6 +1697,14 @@ export default function SellerDashboard({
                                   <p className="flex flex-col">
                                     <span className="text-slate-400">{isZh ? '付款金额' : 'Amount'}</span>
                                     <strong className="font-mono text-slate-900">RM {(selectedOrderDetail.payment?.amount || selectedOrderDetail.total).toFixed(2)}</strong>
+                                  </p>
+                                  <p className="flex flex-col">
+                                    <span className="text-slate-400">{isZh ? '收款银行' : 'Bank'}</span>
+                                    <strong className="text-slate-700">{selectedOrderDetail.payment?.bankName || '-'}</strong>
+                                  </p>
+                                  <p className="flex flex-col">
+                                    <span className="text-slate-400">{isZh ? '收款户口' : 'Receiving account'}</span>
+                                    <strong className="font-mono text-slate-900">{selectedOrderDetail.payment?.accountNumber || '-'}</strong>
                                   </p>
                                 </div>
 
@@ -3298,6 +3325,87 @@ export default function SellerDashboard({
                         {isZh ? '保存公告文本' : 'Save Announcement'}
                       </button>
                     </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">{isZh ? '手动银行转账设置' : 'Manual Bank Transfer Settings'}</h4>
+                      <p className="text-[10px] text-slate-400">{isZh ? '顾客结账时会看到这些收款资料，并上传付款水单等待商家确认。' : 'Customers see these payment details at checkout and upload a slip for seller confirmation.'}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <label className="block">
+                      <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                        {isZh ? '银行名称' : 'Bank Name'}
+                      </span>
+                      <input
+                        type="text"
+                        value={bankName}
+                        onChange={(e) => setBankName(e.target.value)}
+                        placeholder={isZh ? '例如 Maybank / Public Bank' : 'e.g. Maybank / Public Bank'}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                        {isZh ? '户口持有人' : 'Account Holder'}
+                      </span>
+                      <input
+                        type="text"
+                        value={bankAccountHolder}
+                        onChange={(e) => setBankAccountHolder(e.target.value)}
+                        placeholder="Raub Hang Seng"
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                        {isZh ? '银行户口号码' : 'Account Number'}
+                      </span>
+                      <input
+                        type="text"
+                        value={bankAccountNumber}
+                        onChange={(e) => setBankAccountNumber(e.target.value)}
+                        placeholder={isZh ? '输入真实收款户口号码' : 'Enter the real receiving account number'}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg font-mono"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="block">
+                    <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                      {isZh ? '付款说明' : 'Payment Instructions'}
+                    </span>
+                    <textarea
+                      value={bankTransferInstructions}
+                      onChange={(e) => setBankTransferInstructions(e.target.value)}
+                      rows={3}
+                      placeholder={isZh ? '请转账准确总额，备注订单号，并上传付款水单。' : 'Transfer the exact total, include the order ID as reference, then upload the payment slip.'}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg"
+                    />
+                  </label>
+
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <span className="text-[10px] text-slate-400 italic">
+                      {isZh ? '请先填写真实收款户口资料再开放结账。' : 'Configure real receiving account details before taking live checkout orders.'}
+                    </span>
+                    <button
+                      onClick={async () => {
+                        await onSaveSettings?.({
+                          bankName,
+                          bankAccountHolder,
+                          bankAccountNumber,
+                          bankTransferInstructions,
+                        });
+                        triggerSuccess(isZh ? '银行转账资料已保存！' : 'Bank transfer settings saved!');
+                      }}
+                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer"
+                    >
+                      {isZh ? '保存转账资料' : 'Save Bank Details'}
+                    </button>
                   </div>
                 </div>
 
