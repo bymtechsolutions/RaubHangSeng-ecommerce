@@ -133,7 +133,7 @@ export default function ProductPage({
             <span>{isZh ? '返回全部河鱼' : 'Back to all fish'}</span>
           </button>
 
-          <div className="grid lg:grid-cols-[minmax(0,1fr)_430px] gap-7 lg:gap-8 items-start">
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_370px] gap-6 lg:gap-7 items-start">
             <article className="rhs-panel border rounded-2xl overflow-hidden shadow-sm">
               <div className="relative min-h-[320px] md:min-h-[520px] bg-slate-900 overflow-hidden">
                 {heroMedia?.type === 'video' ? (
@@ -194,7 +194,7 @@ export default function ProductPage({
               )}
             </article>
 
-            <aside className="lg:sticky lg:top-[110px] rhs-panel border rounded-2xl shadow-lg p-5 md:p-6">
+            <aside className="lg:sticky lg:top-[110px] rhs-panel border rounded-2xl shadow-lg p-4">
               {orderingPaused && (
                 <div className="mb-4 rounded-xl border border-slate-200 bg-slate-100 p-3 text-xs font-semibold leading-5 text-slate-600">
                   {isZh
@@ -202,24 +202,24 @@ export default function ProductPage({
                     : 'Product details are being updated. Selection, cart, and ordering are paused until maintenance ends.'}
                 </div>
               )}
-              <div className="flex items-baseline justify-between gap-4">
+              <div className="flex items-baseline justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold text-[#536c74]">
+                  <p className="text-[11px] font-bold text-[#536c74]">
                     {isZh ? '每公斤价格' : 'Price per kg'}
                   </p>
-                  <p className="mt-1 text-3xl font-black text-amber-600 font-mono">
+                  <p className="mt-0.5 text-2xl font-black text-amber-600 font-mono">
                     RM {product.pricePerKg}
                   </p>
                 </div>
-                <span className="px-3 py-1 rounded-full bg-[#edf5f4] border border-[#c4d5d9] text-xs font-bold text-[#17323d]">
+                <span className="px-2.5 py-1 rounded-full bg-[#edf5f4] border border-[#c4d5d9] text-[11px] font-bold text-[#17323d]">
                   {product.averageWeightKg.toFixed(1)}kg {isZh ? '常见规格' : 'avg'}
                 </span>
               </div>
 
-              <div className="mt-6 space-y-4">
+              <div className="mt-4 space-y-3">
                 {product.variants && product.variants.length > 0 && (
                   <div>
-                    <span className="block text-xs font-bold text-[#536c74] mb-2">
+                    <span className="block text-[11px] font-bold text-[#536c74] mb-1.5">
                       {isZh ? '选择规格' : 'Choose variant'}
                     </span>
                     <div className="flex flex-wrap gap-2">
@@ -238,7 +238,7 @@ export default function ProductPage({
                               setIsMediaOverrideActive(false);
                             }}
                             disabled={orderingPaused}
-                            className={`inline-flex min-h-10 items-center justify-center rounded-full border px-4 py-2 text-sm font-extrabold transition-all cursor-pointer ${
+                            className={`inline-flex min-h-9 items-center justify-center rounded-full border px-3 py-1.5 text-xs font-extrabold transition-all cursor-pointer ${
                               orderingPaused
                                 ? 'border-slate-200 bg-slate-100 opacity-70 cursor-not-allowed'
                                 : isActive ? 'border-sky-500 bg-sky-50 shadow-sm' : 'border-[#c4d5d9] bg-[#edf5f4] hover:border-sky-300'
@@ -255,13 +255,13 @@ export default function ProductPage({
                           setSelectedVariantId(CUSTOM_VARIANT_INQUIRY_ID);
                         }}
                         disabled={orderingPaused}
-                        className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-extrabold transition-all cursor-pointer ${
+                        className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-extrabold transition-all cursor-pointer ${
                           orderingPaused
                             ? 'border-slate-200 bg-slate-100 opacity-70 cursor-not-allowed'
                             : isCustomVariantInquiry ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-[#c4d5d9] bg-[#edf5f4] hover:border-emerald-300'
                         }`}
                       >
-                        <MessageCircle className="w-4 h-4 text-emerald-600" />
+                        <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
                         <span>{isZh ? 'WhatsApp' : 'Contact WhatsApp'}</span>
                       </button>
                     </div>
@@ -269,17 +269,17 @@ export default function ProductPage({
                 )}
 
                 {hasVariants ? (
-                  <div className="rounded-xl border border-[#c4d5d9] bg-[#edf5f4] p-3">
-                    <span className="block text-xs font-bold text-[#536c74] mb-2">
+                  <div className="rounded-xl border border-[#c4d5d9] bg-[#edf5f4] p-2.5">
+                    <span className="block text-[11px] font-bold text-[#536c74] mb-1.5">
                       {isZh ? '已选订购选项' : 'Selected order option'}
                     </span>
                     {isCustomVariantInquiry ? (
-                      <div className="flex items-start gap-2 text-sm font-semibold text-emerald-700">
+                      <div className="flex items-start gap-2 text-xs font-semibold text-emerald-700">
                         <MessageCircle className="w-4 h-4 shrink-0 mt-0.5" />
                         <span>{isZh ? '请使用 WhatsApp 询问其他规格或特殊处理。' : 'Use WhatsApp to ask about other options or custom processing.'}</span>
                       </div>
                     ) : selectedVariant ? (
-                      <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="grid grid-cols-2 gap-3 text-[11px]">
                         <div>
                           <span className="block text-[#536c74]">{isZh ? '规格' : 'Variant'}</span>
                           <strong className="mt-1 block text-[#17323d]">{selectedVariantName}</strong>
@@ -292,7 +292,7 @@ export default function ProductPage({
                         </div>
                       </div>
                     ) : (
-                      <p className="text-sm font-semibold text-[#536c74]">
+                      <p className="text-xs font-semibold text-[#536c74]">
                         {isZh ? '请选择一个规格。' : 'Choose a variant.'}
                       </p>
                     )}
@@ -300,14 +300,14 @@ export default function ProductPage({
                 ) : (
                   <>
                 <label className="block">
-                  <span className="block text-xs font-bold text-[#536c74] mb-1.5">
+                  <span className="block text-[11px] font-bold text-[#536c74] mb-1.5">
                     {isZh ? '单条估重' : 'Fish weight'}
                   </span>
                   <select
                     value={weightKg}
                     onChange={(event) => setWeightKg(parseFloat(event.target.value))}
                     disabled={orderingPaused}
-                    className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-xl px-3 py-3 text-sm font-semibold text-[#17323d] focus:outline-none focus:border-sky-600 focus:ring-1 focus:ring-sky-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-xl px-3 py-2.5 text-xs font-semibold text-[#17323d] focus:outline-none focus:border-sky-600 focus:ring-1 focus:ring-sky-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     <option value={product.averageWeightKg * 0.8}>
                       {(product.averageWeightKg * 0.8).toFixed(1)} kg ({isZh ? '小条' : 'Small'})
@@ -328,14 +328,14 @@ export default function ProductPage({
                 </label>
 
                 <label className="block">
-                  <span className="block text-xs font-bold text-[#536c74] mb-1.5">
+                  <span className="block text-[11px] font-bold text-[#536c74] mb-1.5">
                     {isZh ? '清洗及刀工' : 'Processing style'}
                   </span>
                   <select
                     value={cutType}
                     onChange={(event) => setCutType(event.target.value as CutType)}
                     disabled={orderingPaused}
-                    className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-xl px-3 py-3 text-sm font-semibold text-[#17323d] focus:outline-none focus:border-sky-600 focus:ring-1 focus:ring-sky-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-xl px-3 py-2.5 text-xs font-semibold text-[#17323d] focus:outline-none focus:border-sky-600 focus:ring-1 focus:ring-sky-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     {cutOptions.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -351,22 +351,22 @@ export default function ProductPage({
                 )}
 
                 <div>
-                  <span className="block text-xs font-bold text-[#536c74] mb-1.5">
+                  <span className="block text-[11px] font-bold text-[#536c74] mb-1.5">
                     {isZh ? '购买数量' : 'Quantity'}
                   </span>
                   <div className="inline-flex items-center rounded-xl border border-[#c4d5d9] bg-[#edf5f4] overflow-hidden">
                     <button
                       onClick={() => setQuantity(Math.max(1, quantity - 1))}
                       disabled={orderingPaused}
-                      className="w-11 h-11 text-lg font-bold text-[#536c74] hover:text-[#17323d] hover:bg-[#e3eeee] cursor-pointer disabled:text-slate-300 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                      className="w-9 h-9 text-base font-bold text-[#536c74] hover:text-[#17323d] hover:bg-[#e3eeee] cursor-pointer disabled:text-slate-300 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                     >
                       -
                     </button>
-                    <span className="w-12 text-center font-mono font-black text-[#17323d]">{quantity}</span>
+                    <span className="w-10 text-center font-mono text-sm font-black text-[#17323d]">{quantity}</span>
                     <button
                       onClick={() => setQuantity(quantity + 1)}
                       disabled={orderingPaused}
-                      className="w-11 h-11 text-lg font-bold text-[#536c74] hover:text-[#17323d] hover:bg-[#e3eeee] cursor-pointer disabled:text-slate-300 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                      className="w-9 h-9 text-base font-bold text-[#536c74] hover:text-[#17323d] hover:bg-[#e3eeee] cursor-pointer disabled:text-slate-300 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                     >
                       +
                     </button>
@@ -374,21 +374,21 @@ export default function ProductPage({
                 </div>
               </div>
 
-              <div className="mt-6 p-4 rounded-2xl bg-[#edf5f4] border border-[#c4d5d9] flex items-end justify-between gap-4">
+              <div className="mt-4 p-3 rounded-xl bg-[#edf5f4] border border-[#c4d5d9] flex items-end justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold text-[#536c74]">
+                  <p className="text-[11px] font-bold text-[#536c74]">
                     {isZh ? '预估总价' : 'Estimated subtotal'}
                   </p>
-                  <p className="mt-1 text-3xl font-black text-amber-600 font-mono">
+                  <p className="mt-0.5 text-2xl font-black text-amber-600 font-mono">
                     {isCustomVariantInquiry ? (isZh ? 'WhatsApp' : 'Ask') : `RM ${calculatedTotalPrice.toFixed(0)}`}
                   </p>
                 </div>
-                <p className="text-right text-xs leading-5 text-[#536c74]">
+                <p className="text-right text-[11px] leading-4 text-[#536c74]">
                   {isCustomVariantInquiry ? (isZh ? '客服确认' : 'Confirm by chat') : `${weightKg.toFixed(1)}kg x ${quantity}`}
                 </p>
               </div>
 
-              <div className="mt-5 grid gap-3">
+              <div className="mt-4 grid gap-2.5">
                 <button
                   onClick={() => {
                     if (canAddToCart) {
@@ -396,13 +396,13 @@ export default function ProductPage({
                     }
                   }}
                   disabled={!canAddToCart}
-                  className={`w-full h-12 rounded-xl font-extrabold inline-flex items-center justify-center gap-2 shadow-md transition-colors ${
+                  className={`w-full h-10 rounded-xl text-sm font-extrabold inline-flex items-center justify-center gap-2 shadow-md transition-colors ${
                     !canAddToCart
                       ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
                       : 'bg-[#073c63] hover:bg-[#082f4e] text-white cursor-pointer'
                   }`}
                 >
-                  <ShoppingCart className="w-5 h-5" />
+                  <ShoppingCart className="w-4 h-4" />
                   <span>
                     {orderingPaused
                       ? (isZh ? '维护中暂不可下单' : 'Ordering Paused')
@@ -417,13 +417,13 @@ export default function ProductPage({
                   rel="noreferrer"
                   aria-disabled={orderingPaused}
                   tabIndex={orderingPaused ? -1 : 0}
-                  className={`w-full h-12 rounded-xl font-extrabold inline-flex items-center justify-center gap-2 shadow-md transition-colors ${
+                  className={`w-full h-10 rounded-xl text-sm font-extrabold inline-flex items-center justify-center gap-2 shadow-md transition-colors ${
                     orderingPaused
                       ? 'bg-slate-300 text-slate-500 cursor-not-allowed pointer-events-none shadow-none'
                       : 'bg-emerald-500 hover:bg-emerald-400 text-white'
                   }`}
                 >
-                  <MessageCircle className="w-5 h-5" />
+                  <MessageCircle className="w-4 h-4" />
                   <span>
                     {orderingPaused
                       ? (isZh ? '暂不接受 WhatsApp 下单' : 'WhatsApp ordering paused')
@@ -434,51 +434,51 @@ export default function ProductPage({
                 </a>
               </div>
 
-              <div className="mt-6 border-t border-[#c4d5d9] pt-6 space-y-6">
+              <div className="mt-5 border-t border-[#c4d5d9] pt-5 space-y-5">
                 <div>
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    <span className="px-3 py-1 rounded-lg bg-white border border-[#c4d5d9] text-[#073c63] text-[11px] font-bold">
+                  <div className="mb-2.5 flex flex-wrap gap-1.5">
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-[#c4d5d9] text-[#073c63] text-[10px] font-bold">
                       {product.isWild ? (isZh ? '彭亨野生捕捞' : 'Pahang Wild Catch') : (isZh ? '彭亨河水养殖' : 'Pahang River Raised')}
                     </span>
-                    <span className="px-3 py-1 rounded-lg bg-emerald-500 text-white text-[11px] font-bold">
+                    <span className="px-2.5 py-1 rounded-lg bg-emerald-500 text-white text-[10px] font-bold">
                       {stockLabel}
                     </span>
-                    <span className="px-3 py-1 rounded-lg bg-[#bc9655] text-white text-[11px] font-bold">
+                    <span className="px-2.5 py-1 rounded-lg bg-[#bc9655] text-white text-[10px] font-bold">
                       {isZh ? '真空冷冻配送' : 'Vacuum Frozen Delivery'}
                     </span>
                   </div>
-                  <p className="text-xs font-mono tracking-wide text-sky-700">
+                  <p className="text-[11px] font-mono tracking-wide text-sky-700">
                     {product.scientificName}
                   </p>
-                  <h1 className="mt-2 text-2xl md:text-3xl font-black leading-tight text-slate-950">
+                  <h1 className="mt-1.5 text-xl md:text-2xl font-black leading-tight text-slate-950">
                     {name}
                   </h1>
-                  <p className="mt-3 text-sm leading-7 text-[#425d65]">
+                  <p className="mt-2 text-xs leading-6 text-[#425d65]">
                     {description}
                   </p>
                 </div>
 
                 <div>
-                  <h2 className="text-base font-extrabold text-slate-950">
+                  <h2 className="text-sm font-extrabold text-slate-950">
                     {isZh ? '风味与肉质' : 'Flavor and Texture'}
                   </h2>
-                  <div className="mt-3 rhs-panel-soft border rounded-xl p-4 flex gap-3">
-                    <Flame className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <p className="text-sm leading-7 text-[#425d65]">{tastingNotes}</p>
+                  <div className="mt-2 rhs-panel-soft border rounded-xl p-3 flex gap-2.5">
+                    <Flame className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-xs leading-6 text-[#425d65]">{tastingNotes}</p>
                   </div>
                 </div>
 
                 <div>
-                  <h2 className="text-base font-extrabold text-slate-950">
+                  <h2 className="text-sm font-extrabold text-slate-950">
                     {isZh ? '推荐煮法' : 'Recommended Cooking'}
                   </h2>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-2 flex flex-wrap gap-1.5">
                     {cookingSuggestions.map((suggestion) => (
                       <span
                         key={suggestion}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl rhs-panel-soft border text-xs font-semibold text-[#17323d]"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg rhs-panel-soft border text-[11px] font-semibold text-[#17323d]"
                       >
-                        <Compass className="w-4 h-4 text-sky-600" />
+                        <Compass className="w-3.5 h-3.5 text-sky-600" />
                         {suggestion}
                       </span>
                     ))}
@@ -486,24 +486,24 @@ export default function ProductPage({
                 </div>
 
                 <div>
-                  <h2 className="text-base font-extrabold text-slate-950">
+                  <h2 className="text-sm font-extrabold text-slate-950">
                     {isZh ? '我们处理到位' : 'Handled for Confidence'}
                   </h2>
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-2 space-y-1.5">
                     {features.map((feature) => (
-                      <div key={feature} className="flex items-start gap-2 text-sm leading-6 text-[#425d65]">
-                        <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-1" />
+                      <div key={feature} className="flex items-start gap-2 text-xs leading-5 text-[#425d65]">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                         <span>{feature}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="rhs-panel-soft border rounded-2xl p-4 space-y-4">
-                  <div className="flex items-start gap-3">
-                    <Truck className="w-5 h-5 text-sky-700 shrink-0" />
+                <div className="rhs-panel-soft border rounded-xl p-3 space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <Truck className="w-4 h-4 text-sky-700 shrink-0" />
                     <div>
-                      <h3 className="text-sm font-extrabold text-slate-950">
+                      <h3 className="text-xs font-extrabold text-slate-950">
                         {isZh ? '全马冷链配送' : 'Malaysia Cold Chain'}
                       </h3>
                       <p className="mt-1 text-xs leading-5 text-[#536c74]">
@@ -511,10 +511,10 @@ export default function ProductPage({
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <Snowflake className="w-5 h-5 text-sky-700 shrink-0" />
+                  <div className="flex items-start gap-2.5">
+                    <Snowflake className="w-4 h-4 text-sky-700 shrink-0" />
                     <div>
-                      <h3 className="text-sm font-extrabold text-slate-950">
+                      <h3 className="text-xs font-extrabold text-slate-950">
                         {isZh ? '锁鲜处理' : 'Freshness Locked'}
                       </h3>
                       <p className="mt-1 text-xs leading-5 text-[#536c74]">
@@ -522,10 +522,10 @@ export default function ProductPage({
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3">
-                    <Package className="w-5 h-5 text-sky-700 shrink-0" />
+                  <div className="flex items-start gap-2.5">
+                    <Package className="w-4 h-4 text-sky-700 shrink-0" />
                     <div>
-                      <h3 className="text-sm font-extrabold text-slate-950">
+                      <h3 className="text-xs font-extrabold text-slate-950">
                         {isZh ? '适合家庭和餐馆' : 'Home and Restaurant Ready'}
                       </h3>
                       <p className="mt-1 text-xs leading-5 text-[#536c74]">
