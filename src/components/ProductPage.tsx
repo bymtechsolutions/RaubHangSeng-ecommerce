@@ -157,31 +157,6 @@ export default function ProductPage({
                 {orderingPaused && (
                   <div className="absolute inset-0 z-10 bg-slate-200/20 pointer-events-none" />
                 )}
-                <div className="absolute inset-0 pointer-events-none bg-linear-to-t from-[#092942]/88 via-[#092942]/24 to-transparent" />
-                <div className={`absolute left-5 right-5 md:left-8 md:right-8 text-white pointer-events-none ${
-                  heroMedia?.type === 'video' ? 'bottom-16 md:bottom-16' : 'bottom-5 md:bottom-8'
-                }`}>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    <span className="px-3 py-1 rounded-lg bg-white text-[#073c63] text-xs font-bold">
-                      {product.isWild ? (isZh ? '彭亨野生捕捞' : 'Pahang Wild Catch') : (isZh ? '彭亨河水养殖' : 'Pahang River Raised')}
-                    </span>
-                    <span className="px-3 py-1 rounded-lg bg-emerald-500 text-white text-xs font-bold">
-                      {stockLabel}
-                    </span>
-                    <span className="px-3 py-1 rounded-lg bg-[#bc9655] text-white text-xs font-bold">
-                      {isZh ? '真空冷冻配送' : 'Vacuum Frozen Delivery'}
-                    </span>
-                  </div>
-                  <p className="text-xs md:text-sm font-mono tracking-wide text-sky-100">
-                    {product.scientificName}
-                  </p>
-                  <h1 className="mt-2 max-w-4xl text-3xl md:text-5xl font-black leading-tight text-wrap-balance">
-                    {name}
-                  </h1>
-                  <p className="mt-4 max-w-3xl text-sm md:text-base leading-7 text-white/88">
-                    {description}
-                  </p>
-                </div>
               </div>
 
               {mediaItems.length > 1 && (
@@ -217,87 +192,6 @@ export default function ProductPage({
                   </div>
                 </div>
               )}
-
-              <div className="grid md:grid-cols-[minmax(0,1fr)_300px] gap-6 p-5 md:p-8">
-                <div className="space-y-7">
-                  <div>
-                    <h2 className="text-xl md:text-2xl font-extrabold text-slate-950">
-                      {isZh ? '风味与肉质' : 'Flavor and Texture'}
-                    </h2>
-                    <div className="mt-3 rhs-panel-soft border rounded-xl p-4 flex gap-3">
-                      <Flame className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                      <p className="text-sm leading-7 text-[#425d65]">{tastingNotes}</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h2 className="text-xl md:text-2xl font-extrabold text-slate-950">
-                      {isZh ? '推荐煮法' : 'Recommended Cooking'}
-                    </h2>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {cookingSuggestions.map((suggestion) => (
-                        <span
-                          key={suggestion}
-                          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl rhs-panel-soft border text-sm font-semibold text-[#17323d]"
-                        >
-                          <Compass className="w-4 h-4 text-sky-600" />
-                          {suggestion}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h2 className="text-xl md:text-2xl font-extrabold text-slate-950">
-                      {isZh ? '我们处理到位' : 'Handled for Confidence'}
-                    </h2>
-                    <div className="mt-3 grid sm:grid-cols-2 gap-3">
-                      {features.map((feature) => (
-                        <div key={feature} className="flex items-start gap-2 text-sm leading-6 text-[#425d65]">
-                          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-1" />
-                          <span>{feature}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rhs-panel-soft border rounded-2xl p-5 space-y-4">
-                  <div className="flex items-start gap-3">
-                    <Truck className="w-6 h-6 text-sky-700 shrink-0" />
-                    <div>
-                      <h3 className="font-extrabold text-slate-950">
-                        {isZh ? '全马冷链配送' : 'Malaysia Cold Chain'}
-                      </h3>
-                      <p className="mt-1 text-xs leading-5 text-[#536c74]">
-                        {isZh ? '真空包装后急速冷冻，配送到家仍保持扎实冰冻状态。' : 'Vacuum packed and flash frozen so the fish reaches you firm and chilled.'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Snowflake className="w-6 h-6 text-sky-700 shrink-0" />
-                    <div>
-                      <h3 className="font-extrabold text-slate-950">
-                        {isZh ? '锁鲜处理' : 'Freshness Locked'}
-                      </h3>
-                      <p className="mt-1 text-xs leading-5 text-[#536c74]">
-                        {isZh ? '活杀处理，清洗后按您选择的刀工包装。' : 'Processed fresh, cleaned, then packed to your selected cut.'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <Package className="w-6 h-6 text-sky-700 shrink-0" />
-                    <div>
-                      <h3 className="font-extrabold text-slate-950">
-                        {isZh ? '适合家庭和餐馆' : 'Home and Restaurant Ready'}
-                      </h3>
-                      <p className="mt-1 text-xs leading-5 text-[#536c74]">
-                        {isZh ? '可整条、厚切、薄片或鱼片处理，方便下锅。' : 'Choose whole, steak, sliced, or fillet processing for easier cooking.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </article>
 
             <aside className="lg:sticky lg:top-[110px] rhs-panel border rounded-2xl shadow-lg p-5 md:p-6">
@@ -328,14 +222,14 @@ export default function ProductPage({
                     <span className="block text-xs font-bold text-[#536c74] mb-2">
                       {isZh ? '选择规格' : 'Choose variant'}
                     </span>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {product.variants.map((variant) => {
                         const isActive = variant.id === selectedVariantId;
-                        const variantCutLabel = cutOptions.find((option) => option.value === variant.cutType);
                         return (
                           <button
                             key={variant.id}
                             type="button"
+                            title={isZh ? variant.nameZh : variant.nameEn}
                             onClick={() => {
                               if (orderingPaused) return;
                               setSelectedVariantId(variant.id);
@@ -344,25 +238,13 @@ export default function ProductPage({
                               setIsMediaOverrideActive(false);
                             }}
                             disabled={orderingPaused}
-                            className={`text-left min-h-24 rounded-xl border p-3 transition-all cursor-pointer ${
+                            className={`inline-flex min-h-10 items-center justify-center rounded-full border px-4 py-2 text-sm font-extrabold transition-all cursor-pointer ${
                               orderingPaused
                                 ? 'border-slate-200 bg-slate-100 opacity-70 cursor-not-allowed'
                                 : isActive ? 'border-sky-500 bg-sky-50 shadow-sm' : 'border-[#c4d5d9] bg-[#edf5f4] hover:border-sky-300'
                             }`}
                           >
-                            <div className="flex h-full flex-col justify-between gap-3">
-                              <p className="text-xs font-extrabold leading-5 text-[#17323d]">
-                                {isZh ? variant.nameZh : variant.nameEn}
-                              </p>
-                              <div>
-                                <span className="block text-[10px] font-bold text-[#536c74]">
-                                  {isZh ? '重量 / 刀工' : 'Weight / cut'}
-                                </span>
-                                <p className="mt-0.5 text-[10px] leading-4 text-[#536c74]">
-                                  {variant.weightKg.toFixed(1)}kg · {isZh ? variantCutLabel?.zh : variantCutLabel?.en}
-                                </p>
-                              </div>
-                            </div>
+                            {variant.weightKg.toFixed(1)}kg
                           </button>
                         );
                       })}
@@ -373,23 +255,14 @@ export default function ProductPage({
                           setSelectedVariantId(CUSTOM_VARIANT_INQUIRY_ID);
                         }}
                         disabled={orderingPaused}
-                        className={`text-left rounded-xl border p-3 transition-all cursor-pointer ${
+                        className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-extrabold transition-all cursor-pointer ${
                           orderingPaused
                             ? 'border-slate-200 bg-slate-100 opacity-70 cursor-not-allowed'
                             : isCustomVariantInquiry ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-[#c4d5d9] bg-[#edf5f4] hover:border-emerald-300'
                         }`}
                       >
-                        <div className="flex h-full min-h-24 flex-col justify-between gap-3">
-                          <MessageCircle className="w-6 h-6 text-emerald-600" />
-                          <div>
-                            <p className="text-xs font-extrabold text-[#17323d]">
-                              {isZh ? '其他规格 / 特别处理' : 'Other option / custom cut'}
-                            </p>
-                            <p className="mt-1 text-[10px] leading-4 text-[#536c74]">
-                              {isZh ? '通过 WhatsApp 询问库存、重量或特殊刀工。' : 'Ask via WhatsApp for stock, weight, or custom processing.'}
-                            </p>
-                          </div>
-                        </div>
+                        <MessageCircle className="w-4 h-4 text-emerald-600" />
+                        <span>{isZh ? 'WhatsApp' : 'Contact WhatsApp'}</span>
                       </button>
                     </div>
                   </div>
@@ -559,6 +432,108 @@ export default function ProductPage({
                         : (isZh ? 'WhatsApp 直接订购' : 'Order on WhatsApp')}
                   </span>
                 </a>
+              </div>
+
+              <div className="mt-6 border-t border-[#c4d5d9] pt-6 space-y-6">
+                <div>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    <span className="px-3 py-1 rounded-lg bg-white border border-[#c4d5d9] text-[#073c63] text-[11px] font-bold">
+                      {product.isWild ? (isZh ? '彭亨野生捕捞' : 'Pahang Wild Catch') : (isZh ? '彭亨河水养殖' : 'Pahang River Raised')}
+                    </span>
+                    <span className="px-3 py-1 rounded-lg bg-emerald-500 text-white text-[11px] font-bold">
+                      {stockLabel}
+                    </span>
+                    <span className="px-3 py-1 rounded-lg bg-[#bc9655] text-white text-[11px] font-bold">
+                      {isZh ? '真空冷冻配送' : 'Vacuum Frozen Delivery'}
+                    </span>
+                  </div>
+                  <p className="text-xs font-mono tracking-wide text-sky-700">
+                    {product.scientificName}
+                  </p>
+                  <h1 className="mt-2 text-2xl md:text-3xl font-black leading-tight text-slate-950">
+                    {name}
+                  </h1>
+                  <p className="mt-3 text-sm leading-7 text-[#425d65]">
+                    {description}
+                  </p>
+                </div>
+
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-950">
+                    {isZh ? '风味与肉质' : 'Flavor and Texture'}
+                  </h2>
+                  <div className="mt-3 rhs-panel-soft border rounded-xl p-4 flex gap-3">
+                    <Flame className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-sm leading-7 text-[#425d65]">{tastingNotes}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-950">
+                    {isZh ? '推荐煮法' : 'Recommended Cooking'}
+                  </h2>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {cookingSuggestions.map((suggestion) => (
+                      <span
+                        key={suggestion}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl rhs-panel-soft border text-xs font-semibold text-[#17323d]"
+                      >
+                        <Compass className="w-4 h-4 text-sky-600" />
+                        {suggestion}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-950">
+                    {isZh ? '我们处理到位' : 'Handled for Confidence'}
+                  </h2>
+                  <div className="mt-3 space-y-2">
+                    {features.map((feature) => (
+                      <div key={feature} className="flex items-start gap-2 text-sm leading-6 text-[#425d65]">
+                        <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-1" />
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rhs-panel-soft border rounded-2xl p-4 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <Truck className="w-5 h-5 text-sky-700 shrink-0" />
+                    <div>
+                      <h3 className="text-sm font-extrabold text-slate-950">
+                        {isZh ? '全马冷链配送' : 'Malaysia Cold Chain'}
+                      </h3>
+                      <p className="mt-1 text-xs leading-5 text-[#536c74]">
+                        {isZh ? '真空包装后急速冷冻，配送到家仍保持扎实冰冻状态。' : 'Vacuum packed and flash frozen so the fish reaches you firm and chilled.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Snowflake className="w-5 h-5 text-sky-700 shrink-0" />
+                    <div>
+                      <h3 className="text-sm font-extrabold text-slate-950">
+                        {isZh ? '锁鲜处理' : 'Freshness Locked'}
+                      </h3>
+                      <p className="mt-1 text-xs leading-5 text-[#536c74]">
+                        {isZh ? '活杀处理，清洗后按您选择的刀工包装。' : 'Processed fresh, cleaned, then packed to your selected cut.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Package className="w-5 h-5 text-sky-700 shrink-0" />
+                    <div>
+                      <h3 className="text-sm font-extrabold text-slate-950">
+                        {isZh ? '适合家庭和餐馆' : 'Home and Restaurant Ready'}
+                      </h3>
+                      <p className="mt-1 text-xs leading-5 text-[#536c74]">
+                        {isZh ? '可整条、厚切、薄片或鱼片处理，方便下锅。' : 'Choose whole, steak, sliced, or fillet processing for easier cooking.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </aside>
           </div>
