@@ -70,7 +70,7 @@ networks="$(docker inspect "$PROXY_CONTAINER" --format '{{range $name, $_ := .Ne
 while IFS= read -r network; do
   [[ -z "$network" ]] && continue
   if docker inspect "$APP_CONTAINER" --format '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' | grep -qx "$network"; then
-    docker network disconnect "$network" "$APP_CONTAINER"
+    continue
   fi
   docker network connect --alias "$APP_CONTAINER" "$network" "$APP_CONTAINER"
 done <<< "$networks"

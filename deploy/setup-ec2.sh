@@ -97,6 +97,16 @@ port_80_taken_by_other_proxy() {
   return 0
 }
 
+existing_proxy_network() {
+  local proxy_container="${EXISTING_PROXY_CONTAINER:-mysellerbase-prod-proxy-1}"
+
+  if ! docker ps --format '{{.Names}}' | grep -qx "$proxy_container"; then
+    return
+  fi
+
+  docker inspect "$proxy_container" --format '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' 2>/dev/null | awk 'NF {print; exit}'
+}
+
 connect_existing_proxy_network() {
   local proxy_container="${EXISTING_PROXY_CONTAINER:-mysellerbase-prod-proxy-1}"
 
@@ -111,7 +121,7 @@ connect_existing_proxy_network() {
   while IFS= read -r network; do
     [[ -z "$network" ]] && continue
     if docker inspect "$CONTAINER_NAME" --format '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' | grep -qx "$network"; then
-      docker network disconnect "$network" "$CONTAINER_NAME"
+      continue
     fi
     docker network connect --alias "$CONTAINER_NAME" "$network" "$CONTAINER_NAME"
   done <<< "$networks"
@@ -140,12 +150,22 @@ run_container() {
   log "Building Docker image"
   docker build -t "$IMAGE_NAME" "$ROOT_DIR"
 
-  log "Starting Docker container on 127.0.0.1:$HOST_PORT"
+  local docker_network_args=()
+  local proxy_network
+  proxy_network="$(existing_proxy_network || true)"
+  if [[ -n "$proxy_network" ]]; then
+    docker_network_args=(--network "$proxy_network" --network-alias "$CONTAINER_NAME")
+    log "Starting Docker container on 127.0.0.1:$HOST_PORT and Docker network $proxy_network"
+  else
+    log "Starting Docker container on 127.0.0.1:$HOST_PORT"
+  fi
+
   docker volume create "$DATA_VOLUME" >/dev/null
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
   docker run -d \
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
+    "${docker_network_args[@]}" \
     -p "127.0.0.1:$HOST_PORT:$CONTAINER_PORT" \
     -v "$DATA_VOLUME:/app/data" \
     -e NODE_ENV=production \
