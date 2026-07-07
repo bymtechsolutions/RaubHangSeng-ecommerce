@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, Menu, X } from 'lucide-react';
+import { ChevronDown, Languages, LogOut, Menu, ShoppingBag, UserCircle, X } from 'lucide-react';
 import { CollectionDisplay, Language, User } from '../types';
 
 interface HeaderProps {
@@ -12,6 +12,7 @@ interface HeaderProps {
   currentUser: User | null;
   collections?: CollectionDisplay[];
   onAuthClick: () => void;
+  onLogout: () => void;
   onSellerClick?: () => void;
 }
 
@@ -27,6 +28,7 @@ export default function Header({
   currentUser,
   collections = [],
   onAuthClick,
+  onLogout,
   onSellerClick,
 }: HeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -86,7 +88,7 @@ export default function Header({
             </span>
           </button>
 
-          <nav id="desktop-nav" className="hidden lg:flex items-center justify-center gap-5 xl:gap-8 text-[13px] xl:text-[15px] font-semibold">
+          <nav id="desktop-nav" className="hidden lg:flex flex-1 items-center justify-center gap-4 xl:gap-6 text-[13px] xl:text-[15px] font-semibold">
             {navItems.map((item) => {
               const isProductItem = item.id === 'collections';
               const isActive = activeSection === item.id || (isProductItem && activeSection === 'products');
@@ -147,6 +149,39 @@ export default function Header({
             })}
           </nav>
 
+          <div className="hidden lg:flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-white/90 hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
+              aria-label={isZh ? 'Switch to English' : '切换中文'}
+            >
+              <Languages className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onCartClick}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white/10 px-3 text-xs font-bold text-white/90 hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>{isZh ? '购物车' : 'Cart'}</span>
+              <span className="font-mono">{cartCount}</span>
+            </button>
+            <button
+              onClick={onAuthClick}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-sky-500 px-3 text-xs font-bold text-white hover:bg-sky-400 transition-colors cursor-pointer"
+            >
+              <UserCircle className="w-4 h-4" />
+              <span>{currentUser ? (isZh ? '个人资料' : 'Profile') : (isZh ? '登录 / 注册' : 'Login / Sign up')}</span>
+            </button>
+            {currentUser && (
+              <button
+                onClick={onLogout}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-white/90 hover:bg-rose-500 hover:text-white transition-colors cursor-pointer"
+                aria-label={isZh ? '登出' : 'Logout'}
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -188,7 +223,7 @@ export default function Header({
           </div>
 
           <div className="mt-4 pt-4 border-t border-white/10 grid gap-3">
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid gap-2 ${currentUser ? 'grid-cols-2' : 'grid-cols-3'}`}>
               <button
                 onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
                 className="py-2.5 rounded-lg bg-white/10 text-white text-sm font-semibold"
@@ -196,17 +231,34 @@ export default function Header({
                 {isZh ? 'English' : '中文'}
               </button>
               <button
-                onClick={onCartClick}
+                onClick={() => {
+                  setIsOpen(false);
+                  onCartClick();
+                }}
                 className="py-2.5 rounded-lg bg-white/10 text-white text-sm font-semibold"
               >
                 {isZh ? `购物车 ${cartCount}` : `Cart ${cartCount}`}
               </button>
               <button
-                onClick={onAuthClick}
+                onClick={() => {
+                  setIsOpen(false);
+                  onAuthClick();
+                }}
                 className="py-2.5 rounded-lg bg-white/10 text-white text-sm font-semibold"
               >
-                {currentUser ? (isZh ? '会员' : 'Member') : isZh ? '登录' : 'Login'}
+                {currentUser ? (isZh ? '个人资料' : 'Profile') : isZh ? '登录 / 注册' : 'Login / Sign up'}
               </button>
+              {currentUser && (
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    onLogout();
+                  }}
+                  className="py-2.5 rounded-lg bg-white/10 text-white text-sm font-semibold"
+                >
+                  {isZh ? '登出' : 'Logout'}
+                </button>
+              )}
             </div>
           </div>
         </div>

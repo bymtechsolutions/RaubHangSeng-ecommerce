@@ -17,14 +17,14 @@ import ContactUs from './components/ContactUs';
 import Footer from './components/Footer';
 import AuthModal from './components/AuthModal';
 import { Product, CartItem, Language, DeliveryDetails, User, OrderRecord, StoreSettings, ProductCategory, CollectionDisplay, ProductMedia } from './types';
-import { ShoppingBag, Eye, X, ClipboardList, CheckCircle, Lock } from 'lucide-react';
+import { X, CheckCircle, Lock } from 'lucide-react';
 import { PRODUCTS } from './data/products';
 import { DEFAULT_COLLECTIONS, normalizeCollectionDisplays } from './data/collections';
 import SellerDashboard from './components/SellerDashboard';
 import PolicyView from './components/PolicyView';
 import { createOrder, fetchStore, replaceOrders, replaceProducts, updateSellerPasscode, updateSettings, verifySellerPasscode } from './lib/api';
 
-type AppRoute = 'home' | 'shop' | 'product' | 'about' | 'business-order' | 'seller' | 'privacy' | 'terms' | 'refund';
+type AppRoute = 'home' | 'shop' | 'product' | 'about' | 'business-order' | 'login' | 'seller' | 'privacy' | 'terms' | 'refund';
 
 const PRODUCT_ROUTE_PREFIX = '/product/';
 const DEFAULT_STORE_ANNOUNCEMENT = '【恒升河鱼公告】彭亨河主流特马鲁网箱及野生巴丁/苏丹鱼每日捕捞，西马冷链送达，消费满 RM250 免运费！';
@@ -33,6 +33,7 @@ const getRouteFromPath = (): AppRoute => {
   if (path === '/shop') return 'shop';
   if (path === '/about') return 'about';
   if (path === '/business-order') return 'business-order';
+  if (path === '/login') return 'login';
   if (path.startsWith(PRODUCT_ROUTE_PREFIX) && path.length > PRODUCT_ROUTE_PREFIX.length) return 'product';
   if (path === '/seller') return 'seller';
   if (path === '/privacy') return 'privacy';
@@ -59,6 +60,7 @@ const routeToActiveSection = (route: AppRoute) => {
   if (route === 'shop' || route === 'product') return 'products';
   if (route === 'about') return 'about';
   if (route === 'business-order') return 'business-order';
+  if (route === 'login') return 'login';
   if (route === 'seller') return 'seller';
   if (route === 'privacy' || route === 'terms' || route === 'refund') return 'policy';
   return 'home';
@@ -82,11 +84,9 @@ export default function App() {
 
   // Member states
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   // Order history
   const [orderHistory, setOrderHistory] = useState<OrderRecord[]>([]);
-  const [isOrderHistoryOpen, setIsOrderHistoryOpen] = useState(false);
   const [latestOrder, setLatestOrder] = useState<string | null>(null);
 
   // Seller Dashboard / Store Configuration States
@@ -573,6 +573,11 @@ export default function App() {
     navigateToRoute('seller');
   };
 
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('raub_hang_seng_current_user');
+  };
+
   const handleVerifyPasscode = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -684,23 +689,10 @@ export default function App() {
         setActiveSection={handleSetActiveSection}
         currentUser={currentUser}
         collections={collectionDisplays}
-        onAuthClick={() => setIsAuthOpen(true)}
+        onAuthClick={() => navigateToRoute('login')}
+        onLogout={handleLogout}
         onSellerClick={handleSellerAccess}
       />
-
-      {/* Floating floating order history trigger if they have placed orders */}
-      {orderHistory.length > 0 && (
-        <button
-          onClick={() => setIsOrderHistoryOpen(true)}
-          className="fixed bottom-6 left-6 z-40 rhs-panel hover:bg-[#f8fbfa] border text-slate-600 hover:text-slate-900 px-4 py-2.5 rounded-full shadow-lg flex items-center space-x-2 text-xs font-semibold cursor-pointer transition-all"
-        >
-          <ClipboardList className="w-4 h-4 text-sky-500" />
-          <span>{language === 'zh' ? '历史订单' : 'Order History'}</span>
-          <span className="bg-sky-50 text-sky-600 border border-sky-100 px-1.5 py-0.5 rounded-full text-[10px] font-mono">
-            {orderHistory.length}
-          </span>
-        </button>
-      )}
 
       <a
         href="https://wa.me/60187682528"
@@ -768,6 +760,20 @@ export default function App() {
             language={language}
             orderingPaused={isOrderingPaused}
           />
+        </main>
+      ) : route === 'login' ? (
+        <main className="min-h-screen pt-[calc(var(--rhs-topbar-height)+40px)] pb-20 px-4 rhs-section-alt">
+          <div className="max-w-lg mx-auto">
+            <AuthModal
+              isOpen
+              mode="page"
+              onClose={() => navigateToRoute('shop')}
+              language={language}
+              currentUser={currentUser}
+              setCurrentUser={setCurrentUser}
+              orderHistory={orderHistory}
+            />
+          </div>
         </main>
       ) : route === 'seller' ? (
         <main className="min-h-screen pt-[96px] md:pt-[116px] pb-20 px-4">
@@ -907,7 +913,7 @@ export default function App() {
           totalAmount={totalAmount}
           onOrderSuccess={handleOrderSuccess}
           currentUser={currentUser}
-          onAuthClick={() => setIsAuthOpen(true)}
+          onAuthClick={() => navigateToRoute('login')}
         />
       )}
 
@@ -945,84 +951,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* MODAL: Past Order History review */}
-      {isOrderHistoryOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="absolute inset-0" onClick={() => setIsOrderHistoryOpen(false)} />
-          <div className="relative w-full max-w-2xl rhs-panel border rounded-2xl overflow-hidden shadow-2xl z-10 my-8 animate-fade-in">
-            <button
-              onClick={() => setIsOrderHistoryOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1 rounded-full transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="p-5 border-b border-slate-150 bg-slate-50">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center">
-                <ClipboardList className="w-5 h-5 mr-2 text-sky-600" />
-                {language === 'zh' ? '我的历史订单' : 'My Past Orders'}
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {language === 'zh' ? '本列表基于您的浏览器本地存储，记录您最近提交的预购订单：' : 'Saved locally in this browser. Here is your current order list:'}
-              </p>
-            </div>
-
-            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto rhs-panel">
-              {orderHistory.map((order) => (
-                <div key={order.id} className="rhs-panel-soft border p-4 rounded-xl space-y-3">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-mono font-bold text-sky-600">Order ID: #{order.id}</span>
-                    <span className="text-slate-500 font-mono">{order.date}</span>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    {order.items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between text-xs text-slate-700">
-                        <span>
-                          {item.quantity}条 × {language === 'zh' ? item.product.nameZh : item.product.nameEn} ({item.selectedWeightKg.toFixed(1)}kg)
-                        </span>
-                        <span className="font-mono text-slate-600">RM {(item.product.pricePerKg * item.selectedWeightKg * item.quantity).toFixed(0)}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="h-px bg-slate-200" />
-
-                  <div className="flex justify-between items-center text-xs text-slate-500">
-                    <div>
-                      <p>{language === 'zh' ? '收件人:' : 'Ship to:'} <span className="text-slate-900 font-semibold">{order.details.fullName}</span></p>
-                      <p className="text-[10px] mt-0.5">{order.details.address}, {order.details.city}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-400 block uppercase font-bold">{language === 'zh' ? '总付金额' : 'Total'}</span>
-                      <strong className="text-sm font-black text-amber-600 font-mono">RM {order.total.toFixed(2)}</strong>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="p-4 rhs-panel-soft border-t border-[#c4d5d9] text-right">
-              <button
-                onClick={() => setIsOrderHistoryOpen(false)}
-                className="px-5 py-2 bg-[#f8fbfa] border border-[#c4d5d9] hover:border-[#a8c1c7] text-slate-600 rounded-lg text-xs font-semibold hover:bg-[#edf5f4] cursor-pointer"
-              >
-                {language === 'zh' ? '关闭' : 'Close'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Optional Member Login & Registration */}
-      <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-        language={language}
-        currentUser={currentUser}
-        setCurrentUser={setCurrentUser}
-        orderHistory={orderHistory}
-      />
 
       {/* MODAL: Seller Passcode Authorization */}
       {isPasscodeModalOpen && (

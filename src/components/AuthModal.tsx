@@ -11,6 +11,7 @@ interface AuthModalProps {
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
   orderHistory?: any[]; // optional, to show user orders in their profile
+  mode?: 'modal' | 'page';
 }
 
 export default function AuthModal({
@@ -20,8 +21,10 @@ export default function AuthModal({
   currentUser,
   setCurrentUser,
   orderHistory = [],
+  mode = 'modal',
 }: AuthModalProps) {
   const isZh = language === 'zh';
+  const isModal = mode === 'modal';
 
   // Modal active tab: 'login' | 'signup' | 'profile'
   const [tab, setTab] = useState<'login' | 'signup'>('login');
@@ -72,7 +75,7 @@ export default function AuthModal({
     setSuccess(null);
   };
 
-  if (!isOpen) return null;
+  if (isModal && !isOpen) return null;
 
   // Handle Login submission
   const handleLogin = async (e: React.FormEvent) => {
@@ -100,7 +103,9 @@ export default function AuthModal({
     setSuccess(isZh ? '登录成功！欢迎回来！' : 'Login successful! Welcome back!');
     setTimeout(() => {
       setSuccess(null);
-      onClose();
+      if (isModal) {
+        onClose();
+      }
     }, 1500);
   };
 
@@ -145,7 +150,9 @@ export default function AuthModal({
     setSuccess(isZh ? '注册成功！赠送 100 迎新会员积分！' : 'Registration successful! 100 welcome loyalty points rewarded!');
     setTimeout(() => {
       setSuccess(null);
-      onClose();
+      if (isModal) {
+        onClose();
+      }
     }, 2000);
   };
 
@@ -190,7 +197,9 @@ export default function AuthModal({
     resetForm();
     setTimeout(() => {
       setSuccess(null);
-      onClose();
+      if (isModal) {
+        onClose();
+      }
     }, 1200);
   };
 
@@ -203,17 +212,16 @@ export default function AuthModal({
       )
     : [];
 
-  return (
-    <div id="auth-modal-overlay" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-      <div className="absolute inset-0" onClick={onClose} />
-
+  const panel = (
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ duration: 0.2 }}
-        id="auth-modal-content"
-        className="relative w-full max-w-lg rhs-panel border rounded-2xl overflow-hidden shadow-2xl z-10 my-8 flex flex-col max-h-[90vh]"
+        id={isModal ? 'auth-modal-content' : 'auth-page-content'}
+        className={`relative w-full max-w-lg rhs-panel border rounded-2xl overflow-hidden flex flex-col ${
+          isModal ? 'shadow-2xl z-10 my-8 max-h-[90vh]' : 'shadow-xl'
+        }`}
       >
         {/* Header */}
         <div className="p-5 border-b border-[#c4d5d9] rhs-panel-soft flex justify-between items-center flex-shrink-0">
@@ -242,12 +250,14 @@ export default function AuthModal({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1.5 rounded-full transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {isModal && (
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1.5 rounded-full transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Success & Error Floating Notification bar */}
@@ -511,7 +521,7 @@ export default function AuthModal({
                   onClick={onClose}
                   className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer shadow-sm"
                 >
-                  {isZh ? '好的，返回浏览' : 'Done, Close'}
+                  {isZh ? (isModal ? '好的，返回浏览' : '继续购物') : (isModal ? 'Done, Close' : 'Continue shopping')}
                 </button>
               </div>
             </div>
@@ -759,7 +769,15 @@ export default function AuthModal({
             </div>
           )}
         </div>
-      </motion.div>
+    </motion.div>
+  );
+
+  if (!isModal) return panel;
+
+  return (
+    <div id="auth-modal-overlay" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+      <div className="absolute inset-0" onClick={onClose} />
+      {panel}
     </div>
   );
 }
