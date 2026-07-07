@@ -1,6 +1,7 @@
 import { X, CheckCircle, Flame, Compass, Snowflake, Info, ShoppingCart } from 'lucide-react';
 import { Product, Language } from '../types';
 import { useState } from 'react';
+import { resolveMediaUrl } from '../lib/media';
 
 interface ProductDetailModalProps {
   product: Product;
@@ -49,7 +50,7 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
           {/* Left Column: Image with overlays */}
           <div className="relative md:col-span-5 aspect-[4/3] md:aspect-auto md:h-full min-h-[300px] bg-slate-100">
             <img
-              src={product.image}
+              src={resolveMediaUrl(product.image)}
               alt={isZh ? product.nameZh : product.nameEn}
               className={`w-full h-full object-cover saturate-[0.9] ${orderingPaused ? 'grayscale opacity-70' : ''}`}
               referrerPolicy="no-referrer"

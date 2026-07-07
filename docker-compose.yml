@@ -9,6 +9,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       RHS_DATA_FILE: /app/data/store.json
+      RHS_UPLOAD_DIR: /app/data/uploads
       SELLER_PASSCODE: ${SELLER_PASSCODE:-8888}
     ports:
       - "127.0.0.1:9999:3000"

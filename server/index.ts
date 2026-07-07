@@ -24,7 +24,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const dataFile = process.env.RHS_DATA_FILE || path.join(__dirname, 'data', 'store.json');
-const uploadDir = process.env.RHS_UPLOAD_DIR || path.join(__dirname, 'data', 'uploads');
+const uploadDir = process.env.RHS_UPLOAD_DIR || path.join(path.dirname(dataFile), 'uploads');
 const storefrontUploadDir = path.join(uploadDir, 'storefront');
 const port = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === 'production' || process.argv.includes('--production');
@@ -52,6 +52,17 @@ const defaultSettings: StoreSettings = {
   discounts: [],
 };
 
+const normalizeStoredMediaUrl = (url: unknown) => {
+  const value = String(url || '').trim();
+  if (!value) return '';
+  if (/^(data:|blob:|https?:\/\/|\/\/)/i.test(value)) return value;
+  if (value.startsWith('/')) return value;
+  if (value.startsWith('uploads/')) return `/${value}`;
+  if (value.startsWith('storefront/')) return `/uploads/${value}`;
+  if (/^[^/?#]+\.(jpe?g|png|webp|gif|mp4|webm|mov)$/i.test(value)) return `/uploads/storefront/${encodeURIComponent(value)}`;
+  return value;
+};
+
 const normalizeMediaLibrary = (mediaLibrary: unknown): ProductMedia[] => {
   if (!Array.isArray(mediaLibrary)) return [];
 
@@ -59,7 +70,7 @@ const normalizeMediaLibrary = (mediaLibrary: unknown): ProductMedia[] => {
     .filter(media => media?.id && media?.url && (media?.type === 'image' || media?.type === 'video'))
     .map(media => ({
       id: String(media.id),
-      url: String(media.url),
+      url: normalizeStoredMediaUrl(media.url),
       type: media.type,
       name: media.name ? String(media.name) : undefined,
       size: Number.isFinite(Number(media.size)) ? Number(media.size) : undefined,

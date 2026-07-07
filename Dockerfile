@@ -16,6 +16,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV RHS_DATA_FILE=/app/data/store.json
+ENV RHS_UPLOAD_DIR=/app/data/uploads
 
 COPY package*.json ./
 RUN npm ci --omit=dev --include=optional --ignore-scripts

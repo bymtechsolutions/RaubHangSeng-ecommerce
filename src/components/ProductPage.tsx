@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, ArrowLeft, CheckCircle, Compass, Flame, MessageCircle, Package, ShoppingCart, Snowflake, Truck } from 'lucide-react';
 import { Language, Product, ProductCutType, ProductMedia } from '../types';
+import { resolveMediaUrl } from '../lib/media';
 
 type CutType = ProductCutType;
 const CUSTOM_VARIANT_INQUIRY_ID = 'whatsapp-custom-option';
@@ -138,7 +139,7 @@ export default function ProductPage({
                 {heroMedia?.type === 'video' ? (
                   <video
                     key={heroMedia.url}
-                    src={heroMedia.url}
+                    src={resolveMediaUrl(heroMedia.url)}
                     className="absolute inset-0 w-full h-full object-contain bg-slate-950 saturate-[0.9]"
                     controls
                     muted
@@ -147,7 +148,7 @@ export default function ProductPage({
                   />
                 ) : (
                   <img
-                    src={heroMedia?.url || product.image}
+                    src={resolveMediaUrl(heroMedia?.url || product.image)}
                     alt={name}
                     className={`absolute inset-0 w-full h-full object-cover saturate-[0.9] ${orderingPaused ? 'grayscale opacity-70' : ''}`}
                     referrerPolicy="no-referrer"
@@ -202,13 +203,13 @@ export default function ProductPage({
                         >
                           {media.type === 'video' ? (
                             <>
-                              <video src={media.url} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                              <video src={resolveMediaUrl(media.url)} className="w-full h-full object-cover" muted playsInline preload="metadata" />
                               <span className="absolute bottom-1 left-1 rounded bg-slate-950/70 px-1.5 py-0.5 text-[9px] font-bold text-white">
                                 Video
                               </span>
                             </>
                           ) : (
-                            <img src={media.url} alt={media.name || name} className="w-full h-full object-cover" />
+                            <img src={resolveMediaUrl(media.url)} alt={media.name || name} className="w-full h-full object-cover" />
                           )}
                         </button>
                       );
@@ -600,7 +601,7 @@ export default function ProductPage({
                 >
                   <div className="aspect-[16/10] overflow-hidden bg-slate-100">
                     <img
-                      src={relatedProduct.image}
+                      src={resolveMediaUrl(relatedProduct.image)}
                       alt={isZh ? relatedProduct.nameZh : relatedProduct.nameEn}
                       className={`w-full h-full object-cover transition-transform duration-500 ${
                         orderingPaused ? 'grayscale opacity-60' : 'group-hover:scale-105 saturate-[0.88] group-hover:saturate-100'

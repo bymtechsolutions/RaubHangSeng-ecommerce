@@ -171,6 +171,7 @@ run_container() {
     -e NODE_ENV=production \
     -e PORT="$CONTAINER_PORT" \
     -e RHS_DATA_FILE=/app/data/store.json \
+    -e RHS_UPLOAD_DIR=/app/data/uploads \
     -e SELLER_PASSCODE="${SELLER_PASSCODE:-8888}" \
     "$IMAGE_NAME" >/dev/null
 }

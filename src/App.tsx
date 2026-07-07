@@ -24,6 +24,7 @@ import SellerDashboard, { type SellerDashboardTab } from './components/SellerDas
 import PolicyView from './components/PolicyView';
 import { createOrder, fetchStore, replaceOrders, replaceProducts, updateSellerPasscode, updateSettings, verifySellerPasscode } from './lib/api';
 import { calculateDiscounts } from './lib/discounts';
+import { resolveMediaUrl } from './lib/media';
 
 type AppRoute = 'home' | 'shop' | 'product' | 'about' | 'business-order' | 'login' | 'seller' | 'privacy' | 'terms' | 'refund';
 
@@ -78,6 +79,13 @@ const routeToActiveSection = (route: AppRoute) => {
   return 'home';
 };
 
+const normalizeMediaLibraryUrls = (mediaLibrary: ProductMedia[]) => (
+  mediaLibrary.map(media => ({
+    ...media,
+    url: resolveMediaUrl(media.url),
+  }))
+);
+
 export default function App() {
   // Main states
   const [route, setRoute] = useState<AppRoute>(() => getRouteFromPath());
@@ -125,7 +133,7 @@ export default function App() {
     setOutstationShippingRate(Number(settings.outstationShippingRate) || 30);
     setStoreAnnouncement(settings.storeAnnouncement || DEFAULT_STORE_ANNOUNCEMENT);
     setCollectionDisplays(normalizeCollectionDisplays(settings.collections));
-    setMediaLibrary(Array.isArray(settings.mediaLibrary) ? settings.mediaLibrary : []);
+    setMediaLibrary(Array.isArray(settings.mediaLibrary) ? normalizeMediaLibraryUrls(settings.mediaLibrary) : []);
     setDiscounts(Array.isArray(settings.discounts) ? settings.discounts : []);
   };
 
@@ -195,7 +203,7 @@ export default function App() {
       if (savedMediaLibraryRaw) {
         try {
           const parsedMediaLibrary = JSON.parse(savedMediaLibraryRaw);
-          savedMediaLibrary = Array.isArray(parsedMediaLibrary) ? parsedMediaLibrary : [];
+          savedMediaLibrary = Array.isArray(parsedMediaLibrary) ? normalizeMediaLibraryUrls(parsedMediaLibrary) : [];
         } catch (e) {
           console.error('Failed to parse media library', e);
         }
@@ -245,7 +253,7 @@ export default function App() {
         localStorage.setItem('raub_hang_seng_outstation_rate', String(store.settings.outstationShippingRate));
         localStorage.setItem('raub_hang_seng_announcement', store.settings.storeAnnouncement);
         localStorage.setItem('raub_hang_seng_collections', JSON.stringify(normalizeCollectionDisplays(store.settings.collections)));
-        localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(store.settings.mediaLibrary || []));
+        localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(normalizeMediaLibraryUrls(store.settings.mediaLibrary || [])));
         localStorage.setItem('raub_hang_seng_discounts', JSON.stringify(store.settings.discounts || []));
       } catch (e) {
         console.error('Failed to load backend store, using local fallback', e);
@@ -389,7 +397,7 @@ export default function App() {
       localStorage.setItem('raub_hang_seng_collections', JSON.stringify(normalizedCollections));
     }
     if (settingsPatch.mediaLibrary !== undefined) {
-      const nextMediaLibrary = Array.isArray(settingsPatch.mediaLibrary) ? settingsPatch.mediaLibrary : [];
+      const nextMediaLibrary = Array.isArray(settingsPatch.mediaLibrary) ? normalizeMediaLibraryUrls(settingsPatch.mediaLibrary) : [];
       setMediaLibrary(nextMediaLibrary);
       localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(nextMediaLibrary));
     }
@@ -408,7 +416,7 @@ export default function App() {
       localStorage.setItem('raub_hang_seng_outstation_rate', String(response.settings.outstationShippingRate));
       localStorage.setItem('raub_hang_seng_announcement', response.settings.storeAnnouncement);
       localStorage.setItem('raub_hang_seng_collections', JSON.stringify(normalizeCollectionDisplays(response.settings.collections)));
-      localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(response.settings.mediaLibrary || []));
+      localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(normalizeMediaLibraryUrls(response.settings.mediaLibrary || [])));
       localStorage.setItem('raub_hang_seng_discounts', JSON.stringify(response.settings.discounts || []));
     } catch (e) {
       console.error('Failed to persist settings to backend', e);

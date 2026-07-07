@@ -3,6 +3,7 @@ import { Search, SlidersHorizontal, Eye, ShoppingCart, HelpCircle, AlertCircle }
 import { CollectionDisplay, Product, Language, ProductCategory } from '../types';
 import { PRODUCTS } from '../data/products';
 import { DEFAULT_COLLECTIONS } from '../data/collections';
+import { resolveMediaUrl } from '../lib/media';
 
 interface ProductsProps {
   language: Language;
@@ -302,7 +303,7 @@ export default function Products({ language, products = PRODUCTS, collections = 
                     aria-label={isZh ? `查看${product.nameZh}详情` : `View ${product.nameEn} details`}
                   >
                     <img
-                      src={product.image}
+                      src={resolveMediaUrl(product.image)}
                       alt={isZh ? product.nameZh : product.nameEn}
                       className={`w-full h-full object-cover transition-transform duration-500 ${
                         orderingPaused

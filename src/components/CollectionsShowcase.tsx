@@ -1,5 +1,6 @@
 import { ArrowRight, Fish, Layers3 } from 'lucide-react';
 import { CollectionDisplay, Language, Product, ProductCategory } from '../types';
+import { resolveMediaUrl } from '../lib/media';
 
 interface CollectionsShowcaseProps {
   language: Language;
@@ -56,7 +57,7 @@ export default function CollectionsShowcase({
               >
                 <div className="relative aspect-[5/4] overflow-hidden bg-[#0b3447]">
                   <img
-                    src={collection.image}
+                    src={resolveMediaUrl(collection.image)}
                     alt={isZh ? collection.titleZh : collection.titleEn}
                     className="absolute inset-0 h-full w-full object-cover transition-transform duration-500"
                     style={{

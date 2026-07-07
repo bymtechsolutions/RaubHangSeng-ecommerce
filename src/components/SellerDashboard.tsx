@@ -35,6 +35,7 @@ import {
 import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductVariant, ProductCutType, StoreSettings, StoreDiscount, StoreDiscountScope, StoreDiscountValueType, CollectionDisplay, ProductCategory, OrderRecord, PaymentStatus } from '../types';
 import { normalizeCollectionDisplays } from '../data/collections';
 import { uploadStorefrontMedia } from '../lib/api';
+import { resolveMediaUrl } from '../lib/media';
 
 interface SellerDashboardProps {
   language: Language;
@@ -2140,7 +2141,7 @@ export default function SellerDashboard({
                                 <td className="p-3">
                                   <div className="flex items-center gap-3 min-w-0">
                                     <img
-                                      src={prod.image}
+                                      src={resolveMediaUrl(prod.image)}
                                       alt={prod.nameEn}
                                       className="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0"
                                       referrerPolicy="no-referrer"
@@ -2423,9 +2424,9 @@ export default function SellerDashboard({
                               <div key={media.id} className="relative rounded-lg overflow-hidden border border-slate-200 bg-white">
                                 <div className="aspect-[4/3] bg-slate-100">
                                   {media.type === 'video' ? (
-                                    <video src={media.url} className="w-full h-full object-cover" muted />
+                                    <video src={resolveMediaUrl(media.url)} className="w-full h-full object-cover" muted />
                                   ) : (
-                                    <img src={media.url} alt={media.name || 'Product media'} className="w-full h-full object-cover" />
+                                    <img src={resolveMediaUrl(media.url)} alt={media.name || 'Product media'} className="w-full h-full object-cover" />
                                   )}
                                 </div>
                                 <div className="p-2 space-y-1.5">
@@ -2499,7 +2500,7 @@ export default function SellerDashboard({
                                   <div className="w-24 shrink-0">
                                     <div className="aspect-square rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
                                       {variant.image ? (
-                                        <img src={variant.image} alt={variant.nameEn || 'Variant'} className="w-full h-full object-cover" />
+                                        <img src={resolveMediaUrl(variant.image)} alt={variant.nameEn || 'Variant'} className="w-full h-full object-cover" />
                                       ) : (
                                         <div className="w-full h-full flex items-center justify-center text-slate-300">
                                           <ImageIcon className="w-7 h-7" />
@@ -2732,7 +2733,7 @@ export default function SellerDashboard({
                           <div className="space-y-2">
                             <div className="relative aspect-[5/4] overflow-hidden rounded-xl bg-slate-100 border border-slate-200">
                               <img
-                                src={coll.image}
+                                src={resolveMediaUrl(coll.image)}
                                 alt={isZh ? coll.titleZh : coll.titleEn}
                                 className="absolute inset-0 w-full h-full object-cover"
                                 style={{
@@ -3453,7 +3454,7 @@ export default function SellerDashboard({
                         <div className="aspect-video bg-slate-950">
                           {media.type === 'video' ? (
                             <video
-                              src={media.url}
+                              src={resolveMediaUrl(media.url)}
                               className="h-full w-full object-contain"
                               controls
                               muted
@@ -3462,7 +3463,7 @@ export default function SellerDashboard({
                             />
                           ) : (
                             <img
-                              src={media.url}
+                              src={resolveMediaUrl(media.url)}
                               alt={media.name || 'Media'}
                               className="h-full w-full object-cover"
                             />
