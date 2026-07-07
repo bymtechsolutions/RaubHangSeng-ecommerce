@@ -135,7 +135,7 @@ export default function AuthModal({
       state: stateName,
       postcode: postcode.trim(),
       email: email.trim(),
-      memberPoints: 100, // Welcome gift points!
+      memberPoints: 0,
     };
 
     try {
@@ -147,7 +147,7 @@ export default function AuthModal({
       return;
     }
 
-    setSuccess(isZh ? '注册成功！赠送 100 迎新会员积分！' : 'Registration successful! 100 welcome loyalty points rewarded!');
+    setSuccess(isZh ? '注册成功！' : 'Registration successful!');
     setTimeout(() => {
       setSuccess(null);
       if (isModal) {
@@ -556,7 +556,7 @@ export default function AuthModal({
                       : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  {isZh ? '注册成为会员' : 'Sign Up (100 pts Gift)'}
+                  {isZh ? '注册成为会员' : 'Sign Up'}
                 </button>
               </div>
 
@@ -762,7 +762,7 @@ export default function AuthModal({
                     type="submit"
                     className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-bold rounded-xl text-xs cursor-pointer shadow-md transition-all flex items-center justify-center space-x-1.5"
                   >
-                    <span>{isZh ? '确 认 注 册 (赠 100 积分)' : 'S I G N   U P   N O W'}</span>
+                    <span>{isZh ? '确 认 注 册' : 'S I G N   U P   N O W'}</span>
                   </button>
                 </form>
               )}
