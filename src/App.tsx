@@ -16,13 +16,14 @@ import Reviews from './components/Reviews';
 import ContactUs from './components/ContactUs';
 import Footer from './components/Footer';
 import AuthModal from './components/AuthModal';
-import { Product, CartItem, Language, DeliveryDetails, User, OrderRecord, StoreSettings, ProductCategory, CollectionDisplay, ProductMedia } from './types';
+import { Product, CartItem, Language, DeliveryDetails, User, OrderRecord, StoreSettings, ProductCategory, CollectionDisplay, ProductMedia, StoreDiscount } from './types';
 import { X, CheckCircle, Lock } from 'lucide-react';
 import { PRODUCTS } from './data/products';
 import { DEFAULT_COLLECTIONS, normalizeCollectionDisplays } from './data/collections';
 import SellerDashboard from './components/SellerDashboard';
 import PolicyView from './components/PolicyView';
 import { createOrder, fetchStore, replaceOrders, replaceProducts, updateSellerPasscode, updateSettings, verifySellerPasscode } from './lib/api';
+import { calculateDiscounts } from './lib/discounts';
 
 type AppRoute = 'home' | 'shop' | 'product' | 'about' | 'business-order' | 'login' | 'seller' | 'privacy' | 'terms' | 'refund';
 
@@ -103,6 +104,7 @@ export default function App() {
   const [storeAnnouncement, setStoreAnnouncement] = useState(DEFAULT_STORE_ANNOUNCEMENT);
   const [collectionDisplays, setCollectionDisplays] = useState<CollectionDisplay[]>(DEFAULT_COLLECTIONS);
   const [mediaLibrary, setMediaLibrary] = useState<ProductMedia[]>([]);
+  const [discounts, setDiscounts] = useState<StoreDiscount[]>([]);
 
   const applyStoreSettings = (settings: StoreSettings) => {
     setIsMaintenanceMode(Boolean(settings.maintenanceMode));
@@ -112,6 +114,7 @@ export default function App() {
     setStoreAnnouncement(settings.storeAnnouncement || DEFAULT_STORE_ANNOUNCEMENT);
     setCollectionDisplays(normalizeCollectionDisplays(settings.collections));
     setMediaLibrary(Array.isArray(settings.mediaLibrary) ? settings.mediaLibrary : []);
+    setDiscounts(Array.isArray(settings.discounts) ? settings.discounts : []);
   };
 
   // Initialize session state locally and shared store data from backend.
@@ -166,6 +169,7 @@ export default function App() {
 
       let savedCollections: CollectionDisplay[] = DEFAULT_COLLECTIONS;
       let savedMediaLibrary: ProductMedia[] = [];
+      let savedDiscounts: StoreDiscount[] = [];
       const savedCollectionsRaw = localStorage.getItem('raub_hang_seng_collections');
       if (savedCollectionsRaw) {
         try {
@@ -185,6 +189,16 @@ export default function App() {
         }
       }
 
+      const savedDiscountsRaw = localStorage.getItem('raub_hang_seng_discounts');
+      if (savedDiscountsRaw) {
+        try {
+          const parsedDiscounts = JSON.parse(savedDiscountsRaw);
+          savedDiscounts = Array.isArray(parsedDiscounts) ? parsedDiscounts : [];
+        } catch (e) {
+          console.error('Failed to parse discounts', e);
+        }
+      }
+
       const fallbackSettings: StoreSettings = {
         maintenanceMode: localStorage.getItem('raub_hang_seng_maintenance') === 'true',
         freeShippingThreshold: Number(localStorage.getItem('raub_hang_seng_free_shipping')) || 250,
@@ -193,6 +207,7 @@ export default function App() {
         storeAnnouncement: localStorage.getItem('raub_hang_seng_announcement') || DEFAULT_STORE_ANNOUNCEMENT,
         collections: savedCollections,
         mediaLibrary: savedMediaLibrary,
+        discounts: savedDiscounts,
       };
       applyStoreSettings(fallbackSettings);
     };
@@ -219,6 +234,7 @@ export default function App() {
         localStorage.setItem('raub_hang_seng_announcement', store.settings.storeAnnouncement);
         localStorage.setItem('raub_hang_seng_collections', JSON.stringify(normalizeCollectionDisplays(store.settings.collections)));
         localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(store.settings.mediaLibrary || []));
+        localStorage.setItem('raub_hang_seng_discounts', JSON.stringify(store.settings.discounts || []));
       } catch (e) {
         console.error('Failed to load backend store, using local fallback', e);
         loadLocalStoreFallback();
@@ -364,6 +380,11 @@ export default function App() {
       setMediaLibrary(nextMediaLibrary);
       localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(nextMediaLibrary));
     }
+    if (settingsPatch.discounts !== undefined) {
+      const nextDiscounts = Array.isArray(settingsPatch.discounts) ? settingsPatch.discounts : [];
+      setDiscounts(nextDiscounts);
+      localStorage.setItem('raub_hang_seng_discounts', JSON.stringify(nextDiscounts));
+    }
 
     try {
       const response = await updateSettings(settingsPatch);
@@ -375,6 +396,7 @@ export default function App() {
       localStorage.setItem('raub_hang_seng_announcement', response.settings.storeAnnouncement);
       localStorage.setItem('raub_hang_seng_collections', JSON.stringify(normalizeCollectionDisplays(response.settings.collections)));
       localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(response.settings.mediaLibrary || []));
+      localStorage.setItem('raub_hang_seng_discounts', JSON.stringify(response.settings.discounts || []));
     } catch (e) {
       console.error('Failed to persist settings to backend', e);
     }
@@ -488,7 +510,7 @@ export default function App() {
   }, 0);
 
   const isFreeShipping = subtotal >= freeShippingThreshold;
-  const shippingFee = cartItems.length === 0
+  const baseShippingFee = cartItems.length === 0
     ? 0
     : isFreeShipping
       ? 0
@@ -496,7 +518,9 @@ export default function App() {
         ? localShippingRate
         : outstationShippingRate;
 
-  const totalAmount = subtotal + shippingFee;
+  const discountTotals = calculateDiscounts(discounts, subtotal, baseShippingFee);
+  const shippingFee = discountTotals.shippingFee;
+  const totalAmount = discountTotals.totalAmount;
 
   const navigateToRoute = (nextRoute: AppRoute, options?: { replace?: boolean; scrollTop?: boolean; productId?: string }) => {
     const nextPath = routeToPath(nextRoute, options?.productId);
@@ -659,6 +683,8 @@ export default function App() {
         setStoreAnnouncement={setStoreAnnouncement}
         collectionDisplays={collectionDisplays}
         mediaLibrary={mediaLibrary}
+        discounts={discounts}
+        setDiscounts={setDiscounts}
         onSaveSettings={persistSettings}
         onChangeSellerPasscode={handleChangeSellerPasscode}
       />
@@ -895,6 +921,10 @@ export default function App() {
             }}
             shippingState={shippingState}
             setShippingState={setShippingState}
+            freeShippingThreshold={freeShippingThreshold}
+            localShippingRate={localShippingRate}
+            outstationShippingRate={outstationShippingRate}
+            discounts={discounts}
             orderingPaused={isOrderingPaused}
           />
         )}
@@ -914,6 +944,11 @@ export default function App() {
           onOrderSuccess={handleOrderSuccess}
           currentUser={currentUser}
           onAuthClick={() => navigateToRoute('login')}
+          subtotal={discountTotals.subtotal}
+          baseShippingFee={discountTotals.baseShippingFee}
+          itemDiscountTotal={discountTotals.itemDiscountTotal}
+          shippingDiscountTotal={discountTotals.shippingDiscountTotal}
+          discountApplications={discountTotals.applications}
         />
       )}
 

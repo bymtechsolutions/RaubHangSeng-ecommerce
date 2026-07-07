@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_COLLECTIONS, normalizeCollectionDisplays } from '../src/data/collections';
 import { PRODUCTS } from '../src/data/products';
-import type { OrderRecord, Product, ProductMedia, StoreSettings, StoreState, User } from '../src/types';
+import type { OrderRecord, Product, ProductMedia, StoreDiscount, StoreSettings, StoreState, User } from '../src/types';
 
 interface MemberRecord {
   passwordHash: string;
@@ -49,6 +49,7 @@ const defaultSettings: StoreSettings = {
   storeAnnouncement: '【恒升河鱼公告】彭亨河主流特马鲁网箱及野生巴丁/苏丹鱼每日捕捞，西马冷链送达，消费满 RM250 免运费！',
   collections: DEFAULT_COLLECTIONS,
   mediaLibrary: [],
+  discounts: [],
 };
 
 const normalizeMediaLibrary = (mediaLibrary: unknown): ProductMedia[] => {
@@ -67,6 +68,30 @@ const normalizeMediaLibrary = (mediaLibrary: unknown): ProductMedia[] => {
     }));
 };
 
+const normalizeDiscounts = (discounts: unknown): StoreDiscount[] => {
+  if (!Array.isArray(discounts)) return [];
+
+  return discounts
+    .filter(discount => discount?.id && discount?.titleZh && discount?.titleEn)
+    .map(discount => {
+      const scope = discount.scope === 'shipping' ? 'shipping' : 'order';
+      const valueType = discount.valueType === 'fixed' || discount.valueType === 'free_shipping'
+        ? discount.valueType
+        : 'percentage';
+
+      return {
+        id: String(discount.id),
+        titleZh: String(discount.titleZh),
+        titleEn: String(discount.titleEn),
+        scope,
+        valueType: scope === 'order' && valueType === 'free_shipping' ? 'percentage' : valueType,
+        value: Math.max(0, Number(discount.value) || 0),
+        minSubtotal: Math.max(0, Number(discount.minSubtotal) || 0),
+        isActive: Boolean(discount.isActive),
+      };
+    });
+};
+
 const createDefaultStore = (): PersistedStore => ({
   products: PRODUCTS,
   orders: [],
@@ -83,6 +108,7 @@ const ensureStoreShape = (value: Partial<PersistedStore> | null | undefined): Pe
     ...(value?.settings || {}),
     collections: normalizeCollectionDisplays(value?.settings?.collections),
     mediaLibrary: normalizeMediaLibrary(value?.settings?.mediaLibrary),
+    discounts: normalizeDiscounts(value?.settings?.discounts),
   },
   members: value?.members && typeof value.members === 'object' ? value.members : {},
   sellerPasscode: value?.sellerPasscode?.passwordHash && value?.sellerPasscode?.salt
@@ -319,11 +345,16 @@ app.patch('/api/settings', async (req, res, next) => {
       return;
     }
 
+    const settingsPatch: Partial<StoreSettings> = {
+      ...settings,
+      ...(settings.discounts !== undefined ? { discounts: normalizeDiscounts(settings.discounts) } : {}),
+    };
+
     const store = await updateStore(current => ({
       ...current,
       settings: {
         ...current.settings,
-        ...settings,
+        ...settingsPatch,
       },
     }));
     res.json({ settings: store.settings });

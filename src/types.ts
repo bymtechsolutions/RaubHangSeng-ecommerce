@@ -64,6 +64,29 @@ export interface CartItem {
   cutType: ProductCutType;
 }
 
+export type StoreDiscountScope = 'order' | 'shipping';
+export type StoreDiscountValueType = 'percentage' | 'fixed' | 'free_shipping';
+
+export interface StoreDiscount {
+  id: string;
+  titleZh: string;
+  titleEn: string;
+  scope: StoreDiscountScope;
+  valueType: StoreDiscountValueType;
+  value: number;
+  minSubtotal: number;
+  isActive: boolean;
+}
+
+export interface AppliedDiscount {
+  discountId: string;
+  titleZh: string;
+  titleEn: string;
+  scope: StoreDiscountScope;
+  valueType: StoreDiscountValueType;
+  amount: number;
+}
+
 export type PaymentMethod = 'bank_transfer';
 export type PaymentStatus = 'pending_review' | 'confirmed' | 'rejected';
 
@@ -98,6 +121,11 @@ export interface OrderRecord {
   status?: string;
   payment?: PaymentRecord;
   userId?: string;
+  subtotal?: number;
+  baseShippingFee?: number;
+  shippingFee?: number;
+  discountTotal?: number;
+  discounts?: AppliedDiscount[];
 }
 
 export interface StoreSettings {
@@ -108,6 +136,7 @@ export interface StoreSettings {
   storeAnnouncement: string;
   collections: CollectionDisplay[];
   mediaLibrary: ProductMedia[];
+  discounts: StoreDiscount[];
 }
 
 export interface StoreState {

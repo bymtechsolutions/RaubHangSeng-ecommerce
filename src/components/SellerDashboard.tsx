@@ -32,7 +32,7 @@ import {
   Image as ImageIcon,
   Video
 } from 'lucide-react';
-import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductVariant, ProductCutType, StoreSettings, CollectionDisplay, ProductCategory, OrderRecord, PaymentStatus } from '../types';
+import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductVariant, ProductCutType, StoreSettings, StoreDiscount, StoreDiscountScope, StoreDiscountValueType, CollectionDisplay, ProductCategory, OrderRecord, PaymentStatus } from '../types';
 import { normalizeCollectionDisplays } from '../data/collections';
 import { uploadStorefrontMedia } from '../lib/api';
 
@@ -55,11 +55,13 @@ interface SellerDashboardProps {
   setStoreAnnouncement: (val: string) => void;
   collectionDisplays: CollectionDisplay[];
   mediaLibrary: ProductMedia[];
+  discounts: StoreDiscount[];
+  setDiscounts: (discounts: StoreDiscount[]) => void;
   onSaveSettings?: (settings: Partial<StoreSettings>) => void | Promise<void>;
   onChangeSellerPasscode?: (currentPasscode: string, nextPasscode: string) => void | Promise<void>;
 }
 
-type TabType = 'overview' | 'orders' | 'customers' | 'products' | 'collections' | 'shipping' | 'settings';
+type TabType = 'overview' | 'orders' | 'customers' | 'products' | 'collections' | 'discounts' | 'shipping' | 'settings';
 
 const imageUploadMaxBytes = 2 * 1024 * 1024;
 const videoUploadMaxBytes = 10 * 1024 * 1024;
@@ -107,6 +109,8 @@ export default function SellerDashboard({
   setStoreAnnouncement,
   collectionDisplays,
   mediaLibrary,
+  discounts,
+  setDiscounts,
   onSaveSettings,
   onChangeSellerPasscode,
 }: SellerDashboardProps) {
@@ -159,6 +163,14 @@ export default function SellerDashboard({
   const [currentSellerPasscode, setCurrentSellerPasscode] = useState('');
   const [newSellerPasscode, setNewSellerPasscode] = useState('');
   const [confirmSellerPasscode, setConfirmSellerPasscode] = useState('');
+  const [editingDiscountId, setEditingDiscountId] = useState<string | null>(null);
+  const [discountTitleZh, setDiscountTitleZh] = useState('');
+  const [discountTitleEn, setDiscountTitleEn] = useState('');
+  const [discountScope, setDiscountScope] = useState<StoreDiscountScope>('order');
+  const [discountValueType, setDiscountValueType] = useState<StoreDiscountValueType>('percentage');
+  const [discountValue, setDiscountValue] = useState(10);
+  const [discountMinSubtotal, setDiscountMinSubtotal] = useState(0);
+  const [discountIsActive, setDiscountIsActive] = useState(true);
 
   useEffect(() => {
     setCollectionDrafts(normalizeCollectionDisplays(collectionDisplays));
@@ -272,6 +284,117 @@ export default function SellerDashboard({
   };
 
   const createMediaId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const resetDiscountForm = () => {
+    setEditingDiscountId(null);
+    setDiscountTitleZh('');
+    setDiscountTitleEn('');
+    setDiscountScope('order');
+    setDiscountValueType('percentage');
+    setDiscountValue(10);
+    setDiscountMinSubtotal(0);
+    setDiscountIsActive(true);
+  };
+
+  const getDiscountScopeLabel = (scope: StoreDiscountScope) => {
+    if (scope === 'shipping') return isZh ? '运费优惠' : 'Shipping Discount';
+    return isZh ? '订单优惠' : 'Order Discount';
+  };
+
+  const getDiscountValueTypeLabel = (valueType: StoreDiscountValueType) => {
+    if (valueType === 'fixed') return isZh ? '固定金额' : 'Fixed Amount';
+    if (valueType === 'free_shipping') return isZh ? '免运费' : 'Free Shipping';
+    return isZh ? '百分比' : 'Percentage';
+  };
+
+  const formatDiscountRule = (discount: StoreDiscount) => {
+    if (discount.valueType === 'free_shipping') return isZh ? '免除符合条件订单的运费' : 'Waives eligible shipping fee';
+    const valueText = discount.valueType === 'percentage'
+      ? `${discount.value}%`
+      : `RM ${discount.value.toFixed(2)}`;
+    return `${valueText} ${discount.scope === 'shipping' ? (isZh ? '运费折扣' : 'off shipping') : (isZh ? '订单折扣' : 'off order')}`;
+  };
+
+  const handleEditDiscount = (discount: StoreDiscount) => {
+    setEditingDiscountId(discount.id);
+    setDiscountTitleZh(discount.titleZh);
+    setDiscountTitleEn(discount.titleEn);
+    setDiscountScope(discount.scope);
+    setDiscountValueType(discount.valueType);
+    setDiscountValue(discount.value);
+    setDiscountMinSubtotal(discount.minSubtotal);
+    setDiscountIsActive(discount.isActive);
+  };
+
+  const persistDiscounts = async (nextDiscounts: StoreDiscount[], message: string) => {
+    setDiscounts(nextDiscounts);
+    await onSaveSettings?.({ discounts: nextDiscounts });
+    triggerSuccess(message);
+  };
+
+  const handleDiscountSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!discountTitleZh.trim() || !discountTitleEn.trim()) {
+      triggerError(isZh ? '请填写中英文优惠名称。' : 'Enter both Chinese and English discount names.');
+      return;
+    }
+
+    const normalizedValueType = discountScope === 'order' && discountValueType === 'free_shipping'
+      ? 'percentage'
+      : discountValueType;
+    const normalizedValue = normalizedValueType === 'free_shipping'
+      ? 0
+      : Math.max(0, Number(discountValue) || 0);
+
+    if (normalizedValueType !== 'free_shipping' && normalizedValue <= 0) {
+      triggerError(isZh ? '优惠数值必须大于 0。' : 'Discount value must be greater than 0.');
+      return;
+    }
+
+    if (normalizedValueType === 'percentage' && normalizedValue > 100) {
+      triggerError(isZh ? '百分比优惠不可超过 100%。' : 'Percentage discount cannot exceed 100%.');
+      return;
+    }
+
+    const discount: StoreDiscount = {
+      id: editingDiscountId || createMediaId('discount'),
+      titleZh: discountTitleZh.trim(),
+      titleEn: discountTitleEn.trim(),
+      scope: discountScope,
+      valueType: normalizedValueType,
+      value: normalizedValue,
+      minSubtotal: Math.max(0, Number(discountMinSubtotal) || 0),
+      isActive: discountIsActive,
+    };
+
+    const nextDiscounts = editingDiscountId
+      ? discounts.map(item => item.id === editingDiscountId ? discount : item)
+      : [discount, ...discounts];
+
+    await persistDiscounts(
+      nextDiscounts,
+      editingDiscountId
+        ? (isZh ? '优惠规则已更新。' : 'Discount rule updated.')
+        : (isZh ? '新优惠规则已新增。' : 'New discount rule added.')
+    );
+    resetDiscountForm();
+  };
+
+  const handleToggleDiscount = async (discountId: string) => {
+    const nextDiscounts = discounts.map(discount => (
+      discount.id === discountId ? { ...discount, isActive: !discount.isActive } : discount
+    ));
+    await persistDiscounts(nextDiscounts, isZh ? '优惠启用状态已同步。' : 'Discount status synced.');
+  };
+
+  const handleDeleteDiscount = async (discountId: string) => {
+    const nextDiscounts = discounts.filter(discount => discount.id !== discountId);
+    await persistDiscounts(nextDiscounts, isZh ? '优惠规则已删除。' : 'Discount rule deleted.');
+    if (editingDiscountId === discountId) {
+      resetDiscountForm();
+    }
+  };
 
   const createCollectionId = (value: string) => (
     value
@@ -1072,6 +1195,7 @@ export default function SellerDashboard({
               { id: 'customers', zh: '客户分析 Customers', en: 'Customer Spend', icon: UserIcon },
               { id: 'products', zh: '商品管理 Catalog', en: 'Product Manager', icon: Package },
               { id: 'collections', zh: '鱼类分类 Collections', en: 'Fish Categories', icon: Database },
+              { id: 'discounts', zh: '优惠折扣 Discounts', en: 'Discounts', icon: DollarSign },
               { id: 'shipping', zh: '物流物流 Shipping', en: 'Shipment Center', icon: Truck },
               { id: 'settings', zh: '店面控制 Settings', en: 'Store Settings', icon: Settings },
             ].map(tab => {
@@ -1084,6 +1208,7 @@ export default function SellerDashboard({
                     setActiveTab(tab.id as TabType);
                     setSelectedOrderDetail(null);
                     resetProductForm();
+                    resetDiscountForm();
                   }}
                   className={`flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer transition-all ${
                     isActive 
@@ -1603,20 +1728,40 @@ export default function SellerDashboard({
                         </div>
 
                         {/* Financial Invoice Total and rewards */}
-                        <div className="bg-sky-50/50 p-3 rounded-xl flex justify-between items-center text-xs">
-                          <div>
-                            <span className="text-slate-400 block">{isZh ? '应收总额 (含运费):' : 'Invoice Total:'}</span>
-                            <strong className="text-base text-slate-900 font-mono">RM {selectedOrderDetail.total.toFixed(2)}</strong>
-                          </div>
-                          {selectedOrderDetail.userId ? (
-                            <span className="bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold px-2 py-1 rounded-md">
-                              {isZh ? `已累计 ${Math.round(selectedOrderDetail.total)} 会员积分` : `Earned +${Math.round(selectedOrderDetail.total)} loyalty pts`}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic">
-                              {isZh ? '非会员购买' : 'Guest Purchase'}
-                            </span>
+                        <div className="bg-sky-50/50 p-3 rounded-xl text-xs space-y-2">
+                          {selectedOrderDetail.subtotal !== undefined && (
+                            <p className="flex justify-between text-slate-500">
+                              <span>{isZh ? '商品小计:' : 'Items subtotal:'}</span>
+                              <strong className="font-mono text-slate-700">RM {selectedOrderDetail.subtotal.toFixed(2)}</strong>
+                            </p>
                           )}
+                          {selectedOrderDetail.shippingFee !== undefined && (
+                            <p className="flex justify-between text-slate-500">
+                              <span>{isZh ? '运费:' : 'Shipping:'}</span>
+                              <strong className="font-mono text-slate-700">RM {(selectedOrderDetail.baseShippingFee ?? selectedOrderDetail.shippingFee).toFixed(2)}</strong>
+                            </p>
+                          )}
+                          {selectedOrderDetail.discounts?.map((discount) => (
+                            <p key={`${discount.discountId}-${discount.scope}`} className="flex justify-between text-emerald-700">
+                              <span>{isZh ? discount.titleZh : discount.titleEn}</span>
+                              <strong className="font-mono">- RM {discount.amount.toFixed(2)}</strong>
+                            </p>
+                          ))}
+                          <div className="border-t border-sky-100 pt-2 flex justify-between items-center">
+                            <div>
+                              <span className="text-slate-400 block">{isZh ? '应收总额 (含运费):' : 'Invoice Total:'}</span>
+                              <strong className="text-base text-slate-900 font-mono">RM {selectedOrderDetail.total.toFixed(2)}</strong>
+                            </div>
+                            {selectedOrderDetail.userId ? (
+                              <span className="bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold px-2 py-1 rounded-md">
+                                {isZh ? `已累计 ${Math.round(selectedOrderDetail.total)} 会员积分` : `Earned +${Math.round(selectedOrderDetail.total)} loyalty pts`}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 italic">
+                                {isZh ? '非会员购买' : 'Guest Purchase'}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Order Status Controller dropdown buttons */}
@@ -2739,6 +2884,225 @@ export default function SellerDashboard({
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* TAB: DISCOUNT RULES */}
+            {activeTab === 'discounts' && (
+              <div className="space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">{isZh ? '优惠折扣规则' : 'Discount Rules'}</h3>
+                    <p className="text-xs text-slate-500">
+                      {isZh ? '建立多个可叠加的订单折扣或运费折扣。启用后会自动应用在购物车与结账金额。' : 'Create multiple stackable order or shipping discounts. Active rules apply automatically in cart and checkout.'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-bold">
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                      <span className="block text-slate-400">{isZh ? '全部' : 'Total'}</span>
+                      <strong className="text-sm text-slate-900">{discounts.length}</strong>
+                    </div>
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                      <span className="block text-emerald-700">{isZh ? '启用' : 'Active'}</span>
+                      <strong className="text-sm text-emerald-800">{discounts.filter(discount => discount.isActive).length}</strong>
+                    </div>
+                    <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
+                      <span className="block text-sky-700">{isZh ? '运费' : 'Shipping'}</span>
+                      <strong className="text-sm text-sky-800">{discounts.filter(discount => discount.scope === 'shipping').length}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                  <form onSubmit={handleDiscountSubmit} className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs xl:col-span-5 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          {editingDiscountId ? (isZh ? '编辑优惠' : 'Edit Discount') : (isZh ? '新增优惠' : 'Add Discount')}
+                        </h4>
+                        <p className="text-[10px] text-slate-400">
+                          {isZh ? '订单优惠会扣商品小计；运费优惠会扣冷链运费。' : 'Order discounts reduce item subtotal; shipping discounts reduce cold-chain fees.'}
+                        </p>
+                      </div>
+                      {editingDiscountId && (
+                        <button
+                          type="button"
+                          onClick={resetDiscountForm}
+                          className="text-[10px] font-bold text-slate-500 hover:text-slate-900 cursor-pointer"
+                        >
+                          {isZh ? '取消编辑' : 'Cancel'}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block">
+                        <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{isZh ? '中文名称' : 'Chinese Name'}</span>
+                        <input
+                          value={discountTitleZh}
+                          onChange={(e) => setDiscountTitleZh(e.target.value)}
+                          placeholder={isZh ? '例：新鲜河鱼优惠' : 'e.g. 新鲜河鱼优惠'}
+                          className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{isZh ? '英文名称' : 'English Name'}</span>
+                        <input
+                          value={discountTitleEn}
+                          onChange={(e) => setDiscountTitleEn(e.target.value)}
+                          placeholder="e.g. Fresh Catch Promo"
+                          className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block">
+                        <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{isZh ? '优惠范围' : 'Discount Scope'}</span>
+                        <select
+                          value={discountScope}
+                          onChange={(e) => {
+                            const nextScope = e.target.value as StoreDiscountScope;
+                            setDiscountScope(nextScope);
+                            if (nextScope === 'order' && discountValueType === 'free_shipping') {
+                              setDiscountValueType('percentage');
+                              setDiscountValue(10);
+                            }
+                          }}
+                          className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                        >
+                          <option value="order">{isZh ? '订单优惠' : 'Order Discount'}</option>
+                          <option value="shipping">{isZh ? '运费优惠' : 'Shipping Discount'}</option>
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{isZh ? '优惠类型' : 'Discount Type'}</span>
+                        <select
+                          value={discountValueType}
+                          onChange={(e) => setDiscountValueType(e.target.value as StoreDiscountValueType)}
+                          className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                        >
+                          <option value="percentage">{isZh ? '百分比折扣' : 'Percentage Off'}</option>
+                          <option value="fixed">{isZh ? '固定金额折扣' : 'Fixed Amount Off'}</option>
+                          {discountScope === 'shipping' && (
+                            <option value="free_shipping">{isZh ? '免运费' : 'Free Shipping'}</option>
+                          )}
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block">
+                        <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                          {discountValueType === 'percentage' ? (isZh ? '折扣百分比 (%)' : 'Discount %') : (isZh ? '折扣金额 (RM)' : 'Amount (RM)')}
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={discountValueType === 'percentage' ? 100 : undefined}
+                          value={discountValue}
+                          onChange={(e) => setDiscountValue(Number(e.target.value))}
+                          disabled={discountValueType === 'free_shipping'}
+                          className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono disabled:text-slate-400"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{isZh ? '最低商品小计 (RM)' : 'Minimum Subtotal (RM)'}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={discountMinSubtotal}
+                          onChange={(e) => setDiscountMinSubtotal(Number(e.target.value))}
+                          className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono"
+                        />
+                      </label>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setDiscountIsActive(!discountIsActive)}
+                      className={`w-full flex items-center justify-center gap-2 rounded-lg border py-2 text-xs font-bold cursor-pointer transition-colors ${
+                        discountIsActive
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-200 bg-slate-50 text-slate-500'
+                      }`}
+                    >
+                      {discountIsActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                      <span>{discountIsActive ? (isZh ? '优惠启用中' : 'Discount active') : (isZh ? '优惠已停用' : 'Discount inactive')}</span>
+                    </button>
+
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors"
+                    >
+                      {editingDiscountId ? (isZh ? '保存优惠修改' : 'Save Discount') : (isZh ? '新增优惠规则' : 'Add Discount Rule')}
+                    </button>
+                  </form>
+
+                  <div className="xl:col-span-7 space-y-3">
+                    {discounts.length === 0 ? (
+                      <div className="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center text-xs text-slate-400">
+                        {isZh ? '暂无优惠规则。新增后会自动同步到前台购物车。' : 'No discount rules yet. Add one to sync it to the storefront cart.'}
+                      </div>
+                    ) : (
+                      discounts.map((discount) => (
+                        <div key={discount.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="text-sm font-black text-slate-900">{isZh ? discount.titleZh : discount.titleEn}</h4>
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                  discount.scope === 'shipping' ? 'bg-sky-50 text-sky-700 border border-sky-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
+                                }`}>
+                                  {getDiscountScopeLabel(discount.scope)}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                  discount.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                }`}>
+                                  {discount.isActive ? (isZh ? '启用' : 'Active') : (isZh ? '停用' : 'Inactive')}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {formatDiscountRule(discount)} · {getDiscountValueTypeLabel(discount.valueType)}
+                              </p>
+                              <p className="mt-1 text-[10px] text-slate-400">
+                                {isZh ? '最低商品小计:' : 'Minimum subtotal:'} RM {discount.minSubtotal.toFixed(2)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleDiscount(discount.id)}
+                                className={`p-2 rounded-lg border cursor-pointer transition-colors ${
+                                  discount.isActive ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500'
+                                }`}
+                                aria-label={discount.isActive ? (isZh ? '停用优惠' : 'Disable discount') : (isZh ? '启用优惠' : 'Enable discount')}
+                              >
+                                {discount.isActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleEditDiscount(discount)}
+                                className="p-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:text-sky-600 cursor-pointer transition-colors"
+                                aria-label={isZh ? '编辑优惠' : 'Edit discount'}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDiscount(discount.id)}
+                                className="p-2 rounded-lg border border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer transition-colors"
+                                aria-label={isZh ? '删除优惠' : 'Delete discount'}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             )}

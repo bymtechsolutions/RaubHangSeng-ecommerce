@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, MessageSquare, ShieldCheck, ClipboardCheck, Info, Award, Upload, FileCheck2 } from 'lucide-react';
-import { CartItem, Language, DeliveryDetails, User, OrderRecord, PaymentSlip } from '../types';
+import { AppliedDiscount, CartItem, Language, DeliveryDetails, User, OrderRecord, PaymentSlip } from '../types';
+import { getDiscountLabel } from '../lib/discounts';
 
 interface CheckoutModalProps {
   cartItems: CartItem[];
@@ -8,6 +9,11 @@ interface CheckoutModalProps {
   onClose: () => void;
   shippingFee: number;
   totalAmount: number;
+  subtotal: number;
+  baseShippingFee: number;
+  itemDiscountTotal: number;
+  shippingDiscountTotal: number;
+  discountApplications: AppliedDiscount[];
   onOrderSuccess: (order: OrderRecord) => void;
   currentUser: User | null;
   onAuthClick: () => void;
@@ -19,6 +25,11 @@ export default function CheckoutModal({
   onClose,
   shippingFee,
   totalAmount,
+  subtotal,
+  baseShippingFee,
+  itemDiscountTotal,
+  shippingDiscountTotal,
+  discountApplications,
   onOrderSuccess,
   currentUser,
   onAuthClick,
@@ -204,7 +215,10 @@ export default function CheckoutModal({
     });
 
     waText += `===============================\n`;
-    waText += `💵 *商品小计:* RM ${(totalAmount - shippingFee).toFixed(2)}\n`;
+    waText += `💵 *商品小计:* RM ${subtotal.toFixed(2)}\n`;
+    discountApplications.forEach((discount) => {
+      waText += `🏷️ *${getDiscountLabel(discount, isZh)}:* -RM ${discount.amount.toFixed(2)}\n`;
+    });
     waText += `🚚 *冷链运费:* ${shippingFee === 0 ? 'FREE (免运费)' : `RM ${shippingFee.toFixed(2)}`}\n`;
     waText += `💰 *应付总额:* *RM ${totalAmount.toFixed(2)}*\n\n`;
     waText += `🏦 *付款方式:* Manual Bank Transfer\n`;
@@ -221,6 +235,11 @@ export default function CheckoutModal({
       total: totalAmount,
       date: currentDate,
       status: 'pending',
+      subtotal,
+      baseShippingFee,
+      shippingFee,
+      discountTotal: itemDiscountTotal + shippingDiscountTotal,
+      discounts: discountApplications,
       payment: {
         method: 'bank_transfer',
         status: 'pending_review',
@@ -555,18 +574,24 @@ export default function CheckoutModal({
             <div className="space-y-2 text-xs">
               <div className="flex justify-between text-slate-500">
                 <span>{isZh ? '商品小计' : 'Items Subtotal'}</span>
-                <span className="font-mono text-slate-700">RM {(totalAmount - shippingFee).toFixed(2)}</span>
+                <span className="font-mono text-slate-700">RM {subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-slate-500">
                 <span>{isZh ? '冷链物流专车配送' : 'Cold Chain Shipping'}</span>
                 <span className="font-mono text-slate-700">
-                  {shippingFee === 0 ? (
+                  {baseShippingFee === 0 ? (
                     <span className="text-emerald-600 font-bold">{isZh ? '免运费' : 'FREE'}</span>
                   ) : (
-                    `RM ${shippingFee.toFixed(2)}`
+                    `RM ${baseShippingFee.toFixed(2)}`
                   )}
                 </span>
               </div>
+              {discountApplications.map((discount) => (
+                <div key={`${discount.discountId}-${discount.scope}`} className="flex justify-between text-emerald-700">
+                  <span>{getDiscountLabel(discount, isZh)}</span>
+                  <span className="font-mono">- RM {discount.amount.toFixed(2)}</span>
+                </div>
+              ))}
               <div className="h-px bg-slate-200 my-1.5" />
               <div className="flex justify-between text-slate-500">
                 <span>{isZh ? '付款方式' : 'Payment Method'}</span>

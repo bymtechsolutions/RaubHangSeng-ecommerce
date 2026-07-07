@@ -1,6 +1,7 @@
-import { X, Trash2, ShoppingBag, Plus, Minus, Info, ShieldAlert, Truck } from 'lucide-react';
+import { X, Trash2, ShoppingBag, Plus, Minus, Truck } from 'lucide-react';
 import { motion } from 'motion/react';
-import { CartItem, Language } from '../types';
+import { CartItem, Language, StoreDiscount } from '../types';
+import { calculateDiscounts, getDiscountLabel } from '../lib/discounts';
 
 interface CartProps {
   cartItems: CartItem[];
@@ -12,6 +13,10 @@ interface CartProps {
   onCheckout: () => void;
   shippingState: 'local' | 'outstation';
   setShippingState: (state: 'local' | 'outstation') => void;
+  freeShippingThreshold: number;
+  localShippingRate: number;
+  outstationShippingRate: number;
+  discounts: StoreDiscount[];
   orderingPaused?: boolean;
 }
 
@@ -25,6 +30,10 @@ export default function Cart({
   onCheckout,
   shippingState,
   setShippingState,
+  freeShippingThreshold,
+  localShippingRate,
+  outstationShippingRate,
+  discounts,
   orderingPaused = false,
 }: CartProps) {
   const isZh = language === 'zh';
@@ -34,20 +43,21 @@ export default function Cart({
     return acc + item.product.pricePerKg * item.selectedWeightKg * item.quantity;
   }, 0);
 
-  const FREE_SHIPPING_LIMIT = 250;
-  const isFreeShipping = subtotal >= FREE_SHIPPING_LIMIT;
+  const isFreeShipping = subtotal >= freeShippingThreshold;
 
-  const shippingFee = cartItems.length === 0
+  const baseShippingFee = cartItems.length === 0
     ? 0
     : isFreeShipping
       ? 0
       : shippingState === 'local'
-        ? 20
-        : 30;
+        ? localShippingRate
+        : outstationShippingRate;
 
-  const total = subtotal + shippingFee;
-  const progressToFree = Math.max(0, FREE_SHIPPING_LIMIT - subtotal);
-  const progressPercentage = Math.min(100, (subtotal / FREE_SHIPPING_LIMIT) * 100);
+  const discountTotals = calculateDiscounts(discounts, subtotal, baseShippingFee);
+  const shippingFee = discountTotals.shippingFee;
+  const total = discountTotals.totalAmount;
+  const progressToFree = Math.max(0, freeShippingThreshold - subtotal);
+  const progressPercentage = freeShippingThreshold > 0 ? Math.min(100, (subtotal / freeShippingThreshold) * 100) : 100;
 
   const getCutTypeLabel = (cut: CartItem['cutType']) => {
     switch (cut) {
@@ -142,10 +152,10 @@ export default function Cart({
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-500 flex items-center">
                     <Truck className="w-3.5 h-3.5 mr-1.5 text-sky-500" />
-                    {isZh ? '冷链免运费门槛 (RM 250)' : 'Cold Chain Free Delivery at RM 250'}
+                    {isZh ? `冷链免运费门槛 (RM ${freeShippingThreshold})` : `Cold Chain Free Delivery at RM ${freeShippingThreshold}`}
                   </span>
                   <span className="font-bold text-sky-600">
-                    {isFreeShipping ? (isZh ? '已享免运费！' : 'Free Shipping Achieved!') : `RM ${subtotal.toFixed(0)} / RM 250`}
+                    {isFreeShipping ? (isZh ? '已享免运费！' : 'Free Shipping Achieved!') : `RM ${subtotal.toFixed(0)} / RM ${freeShippingThreshold}`}
                   </span>
                 </div>
                 
@@ -160,8 +170,8 @@ export default function Cart({
                 {!isFreeShipping && (
                   <p className="text-[11px] text-amber-700 leading-normal font-semibold">
                     {isZh
-                      ? `✨ 再凑单 RM ${progressToFree.toFixed(0)} 即可省下 RM ${shippingState === 'local' ? '20' : '30'} 运费！`
-                      : `✨ Add RM ${progressToFree.toFixed(0)} more to save RM ${shippingState === 'local' ? '20' : '30'} on delivery!`}
+                      ? `✨ 再凑单 RM ${progressToFree.toFixed(0)} 即可省下 RM ${shippingState === 'local' ? localShippingRate : outstationShippingRate} 运费！`
+                      : `✨ Add RM ${progressToFree.toFixed(0)} more to save RM ${shippingState === 'local' ? localShippingRate : outstationShippingRate} on delivery!`}
                   </p>
                 )}
               </div>
@@ -266,7 +276,7 @@ export default function Cart({
                         : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    {isZh ? '雪隆/彭亨 (RM 20)' : 'KL/Selangor/Pahang (RM 20)'}
+                    {isZh ? `雪隆/彭亨 (RM ${localShippingRate})` : `KL/Selangor/Pahang (RM ${localShippingRate})`}
                   </button>
                   <button
                     onClick={() => setShippingState('outstation')}
@@ -279,7 +289,7 @@ export default function Cart({
                         : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    {isZh ? '西马其他外州 (RM 30)' : 'Other Peninsular (RM 30)'}
+                    {isZh ? `西马其他外州 (RM ${outstationShippingRate})` : `Other Peninsular (RM ${outstationShippingRate})`}
                   </button>
                 </div>
               </div>
@@ -300,13 +310,19 @@ export default function Cart({
               <div className="flex justify-between text-slate-500">
                 <span>{isZh ? '专业保冷箱及冷链运费' : 'Refrigerated Box & Shipping'}</span>
                 <span className="font-mono text-slate-700">
-                  {shippingFee === 0 ? (
+                  {baseShippingFee === 0 ? (
                     <span className="text-emerald-600 font-bold">{isZh ? '免运费' : 'FREE'}</span>
                   ) : (
-                    `RM ${shippingFee.toFixed(2)}`
+                    `RM ${baseShippingFee.toFixed(2)}`
                   )}
                 </span>
               </div>
+              {discountTotals.applications.map((discount) => (
+                <div key={`${discount.discountId}-${discount.scope}`} className="flex justify-between text-emerald-700">
+                  <span>{getDiscountLabel(discount, isZh)}</span>
+                  <span className="font-mono">- RM {discount.amount.toFixed(2)}</span>
+                </div>
+              ))}
               <div className="h-px bg-slate-200 my-1" />
               <div className="flex justify-between items-baseline text-slate-950">
                 <span className="text-sm font-bold">{isZh ? '应付总额' : 'Total Amount'}</span>
