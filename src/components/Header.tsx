@@ -16,7 +16,7 @@ interface HeaderProps {
   onSellerClick?: () => void;
 }
 
-const logoImage = new URL('../../assets/raub-hang-seng-logo.jpg', import.meta.url).href;
+const logoImage = new URL('../../assets/raub-hang-seng-logo-mark.jpg', import.meta.url).href;
 
 export default function Header({
   language,
@@ -76,7 +76,7 @@ export default function Header({
             <img
               src={logoImage}
               alt="Raub Hang Seng Fish Supplier"
-              className="w-11 h-11 md:w-[52px] md:h-[52px] rounded-full object-cover bg-[#314b59] border border-white/20 shadow-sm"
+              className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover object-center bg-[#314b59] border border-white/20 shadow-sm"
             />
             <span className="flex flex-col leading-none">
               <span className="text-[18px] md:text-[24px] font-semibold tracking-[0.02em]">
