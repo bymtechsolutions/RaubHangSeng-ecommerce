@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_COLLECTIONS, normalizeCollectionDisplays } from '../src/data/collections';
 import { PRODUCTS } from '../src/data/products';
-import type { OrderRecord, Product, StoreSettings, StoreState, User } from '../src/types';
+import type { OrderRecord, Product, ProductMedia, StoreSettings, StoreState, User } from '../src/types';
 
 interface MemberRecord {
   passwordHash: string;
@@ -24,8 +24,22 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const dataFile = process.env.RHS_DATA_FILE || path.join(__dirname, 'data', 'store.json');
+const uploadDir = process.env.RHS_UPLOAD_DIR || path.join(__dirname, 'data', 'uploads');
+const storefrontUploadDir = path.join(uploadDir, 'storefront');
 const port = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === 'production' || process.argv.includes('--production');
+
+const maxImageUploadBytes = 2 * 1024 * 1024;
+const maxVideoUploadBytes = 10 * 1024 * 1024;
+const allowedUploadTypes: Record<string, { extension: string; type: ProductMedia['type']; maxBytes: number }> = {
+  'image/jpeg': { extension: 'jpg', type: 'image', maxBytes: maxImageUploadBytes },
+  'image/png': { extension: 'png', type: 'image', maxBytes: maxImageUploadBytes },
+  'image/webp': { extension: 'webp', type: 'image', maxBytes: maxImageUploadBytes },
+  'image/gif': { extension: 'gif', type: 'image', maxBytes: maxImageUploadBytes },
+  'video/mp4': { extension: 'mp4', type: 'video', maxBytes: maxVideoUploadBytes },
+  'video/webm': { extension: 'webm', type: 'video', maxBytes: maxVideoUploadBytes },
+  'video/quicktime': { extension: 'mov', type: 'video', maxBytes: maxVideoUploadBytes },
+};
 
 const defaultSettings: StoreSettings = {
   maintenanceMode: false,
@@ -34,6 +48,23 @@ const defaultSettings: StoreSettings = {
   outstationShippingRate: 30,
   storeAnnouncement: '【恒升河鱼公告】彭亨河主流特马鲁网箱及野生巴丁/苏丹鱼每日捕捞，西马冷链送达，消费满 RM250 免运费！',
   collections: DEFAULT_COLLECTIONS,
+  mediaLibrary: [],
+};
+
+const normalizeMediaLibrary = (mediaLibrary: unknown): ProductMedia[] => {
+  if (!Array.isArray(mediaLibrary)) return [];
+
+  return mediaLibrary
+    .filter(media => media?.id && media?.url && (media?.type === 'image' || media?.type === 'video'))
+    .map(media => ({
+      id: String(media.id),
+      url: String(media.url),
+      type: media.type,
+      name: media.name ? String(media.name) : undefined,
+      size: Number.isFinite(Number(media.size)) ? Number(media.size) : undefined,
+      mimeType: media.mimeType ? String(media.mimeType) : undefined,
+      uploadedAt: media.uploadedAt ? String(media.uploadedAt) : undefined,
+    }));
 };
 
 const createDefaultStore = (): PersistedStore => ({
@@ -51,6 +82,7 @@ const ensureStoreShape = (value: Partial<PersistedStore> | null | undefined): Pe
     ...defaultSettings,
     ...(value?.settings || {}),
     collections: normalizeCollectionDisplays(value?.settings?.collections),
+    mediaLibrary: normalizeMediaLibrary(value?.settings?.mediaLibrary),
   },
   members: value?.members && typeof value.members === 'object' ? value.members : {},
   sellerPasscode: value?.sellerPasscode?.passwordHash && value?.sellerPasscode?.salt
@@ -113,9 +145,61 @@ const updateStore = async (updater: (store: PersistedStore) => PersistedStore | 
   return nextStore;
 };
 
+const sanitizeFileBaseName = (fileName: string) => (
+  path
+    .parse(fileName)
+    .name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 72) || 'storefront-media'
+);
+
 const app = express();
 
 app.use(express.json({ limit: '50mb' }));
+app.use('/uploads', express.static(uploadDir));
+
+app.post('/api/media', async (req, res, next) => {
+  try {
+    const media = req.body?.media as { name?: string; type?: string; size?: number; dataUrl?: string } | undefined;
+    const mimeType = String(media?.type || '').toLowerCase();
+    const uploadType = allowedUploadTypes[mimeType];
+    const dataUrl = String(media?.dataUrl || '');
+    const dataMatch = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+
+    if (!media?.name || !uploadType || !dataMatch || dataMatch[1].toLowerCase() !== mimeType) {
+      res.status(400).json({ error: 'supported image or video media is required' });
+      return;
+    }
+
+    const fileBuffer = Buffer.from(dataMatch[2], 'base64');
+    if (fileBuffer.length === 0 || fileBuffer.length > uploadType.maxBytes) {
+      res.status(400).json({ error: `media exceeds ${Math.round(uploadType.maxBytes / 1024 / 1024)}MB upload limit` });
+      return;
+    }
+
+    await fs.mkdir(storefrontUploadDir, { recursive: true });
+    const safeBaseName = sanitizeFileBaseName(media.name);
+    const fileName = `${Date.now()}-${crypto.randomBytes(5).toString('hex')}-${safeBaseName}.${uploadType.extension}`;
+    const filePath = path.join(storefrontUploadDir, fileName);
+    await fs.writeFile(filePath, fileBuffer);
+
+    const savedMedia: ProductMedia = {
+      id: `media-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+      url: `/uploads/storefront/${fileName}`,
+      type: uploadType.type,
+      name: media.name,
+      size: fileBuffer.length,
+      mimeType,
+      uploadedAt: new Date().toISOString(),
+    };
+
+    res.status(201).json({ media: savedMedia });
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });

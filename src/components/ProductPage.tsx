@@ -317,11 +317,12 @@ export default function ProductPage({
                 {product.variants && product.variants.length > 0 && (
                   <div>
                     <span className="block text-xs font-bold text-[#536c74] mb-2">
-                      {isZh ? '选择规格图片' : 'Choose variant'}
+                      {isZh ? '选择规格' : 'Choose variant'}
                     </span>
                     <div className="grid grid-cols-2 gap-2">
                       {product.variants.map((variant) => {
                         const isActive = variant.id === selectedVariantId;
+                        const variantCutLabel = cutOptions.find((option) => option.value === variant.cutType);
                         return (
                           <button
                             key={variant.id}
@@ -333,26 +334,24 @@ export default function ProductPage({
                               setCutType(variant.cutType);
                             }}
                             disabled={orderingPaused}
-                            className={`text-left rounded-xl border overflow-hidden transition-all cursor-pointer ${
+                            className={`text-left min-h-24 rounded-xl border p-3 transition-all cursor-pointer ${
                               orderingPaused
                                 ? 'border-slate-200 bg-slate-100 opacity-70 cursor-not-allowed'
                                 : isActive ? 'border-sky-500 bg-sky-50 shadow-sm' : 'border-[#c4d5d9] bg-[#edf5f4] hover:border-sky-300'
                             }`}
                           >
-                            <div className="aspect-[4/3] bg-slate-100">
-                              <img
-                                src={variant.image || product.image}
-                                alt={isZh ? variant.nameZh : variant.nameEn}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <div className="p-2">
-                              <p className="text-xs font-extrabold text-[#17323d] truncate">
+                            <div className="flex h-full flex-col justify-between gap-3">
+                              <p className="text-xs font-extrabold leading-5 text-[#17323d]">
                                 {isZh ? variant.nameZh : variant.nameEn}
                               </p>
-                              <p className="mt-0.5 text-[10px] text-[#536c74] font-mono">
-                                {variant.weightKg.toFixed(1)}kg · {variant.cutType}
-                              </p>
+                              <div>
+                                <span className="block text-[10px] font-bold text-[#536c74]">
+                                  {isZh ? '重量 / 刀工' : 'Weight / cut'}
+                                </span>
+                                <p className="mt-0.5 text-[10px] leading-4 text-[#536c74]">
+                                  {variant.weightKg.toFixed(1)}kg · {isZh ? variantCutLabel?.zh : variantCutLabel?.en}
+                                </p>
+                              </div>
                             </div>
                           </button>
                         );

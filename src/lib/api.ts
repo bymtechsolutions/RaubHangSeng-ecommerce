@@ -1,4 +1,4 @@
-import { OrderRecord, Product, StoreSettings, StoreState, User } from '../types';
+import { OrderRecord, Product, ProductMedia, StoreSettings, StoreState, User } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -46,6 +46,18 @@ export const updateSettings = (settings: Partial<StoreSettings>) => (
   requestJson<{ settings: StoreSettings }>('/api/settings', {
     method: 'PATCH',
     body: JSON.stringify({ settings }),
+  })
+);
+
+export const uploadStorefrontMedia = (media: {
+  name: string;
+  type: string;
+  size: number;
+  dataUrl: string;
+}) => (
+  requestJson<{ media: ProductMedia }>('/api/media', {
+    method: 'POST',
+    body: JSON.stringify({ media }),
   })
 );
 

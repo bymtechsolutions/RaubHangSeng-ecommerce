@@ -20,6 +20,9 @@ export interface ProductMedia {
   url: string;
   type: ProductMediaType;
   name?: string;
+  size?: number;
+  mimeType?: string;
+  uploadedAt?: string;
 }
 
 export interface ProductVariant {
@@ -104,6 +107,7 @@ export interface StoreSettings {
   outstationShippingRate: number;
   storeAnnouncement: string;
   collections: CollectionDisplay[];
+  mediaLibrary: ProductMedia[];
 }
 
 export interface StoreState {

@@ -16,7 +16,7 @@ import Reviews from './components/Reviews';
 import ContactUs from './components/ContactUs';
 import Footer from './components/Footer';
 import AuthModal from './components/AuthModal';
-import { Product, CartItem, Language, DeliveryDetails, User, OrderRecord, StoreSettings, ProductCategory, CollectionDisplay } from './types';
+import { Product, CartItem, Language, DeliveryDetails, User, OrderRecord, StoreSettings, ProductCategory, CollectionDisplay, ProductMedia } from './types';
 import { ShoppingBag, Eye, X, ClipboardList, CheckCircle, Lock } from 'lucide-react';
 import { PRODUCTS } from './data/products';
 import { DEFAULT_COLLECTIONS, normalizeCollectionDisplays } from './data/collections';
@@ -102,6 +102,7 @@ export default function App() {
   const [outstationShippingRate, setOutstationShippingRate] = useState(30);
   const [storeAnnouncement, setStoreAnnouncement] = useState(DEFAULT_STORE_ANNOUNCEMENT);
   const [collectionDisplays, setCollectionDisplays] = useState<CollectionDisplay[]>(DEFAULT_COLLECTIONS);
+  const [mediaLibrary, setMediaLibrary] = useState<ProductMedia[]>([]);
 
   const applyStoreSettings = (settings: StoreSettings) => {
     setIsMaintenanceMode(Boolean(settings.maintenanceMode));
@@ -110,6 +111,7 @@ export default function App() {
     setOutstationShippingRate(Number(settings.outstationShippingRate) || 30);
     setStoreAnnouncement(settings.storeAnnouncement || DEFAULT_STORE_ANNOUNCEMENT);
     setCollectionDisplays(normalizeCollectionDisplays(settings.collections));
+    setMediaLibrary(Array.isArray(settings.mediaLibrary) ? settings.mediaLibrary : []);
   };
 
   // Initialize session state locally and shared store data from backend.
@@ -163,12 +165,23 @@ export default function App() {
       }
 
       let savedCollections: CollectionDisplay[] = DEFAULT_COLLECTIONS;
+      let savedMediaLibrary: ProductMedia[] = [];
       const savedCollectionsRaw = localStorage.getItem('raub_hang_seng_collections');
       if (savedCollectionsRaw) {
         try {
           savedCollections = normalizeCollectionDisplays(JSON.parse(savedCollectionsRaw));
         } catch (e) {
           console.error('Failed to parse collection displays', e);
+        }
+      }
+
+      const savedMediaLibraryRaw = localStorage.getItem('raub_hang_seng_media_library');
+      if (savedMediaLibraryRaw) {
+        try {
+          const parsedMediaLibrary = JSON.parse(savedMediaLibraryRaw);
+          savedMediaLibrary = Array.isArray(parsedMediaLibrary) ? parsedMediaLibrary : [];
+        } catch (e) {
+          console.error('Failed to parse media library', e);
         }
       }
 
@@ -179,6 +192,7 @@ export default function App() {
         outstationShippingRate: Number(localStorage.getItem('raub_hang_seng_outstation_rate')) || 30,
         storeAnnouncement: localStorage.getItem('raub_hang_seng_announcement') || DEFAULT_STORE_ANNOUNCEMENT,
         collections: savedCollections,
+        mediaLibrary: savedMediaLibrary,
       };
       applyStoreSettings(fallbackSettings);
     };
@@ -204,6 +218,7 @@ export default function App() {
         localStorage.setItem('raub_hang_seng_outstation_rate', String(store.settings.outstationShippingRate));
         localStorage.setItem('raub_hang_seng_announcement', store.settings.storeAnnouncement);
         localStorage.setItem('raub_hang_seng_collections', JSON.stringify(normalizeCollectionDisplays(store.settings.collections)));
+        localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(store.settings.mediaLibrary || []));
       } catch (e) {
         console.error('Failed to load backend store, using local fallback', e);
         loadLocalStoreFallback();
@@ -344,6 +359,11 @@ export default function App() {
       setCollectionDisplays(normalizedCollections);
       localStorage.setItem('raub_hang_seng_collections', JSON.stringify(normalizedCollections));
     }
+    if (settingsPatch.mediaLibrary !== undefined) {
+      const nextMediaLibrary = Array.isArray(settingsPatch.mediaLibrary) ? settingsPatch.mediaLibrary : [];
+      setMediaLibrary(nextMediaLibrary);
+      localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(nextMediaLibrary));
+    }
 
     try {
       const response = await updateSettings(settingsPatch);
@@ -354,6 +374,7 @@ export default function App() {
       localStorage.setItem('raub_hang_seng_outstation_rate', String(response.settings.outstationShippingRate));
       localStorage.setItem('raub_hang_seng_announcement', response.settings.storeAnnouncement);
       localStorage.setItem('raub_hang_seng_collections', JSON.stringify(normalizeCollectionDisplays(response.settings.collections)));
+      localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(response.settings.mediaLibrary || []));
     } catch (e) {
       console.error('Failed to persist settings to backend', e);
     }
@@ -632,6 +653,7 @@ export default function App() {
         storeAnnouncement={storeAnnouncement}
         setStoreAnnouncement={setStoreAnnouncement}
         collectionDisplays={collectionDisplays}
+        mediaLibrary={mediaLibrary}
         onSaveSettings={persistSettings}
         onChangeSellerPasscode={handleChangeSellerPasscode}
       />

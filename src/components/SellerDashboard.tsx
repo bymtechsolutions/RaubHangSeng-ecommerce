@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductVariant, ProductCutType, StoreSettings, CollectionDisplay, ProductCategory, OrderRecord, PaymentStatus } from '../types';
 import { normalizeCollectionDisplays } from '../data/collections';
+import { uploadStorefrontMedia } from '../lib/api';
 
 interface SellerDashboardProps {
   language: Language;
@@ -53,11 +54,23 @@ interface SellerDashboardProps {
   storeAnnouncement: string;
   setStoreAnnouncement: (val: string) => void;
   collectionDisplays: CollectionDisplay[];
+  mediaLibrary: ProductMedia[];
   onSaveSettings?: (settings: Partial<StoreSettings>) => void | Promise<void>;
   onChangeSellerPasscode?: (currentPasscode: string, nextPasscode: string) => void | Promise<void>;
 }
 
 type TabType = 'overview' | 'orders' | 'customers' | 'products' | 'collections' | 'shipping' | 'settings';
+
+const imageUploadMaxBytes = 2 * 1024 * 1024;
+const videoUploadMaxBytes = 10 * 1024 * 1024;
+const uploadGuidanceText = {
+  zh: '建议图片 ≤ 2MB，视频 ≤ 10MB；会保存到共用媒体库。',
+  en: 'Suggested max: images <= 2MB, videos <= 10MB. Uploads are saved to the shared media library.',
+};
+const imageUploadGuidanceText = {
+  zh: '建议图片 ≤ 2MB；可上传新图或选择已有媒体库图片。',
+  en: 'Suggested max: image <= 2MB. Upload a new image or choose one from the media library.',
+};
 
 type CustomerInsight = {
   id: string;
@@ -93,6 +106,7 @@ export default function SellerDashboard({
   storeAnnouncement,
   setStoreAnnouncement,
   collectionDisplays,
+  mediaLibrary,
   onSaveSettings,
   onChangeSellerPasscode,
 }: SellerDashboardProps) {
@@ -183,6 +197,40 @@ export default function SellerDashboard({
     setTimeout(() => setErrorMsg(null), 3000);
   };
 
+  const mediaLibraryImages = useMemo(
+    () => mediaLibrary.filter(media => media.type === 'image'),
+    [mediaLibrary]
+  );
+
+  const formatMediaSize = (size?: number) => {
+    if (!size) return '';
+    if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)}MB`;
+    return `${Math.max(1, Math.round(size / 1024))}KB`;
+  };
+
+  const getUploadValidationMessage = (file: File, imageOnly: boolean) => {
+    const supportedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const supportedVideoTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
+    const isImage = supportedImageTypes.includes(file.type);
+    const isVideo = supportedVideoTypes.includes(file.type);
+
+    if (imageOnly && !isImage) {
+      return isZh ? '此处只支持 JPG、PNG、WebP 或 GIF 图片。' : 'This field only supports JPG, PNG, WebP, or GIF images.';
+    }
+
+    if (!imageOnly && !isImage && !isVideo) {
+      return isZh ? '媒体只支持 JPG、PNG、WebP、GIF、MP4、WebM 或 MOV。' : 'Media supports JPG, PNG, WebP, GIF, MP4, WebM, or MOV only.';
+    }
+
+    const maxBytes = isVideo ? videoUploadMaxBytes : imageUploadMaxBytes;
+    if (file.size > maxBytes) {
+      const maxMb = Math.round(maxBytes / 1024 / 1024);
+      return isZh ? `文件超过 ${maxMb}MB，建议压缩后再上传。` : `File exceeds ${maxMb}MB. Please compress it before uploading.`;
+    }
+
+    return null;
+  };
+
   const handleMaintenanceToggle = async () => {
     const nextMaintenanceMode = !isMaintenanceMode;
     await onSaveSettings?.({ maintenanceMode: nextMaintenanceMode });
@@ -246,28 +294,76 @@ export default function SellerDashboard({
     return nextId;
   };
 
-  const fileToMedia = (file: File): Promise<ProductMedia> => {
+  const readFileAsDataUrl = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => {
-        resolve({
-          id: createMediaId('media'),
-          url: String(reader.result),
-          type: file.type.startsWith('video/') ? 'video' : 'image',
-          name: file.name,
-        });
-      };
+      reader.onload = () => resolve(String(reader.result));
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
   };
 
+  const saveMediaLibrary = async (uploadedMedia: ProductMedia[]) => {
+    if (uploadedMedia.length === 0) return;
+
+    const mediaByUrl = new Map<string, ProductMedia>();
+    [...mediaLibrary, ...uploadedMedia].forEach(media => {
+      mediaByUrl.set(media.url, media);
+    });
+
+    await onSaveSettings?.({ mediaLibrary: Array.from(mediaByUrl.values()) });
+  };
+
+  const fileToMedia = async (file: File): Promise<ProductMedia> => {
+    const dataUrl = await readFileAsDataUrl(file);
+    const response = await uploadStorefrontMedia({
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      dataUrl,
+    });
+
+    return response.media;
+  };
+
+  const handleAddExistingMediaToProduct = (mediaUrl: string) => {
+    const media = mediaLibrary.find(item => item.url === mediaUrl);
+    if (!media) return;
+
+    setFormMedia(prev => prev.some(item => item.url === media.url) ? prev : [...prev, media]);
+    if (media.type === 'image' && !formImage.trim()) {
+      setFormImage(media.url);
+    }
+  };
+
+  const handleUseExistingVariantImage = (index: number, mediaUrl: string) => {
+    const media = mediaLibraryImages.find(item => item.url === mediaUrl);
+    if (media) {
+      handleUpdateVariant(index, { image: media.url });
+    }
+  };
+
+  const handleUseExistingCollectionImage = (id: ProductCategory, mediaUrl: string) => {
+    const media = mediaLibraryImages.find(item => item.url === mediaUrl);
+    if (media) {
+      handleUpdateCollectionDraft(id, { image: media.url });
+    }
+  };
+
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const files: File[] = e.currentTarget.files ? Array.from(e.currentTarget.files) : [];
     if (files.length === 0) return;
+
+    const validationMessage = files.map(file => getUploadValidationMessage(file, false)).find(Boolean);
+    if (validationMessage) {
+      triggerError(validationMessage);
+      e.target.value = '';
+      return;
+    }
 
     try {
       const uploadedMedia = await Promise.all(files.map(fileToMedia));
+      await saveMediaLibrary(uploadedMedia);
       setFormMedia(prev => [...prev, ...uploadedMedia]);
       const firstImage = uploadedMedia.find(media => media.type === 'image');
       if (!formImage.trim() && firstImage) {
@@ -315,14 +411,16 @@ export default function SellerDashboard({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      triggerError(isZh ? '每个规格只能上传一张图片。' : 'Each variant accepts one photo only.');
+    const validationMessage = getUploadValidationMessage(file, true);
+    if (validationMessage) {
+      triggerError(validationMessage);
       e.target.value = '';
       return;
     }
 
     try {
       const media = await fileToMedia(file);
+      await saveMediaLibrary([media]);
       handleUpdateVariant(index, { image: media.url });
       triggerSuccess(isZh ? '规格图片已更新。' : 'Variant photo updated.');
     } catch (error) {
@@ -414,14 +512,16 @@ export default function SellerDashboard({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      triggerError(isZh ? '系列封面只支持图片。' : 'Collection cover accepts image files only.');
+    const validationMessage = getUploadValidationMessage(file, true);
+    if (validationMessage) {
+      triggerError(validationMessage);
       e.target.value = '';
       return;
     }
 
     try {
       const media = await fileToMedia(file);
+      await saveMediaLibrary([media]);
       handleUpdateCollectionDraft(id, { image: media.url });
       triggerSuccess(isZh ? '系列封面已上传。' : 'Collection image uploaded.');
     } catch {
@@ -2082,20 +2182,40 @@ export default function SellerDashboard({
                               {isZh ? '产品媒体图库' : 'Product Media Gallery'}
                             </h5>
                             <p className="text-[10px] text-slate-500 mt-0.5">
-                              {isZh ? '可上传多张图片或视频；图片可设为产品封面。' : 'Upload multiple photos or videos; images can be used as the cover.'}
+                              {uploadGuidanceText[isZh ? 'zh' : 'en']}
                             </p>
                           </div>
-                          <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-sky-300 text-slate-700 text-[11px] font-bold cursor-pointer">
-                            <Upload className="w-3.5 h-3.5 text-sky-600" />
-                            <span>{isZh ? '上传媒体' : 'Upload'}</span>
-                            <input
-                              type="file"
-                              accept="image/*,video/*"
-                              multiple
-                              onChange={handleMediaUpload}
-                              className="hidden"
-                            />
-                          </label>
+                          <div className="flex flex-wrap justify-end gap-2">
+                            {mediaLibrary.length > 0 && (
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  handleAddExistingMediaToProduct(e.target.value);
+                                  e.target.value = '';
+                                }}
+                                className="max-w-44 rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] font-bold text-slate-700 focus:outline-none focus:border-sky-500"
+                                aria-label={isZh ? '选择已有媒体' : 'Choose existing media'}
+                              >
+                                <option value="">{isZh ? '选择已有媒体' : 'Choose existing'}</option>
+                                {mediaLibrary.map(media => (
+                                  <option key={media.url} value={media.url}>
+                                    {media.name || media.type} {formatMediaSize(media.size)}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                            <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-sky-300 text-slate-700 text-[11px] font-bold cursor-pointer">
+                              <Upload className="w-3.5 h-3.5 text-sky-600" />
+                              <span>{isZh ? '上传新媒体' : 'Upload new'}</span>
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+                                multiple
+                                onChange={handleMediaUpload}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
                         </div>
 
                         {formMedia.length === 0 ? (
@@ -2118,6 +2238,9 @@ export default function SellerDashboard({
                                     {media.type === 'video' ? <Video className="w-3 h-3 shrink-0" /> : <ImageIcon className="w-3 h-3 shrink-0" />}
                                     <span className="truncate">{media.name || media.type}</span>
                                   </div>
+                                  {media.size && (
+                                    <p className="text-[9px] text-slate-400">{formatMediaSize(media.size)}</p>
+                                  )}
                                   <div className="flex items-center gap-1">
                                     {media.type === 'image' && (
                                       <button
@@ -2156,7 +2279,7 @@ export default function SellerDashboard({
                               {isZh ? '规格图片' : 'Variant Photos'}
                             </h5>
                             <p className="text-[10px] text-slate-500 mt-0.5">
-                              {isZh ? '每个规格保留一张照片，前台选择规格时会同步切换。' : 'Each variant keeps one photo and switches on the storefront when selected.'}
+                              {imageUploadGuidanceText[isZh ? 'zh' : 'en']}
                             </p>
                           </div>
                           <button
@@ -2189,14 +2312,32 @@ export default function SellerDashboard({
                                       )}
                                     </div>
                                     <label className="mt-2 w-full inline-flex items-center justify-center px-2 py-1.5 rounded-md border border-slate-200 bg-slate-50 hover:border-sky-300 text-[10px] font-bold text-slate-600 cursor-pointer">
-                                      {isZh ? '上传照片' : 'Upload photo'}
+                                      {isZh ? '上传新图' : 'Upload new'}
                                       <input
                                         type="file"
-                                        accept="image/*"
+                                        accept="image/jpeg,image/png,image/webp,image/gif"
                                         onChange={(e) => handleVariantImageUpload(index, e)}
                                         className="hidden"
                                       />
                                     </label>
+                                    {mediaLibraryImages.length > 0 && (
+                                      <select
+                                        value=""
+                                        onChange={(e) => {
+                                          handleUseExistingVariantImage(index, e.target.value);
+                                          e.target.value = '';
+                                        }}
+                                        className="mt-2 w-full rounded-md border border-slate-200 bg-white px-1.5 py-1.5 text-[10px] font-bold text-slate-600 focus:outline-none focus:border-sky-500"
+                                        aria-label={isZh ? '选择已有规格图片' : 'Choose existing variant image'}
+                                      >
+                                        <option value="">{isZh ? '选择已有' : 'Choose existing'}</option>
+                                        {mediaLibraryImages.map(media => (
+                                          <option key={media.url} value={media.url}>
+                                            {media.name || 'Image'} {formatMediaSize(media.size)}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
                                   </div>
 
                                   <div className="flex-1 min-w-0 space-y-2">
@@ -2427,14 +2568,35 @@ export default function SellerDashboard({
                             </div>
                             <label className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-sky-300 text-slate-700 text-[11px] font-bold cursor-pointer">
                               <Upload className="w-3.5 h-3.5 text-sky-600" />
-                              <span>{isZh ? '上传系列图片' : 'Upload image'}</span>
+                              <span>{isZh ? '上传新图' : 'Upload new'}</span>
                               <input
                                 type="file"
-                                accept="image/*"
+                                accept="image/jpeg,image/png,image/webp,image/gif"
                                 onChange={(e) => handleCollectionImageUpload(coll.id, e)}
                                 className="hidden"
                               />
                             </label>
+                            {mediaLibraryImages.length > 0 && (
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  handleUseExistingCollectionImage(coll.id, e.target.value);
+                                  e.target.value = '';
+                                }}
+                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] font-bold text-slate-700 focus:outline-none focus:border-sky-500"
+                                aria-label={isZh ? '选择已有系列图片' : 'Choose existing collection image'}
+                              >
+                                <option value="">{isZh ? '选择已有图片' : 'Choose existing image'}</option>
+                                {mediaLibraryImages.map(media => (
+                                  <option key={media.url} value={media.url}>
+                                    {media.name || 'Image'} {formatMediaSize(media.size)}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                            <p className="text-[10px] leading-4 text-slate-500">
+                              {imageUploadGuidanceText[isZh ? 'zh' : 'en']}
+                            </p>
                           </div>
 
                           <div className="space-y-3">
