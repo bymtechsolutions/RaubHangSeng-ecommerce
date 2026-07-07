@@ -2085,16 +2085,16 @@ export default function SellerDashboard({
                   </div>
                 </div>
 
-                {/* Split catalog table / form layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Catalog table layout */}
+                <div className="space-y-4">
                   
-                  {/* LEFT: Products table list */}
-                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs lg:col-span-7">
+                  {/* Products table list */}
+                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
                     <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         {isZh ? `上架目录（${filteredProducts.length} 款）` : `Active Storefront Catalog (${filteredProducts.length} items)`}
                       </span>
-                      <span className="text-[10px] text-slate-400">{isZh ? '点击编辑进入右侧详情' : 'Use Edit to open details'}</span>
+                      <span className="text-[10px] text-slate-400">{isZh ? '点击编辑打开弹窗' : 'Use Edit to open modal'}</span>
                     </div>
 
                     {filteredProducts.length === 0 ? (
@@ -2190,47 +2190,37 @@ export default function SellerDashboard({
                     )}
                   </div>
 
-                  {/* RIGHT: Add/Edit Product live form */}
-                  <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-                    <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-900">
-                          {isAddingNew
-                            ? (isZh ? '上架全新河鱼品类' : 'Add New Species Catalog')
-                            : editingProduct
-                              ? (isZh ? '修改河鱼商品资料' : 'Modify Species Profile')
-                              : (isZh ? '商品详情编辑' : 'Product Details Editor')}
-                        </h4>
-                        <p className="text-[10px] text-slate-400">
-                          {isAddingNew
-                            ? (isZh ? '配置一尾全新彭亨野生或特马鲁养殖河鱼' : 'Configure a fresh wild caught species')
-                            : editingProduct
-                              ? `Updating: ${editingProduct.id}`
-                              : (isZh ? '从目录表格点击编辑来修改商品。' : 'Choose Edit from the catalog table to modify a product.')}
-                        </p>
-                      </div>
-                      {(editingProduct || isAddingNew) && (
-                        <button
-                          onClick={resetProductForm}
-                          className="text-xs font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
-                        >
-                          {isZh ? '重置/取消' : 'Cancel'}
-                        </button>
-                      )}
-                    </div>
-
-                    {!(editingProduct || isAddingNew) ? (
-                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-8 text-center">
-                        <Package className="mx-auto h-9 w-9 text-slate-300" />
-                        <h5 className="mt-3 text-sm font-bold text-slate-700">
-                          {isZh ? '请选择一个商品' : 'Select a product'}
-                        </h5>
-                        <p className="mx-auto mt-1 max-w-[34ch] text-xs leading-5 text-slate-500">
-                          {isZh ? '使用左侧表格的编辑按钮打开商品详情，或点击上方新增商品。' : 'Use the table Edit button to open product details, or add a new product from the top action.'}
-                        </p>
-                      </div>
-                    ) : (
-                    <form onSubmit={handleSaveProduct} className="space-y-4">
+                  {(editingProduct || isAddingNew) && (
+                    <div
+                      className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-950/60 px-3 py-6 sm:px-6"
+                      onClick={resetProductForm}
+                    >
+                      <div
+                        className="w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4">
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-900">
+                              {isAddingNew ? (isZh ? '上架全新河鱼品类' : 'Add New Species Catalog') : (isZh ? '修改河鱼商品资料' : 'Modify Species Profile')}
+                            </h4>
+                            <p className="text-[10px] text-slate-400">
+                              {isAddingNew
+                                ? (isZh ? '配置一尾全新彭亨野生或特马鲁养殖河鱼' : 'Configure a fresh wild caught species')
+                                : `Updating: ${editingProduct?.id}`}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={resetProductForm}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800 cursor-pointer"
+                            aria-label={isZh ? '关闭商品编辑弹窗' : 'Close product editor'}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="max-h-[calc(100vh-9rem)] overflow-y-auto p-5">
+                          <form onSubmit={handleSaveProduct} className="space-y-4">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[10px] font-bold text-slate-500 uppercase">
@@ -2659,10 +2649,11 @@ export default function SellerDashboard({
                       >
                         {isZh ? '💾 保存并发布同步至商城' : 'Save & Sync Product to Store'}
                       </button>
-                    </form>
-                    )}
-                  </div>
-
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
