@@ -3,6 +3,7 @@ import { AlertCircle, ArrowLeft, CheckCircle, Compass, Flame, MessageCircle, Pac
 import { Language, Product, ProductCutType, ProductMedia } from '../types';
 
 type CutType = ProductCutType;
+const CUSTOM_VARIANT_INQUIRY_ID = 'whatsapp-custom-option';
 
 interface ProductPageProps {
   language: Language;
@@ -75,7 +76,9 @@ export default function ProductPage({
       ? [{ id: 'cover', url: product.image, type: 'image', name: 'Cover image' }]
       : [];
   const selectedMedia = mediaItems.find((media) => media.id === selectedMediaId) || mediaItems[0];
+  const hasVariants = Boolean(product.variants?.length);
   const selectedVariant = product.variants?.find((variant) => variant.id === selectedVariantId);
+  const isCustomVariantInquiry = selectedVariantId === CUSTOM_VARIANT_INQUIRY_ID;
   const heroMedia = selectedVariant?.image
     ? { url: selectedVariant.image, type: 'image' as const }
     : selectedMedia;
@@ -95,10 +98,21 @@ export default function ProductPage({
   ];
 
   const selectedCutLabel = cutOptions.find((option) => option.value === cutType);
+  const selectedVariantCutLabel = selectedVariant
+    ? cutOptions.find((option) => option.value === selectedVariant.cutType)
+    : null;
+  const selectedVariantName = selectedVariant
+    ? (isZh ? selectedVariant.nameZh : selectedVariant.nameEn)
+    : '';
+  const canAddToCart = !orderingPaused && !isCustomVariantInquiry && (!hasVariants || Boolean(selectedVariant));
   const whatsappText = encodeURIComponent(
-    isZh
-      ? `你好，我想订购 ${name}，${weightKg.toFixed(1)}kg，${selectedCutLabel?.zh ?? ''}，数量 ${quantity}。`
-      : `Hi, I want to order ${name}, ${weightKg.toFixed(1)}kg, ${selectedCutLabel?.en ?? ''}, quantity ${quantity}.`
+    isCustomVariantInquiry
+      ? (isZh
+        ? `你好，我想询问 ${name} 的其他规格或特别处理方式。`
+        : `Hi, I want to ask about other options or custom processing for ${name}.`)
+      : (isZh
+        ? `你好，我想订购 ${name}${selectedVariantName ? `（${selectedVariantName}）` : ''}，${weightKg.toFixed(1)}kg，${selectedVariantCutLabel?.zh ?? selectedCutLabel?.zh ?? ''}，数量 ${quantity}。`
+        : `Hi, I want to order ${name}${selectedVariantName ? ` (${selectedVariantName})` : ''}, ${weightKg.toFixed(1)}kg, ${selectedVariantCutLabel?.en ?? selectedCutLabel?.en ?? ''}, quantity ${quantity}.`)
   );
 
   return (
@@ -168,7 +182,9 @@ export default function ProductPage({
                         <button
                           key={media.id}
                           onClick={() => {
-                            setSelectedVariantId(null);
+                            if (!hasVariants) {
+                              setSelectedVariantId(null);
+                            }
                             setSelectedMediaId(media.id);
                           }}
                           className={`relative w-24 h-20 shrink-0 rounded-xl overflow-hidden border-2 bg-slate-100 cursor-pointer transition-all ${
@@ -341,10 +357,66 @@ export default function ProductPage({
                           </button>
                         );
                       })}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (orderingPaused) return;
+                          setSelectedVariantId(CUSTOM_VARIANT_INQUIRY_ID);
+                        }}
+                        disabled={orderingPaused}
+                        className={`text-left rounded-xl border p-3 transition-all cursor-pointer ${
+                          orderingPaused
+                            ? 'border-slate-200 bg-slate-100 opacity-70 cursor-not-allowed'
+                            : isCustomVariantInquiry ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-[#c4d5d9] bg-[#edf5f4] hover:border-emerald-300'
+                        }`}
+                      >
+                        <div className="flex h-full min-h-24 flex-col justify-between gap-3">
+                          <MessageCircle className="w-6 h-6 text-emerald-600" />
+                          <div>
+                            <p className="text-xs font-extrabold text-[#17323d]">
+                              {isZh ? '其他规格 / 特别处理' : 'Other option / custom cut'}
+                            </p>
+                            <p className="mt-1 text-[10px] leading-4 text-[#536c74]">
+                              {isZh ? '通过 WhatsApp 询问库存、重量或特殊刀工。' : 'Ask via WhatsApp for stock, weight, or custom processing.'}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
                     </div>
                   </div>
                 )}
 
+                {hasVariants ? (
+                  <div className="rounded-xl border border-[#c4d5d9] bg-[#edf5f4] p-3">
+                    <span className="block text-xs font-bold text-[#536c74] mb-2">
+                      {isZh ? '已选订购选项' : 'Selected order option'}
+                    </span>
+                    {isCustomVariantInquiry ? (
+                      <div className="flex items-start gap-2 text-sm font-semibold text-emerald-700">
+                        <MessageCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>{isZh ? '请使用 WhatsApp 询问其他规格或特殊处理。' : 'Use WhatsApp to ask about other options or custom processing.'}</span>
+                      </div>
+                    ) : selectedVariant ? (
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <span className="block text-[#536c74]">{isZh ? '规格' : 'Variant'}</span>
+                          <strong className="mt-1 block text-[#17323d]">{selectedVariantName}</strong>
+                        </div>
+                        <div>
+                          <span className="block text-[#536c74]">{isZh ? '重量 / 刀工' : 'Weight / cut'}</span>
+                          <strong className="mt-1 block text-[#17323d]">
+                            {selectedVariant.weightKg.toFixed(1)}kg · {isZh ? selectedVariantCutLabel?.zh : selectedVariantCutLabel?.en}
+                          </strong>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-semibold text-[#536c74]">
+                        {isZh ? '请选择一个规格。' : 'Choose a variant.'}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <>
                 <label className="block">
                   <span className="block text-xs font-bold text-[#536c74] mb-1.5">
                     {isZh ? '单条估重' : 'Fish weight'}
@@ -393,6 +465,8 @@ export default function ProductPage({
                     </option>
                   </select>
                 </label>
+                  </>
+                )}
 
                 <div>
                   <span className="block text-xs font-bold text-[#536c74] mb-1.5">
@@ -424,26 +498,36 @@ export default function ProductPage({
                     {isZh ? '预估总价' : 'Estimated subtotal'}
                   </p>
                   <p className="mt-1 text-3xl font-black text-amber-600 font-mono">
-                    RM {calculatedTotalPrice.toFixed(0)}
+                    {isCustomVariantInquiry ? (isZh ? 'WhatsApp' : 'Ask') : `RM ${calculatedTotalPrice.toFixed(0)}`}
                   </p>
                 </div>
                 <p className="text-right text-xs leading-5 text-[#536c74]">
-                  {weightKg.toFixed(1)}kg x {quantity}
+                  {isCustomVariantInquiry ? (isZh ? '客服确认' : 'Confirm by chat') : `${weightKg.toFixed(1)}kg x ${quantity}`}
                 </p>
               </div>
 
               <div className="mt-5 grid gap-3">
                 <button
-                  onClick={() => onAddToCart(product, quantity, weightKg, cutType)}
-                  disabled={orderingPaused}
+                  onClick={() => {
+                    if (canAddToCart) {
+                      onAddToCart(product, quantity, weightKg, cutType);
+                    }
+                  }}
+                  disabled={!canAddToCart}
                   className={`w-full h-12 rounded-xl font-extrabold inline-flex items-center justify-center gap-2 shadow-md transition-colors ${
-                    orderingPaused
+                    !canAddToCart
                       ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
                       : 'bg-[#073c63] hover:bg-[#082f4e] text-white cursor-pointer'
                   }`}
                 >
                   <ShoppingCart className="w-5 h-5" />
-                  <span>{orderingPaused ? (isZh ? '维护中暂不可下单' : 'Ordering Paused') : (isZh ? '加入购物车' : 'Add to Cart')}</span>
+                  <span>
+                    {orderingPaused
+                      ? (isZh ? '维护中暂不可下单' : 'Ordering Paused')
+                      : isCustomVariantInquiry
+                        ? (isZh ? '请用 WhatsApp 询问' : 'Use WhatsApp to ask')
+                        : (isZh ? '加入购物车' : 'Add to Cart')}
+                  </span>
                 </button>
                 <a
                   href={orderingPaused ? undefined : `https://wa.me/60187682528?text=${whatsappText}`}
@@ -458,7 +542,13 @@ export default function ProductPage({
                   }`}
                 >
                   <MessageCircle className="w-5 h-5" />
-                  <span>{orderingPaused ? (isZh ? '暂不接受 WhatsApp 下单' : 'WhatsApp ordering paused') : (isZh ? 'WhatsApp 直接订购' : 'Order on WhatsApp')}</span>
+                  <span>
+                    {orderingPaused
+                      ? (isZh ? '暂不接受 WhatsApp 下单' : 'WhatsApp ordering paused')
+                      : isCustomVariantInquiry
+                        ? (isZh ? 'WhatsApp 询问规格' : 'Ask on WhatsApp')
+                        : (isZh ? 'WhatsApp 直接订购' : 'Order on WhatsApp')}
+                  </span>
                 </a>
               </div>
             </aside>

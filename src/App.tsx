@@ -570,7 +570,7 @@ export default function App() {
   };
 
   const handleSetActiveSection = (section: string) => {
-    const shopCategoryMatch = section.match(/^shop:(premium|wild|aquaculture|wellness)$/);
+    const shopCategoryMatch = section.match(/^shop:(.+)$/);
     if (shopCategoryMatch) {
       setShopCategory(shopCategoryMatch[1] as ProductCategory);
       navigateToRoute('shop');
@@ -661,6 +661,7 @@ export default function App() {
         activeSection={activeSection}
         setActiveSection={handleSetActiveSection}
         currentUser={currentUser}
+        collections={collectionDisplays}
         onAuthClick={() => setIsAuthOpen(true)}
         onSellerClick={handleSellerAccess}
       />
@@ -724,6 +725,7 @@ export default function App() {
           <Products
             language={language}
             products={products}
+            collections={collectionDisplays}
             initialCategory={shopCategory}
             onProductClick={navigateToProduct}
             onAddToCart={handleAddToCart}

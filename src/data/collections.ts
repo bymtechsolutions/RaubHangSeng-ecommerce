@@ -56,27 +56,53 @@ export const DEFAULT_COLLECTIONS: CollectionDisplay[] = [
 export const normalizeCollectionDisplays = (
   collections?: Partial<CollectionDisplay>[] | null
 ): CollectionDisplay[] => {
-  const incoming = Array.isArray(collections) ? collections : [];
+  const incoming = Array.isArray(collections) ? collections : DEFAULT_COLLECTIONS;
+  const usedIds = new Set<string>();
 
-  return DEFAULT_COLLECTIONS.map(defaultCollection => {
-    const saved = incoming.find(collection => collection?.id === defaultCollection.id);
+  return incoming.reduce<CollectionDisplay[]>((normalized, collection, index) => {
+    const rawId = String(collection?.id || '').trim();
+    const fallbackDefault = DEFAULT_COLLECTIONS[index] || DEFAULT_COLLECTIONS[0];
+    const id = rawId || fallbackDefault.id || `collection-${index + 1}`;
 
-    return {
-      ...defaultCollection,
-      ...saved,
-      id: defaultCollection.id,
-      titleZh: saved?.titleZh?.trim() || defaultCollection.titleZh,
-      titleEn: saved?.titleEn?.trim() || defaultCollection.titleEn,
-      descZh: saved?.descZh?.trim() || defaultCollection.descZh,
-      descEn: saved?.descEn?.trim() || defaultCollection.descEn,
-      image: saved?.image?.trim() || defaultCollection.image,
-      imagePositionX: clampNumber(saved?.imagePositionX, 0, 100, defaultCollection.imagePositionX),
-      imagePositionY: clampNumber(saved?.imagePositionY, 0, 100, defaultCollection.imagePositionY),
-      imageScale: clampNumber(saved?.imageScale, 1, 1.8, defaultCollection.imageScale),
+    if (usedIds.has(id)) return normalized;
+    usedIds.add(id);
+
+    const savedDefault = DEFAULT_COLLECTIONS.find(defaultCollection => defaultCollection.id === id);
+    const base = savedDefault || {
+      id,
+      titleZh: `系列 ${index + 1}`,
+      titleEn: `Collection ${index + 1}`,
+      descZh: '',
+      descEn: '',
+      image: fallbackDefault.image,
+      imagePositionX: 50,
+      imagePositionY: 50,
+      imageScale: 1,
     };
-  });
+
+    normalized.push({
+      ...base,
+      ...collection,
+      id,
+      titleZh: collection?.titleZh?.trim() || base.titleZh,
+      titleEn: collection?.titleEn?.trim() || base.titleEn,
+      descZh: collection?.descZh?.trim() || base.descZh,
+      descEn: collection?.descEn?.trim() || base.descEn,
+      image: collection?.image?.trim() || base.image,
+      imagePositionX: clampNumber(collection?.imagePositionX, 0, 100, base.imagePositionX),
+      imagePositionY: clampNumber(collection?.imagePositionY, 0, 100, base.imagePositionY),
+      imageScale: clampNumber(collection?.imageScale, 1, 1.8, base.imageScale),
+    });
+
+    return normalized;
+  }, []);
 };
 
-export const getCollectionById = (id: ProductCategory) => (
-  DEFAULT_COLLECTIONS.find(collection => collection.id === id) || DEFAULT_COLLECTIONS[0]
+export const getCollectionById = (
+  id: ProductCategory,
+  collections: CollectionDisplay[] = DEFAULT_COLLECTIONS
+) => (
+  collections.find(collection => collection.id === id) ||
+  DEFAULT_COLLECTIONS.find(collection => collection.id === id) ||
+  DEFAULT_COLLECTIONS[0]
 );

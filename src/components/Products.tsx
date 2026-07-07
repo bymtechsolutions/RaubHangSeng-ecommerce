@@ -1,11 +1,13 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Search, SlidersHorizontal, Eye, ShoppingCart, HelpCircle, AlertCircle } from 'lucide-react';
-import { Product, Language, ProductCategory } from '../types';
+import { CollectionDisplay, Product, Language, ProductCategory } from '../types';
 import { PRODUCTS } from '../data/products';
+import { DEFAULT_COLLECTIONS } from '../data/collections';
 
 interface ProductsProps {
   language: Language;
   products?: Product[];
+  collections?: CollectionDisplay[];
   initialCategory?: CategoryFilter;
   onProductClick: (product: Product) => void;
   onAddToCart: (product: Product, quantity: number, weightKg: number, cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet') => void;
@@ -14,7 +16,7 @@ interface ProductsProps {
 
 type CategoryFilter = 'all' | ProductCategory;
 
-export default function Products({ language, products = PRODUCTS, initialCategory = 'all', onProductClick, onAddToCart, orderingPaused = false }: ProductsProps) {
+export default function Products({ language, products = PRODUCTS, collections = DEFAULT_COLLECTIONS, initialCategory = 'all', onProductClick, onAddToCart, orderingPaused = false }: ProductsProps) {
   const isZh = language === 'zh';
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>(initialCategory);
@@ -31,7 +33,7 @@ export default function Products({ language, products = PRODUCTS, initialCategor
     setSelectedCategory(initialCategory);
   }, [initialCategory]);
 
-  const categories = [
+  const fallbackCategories = [
     { id: 'all', zh: '全部河鱼', en: 'All River Fish' },
     { id: 'premium', zh: '尊贵极品', en: 'Premium Imperial' },
     { id: 'wild', zh: '纯野生捕捞', en: '100% Wild Caught' },
@@ -39,21 +41,40 @@ export default function Products({ language, products = PRODUCTS, initialCategor
     { id: 'wellness', zh: '养生调理', en: 'Health & Wellness' },
   ];
 
+  useEffect(() => {
+    if (selectedCategory !== 'all' && !collections.some(collection => collection.id === selectedCategory)) {
+      setSelectedCategory('all');
+    }
+  }, [collections, selectedCategory]);
+
+  const categories = useMemo(() => {
+    if (collections.length === 0) return fallbackCategories;
+
+    return [
+      fallbackCategories[0],
+      ...collections.map(collection => ({
+        id: collection.id,
+        zh: collection.titleZh,
+        en: collection.titleEn,
+      })),
+    ];
+  }, [collections, fallbackCategories]);
+
   const categoryCounts = useMemo(() => {
-    const counts: Record<CategoryFilter, number> = {
+    const counts: Record<string, number> = {
       all: products.length,
-      premium: 0,
-      wild: 0,
-      aquaculture: 0,
-      wellness: 0,
     };
 
+    collections.forEach(collection => {
+      counts[collection.id] = 0;
+    });
+
     products.forEach((product) => {
-      counts[product.category] += 1;
+      counts[product.category] = (counts[product.category] || 0) + 1;
     });
 
     return counts;
-  }, [products]);
+  }, [collections, products]);
 
   // Initialize selection settings for a product card if not set yet
   const getCardSelection = (product: Product) => {

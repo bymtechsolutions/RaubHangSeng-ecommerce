@@ -1,7 +1,7 @@
 export type Language = 'zh' | 'en';
 export type ProductMediaType = 'image' | 'video';
 export type ProductCutType = 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet';
-export type ProductCategory = 'premium' | 'wild' | 'aquaculture' | 'wellness';
+export type ProductCategory = string;
 
 export interface CollectionDisplay {
   id: ProductCategory;

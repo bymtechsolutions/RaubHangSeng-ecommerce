@@ -116,7 +116,7 @@ export default function SellerDashboard({
   const [formNameZh, setFormNameZh] = useState('');
   const [formNameEn, setFormNameEn] = useState('');
   const [formScientificName, setFormScientificName] = useState('');
-  const [formCategory, setFormCategory] = useState<'premium' | 'wild' | 'aquaculture' | 'wellness'>('wild');
+  const [formCategory, setFormCategory] = useState<ProductCategory>('wild');
   const [formDescriptionZh, setFormDescriptionZh] = useState('');
   const [formDescriptionEn, setFormDescriptionEn] = useState('');
   const [formPricePerKg, setFormPricePerKg] = useState<number>(50);
@@ -149,6 +149,29 @@ export default function SellerDashboard({
   useEffect(() => {
     setCollectionDrafts(normalizeCollectionDisplays(collectionDisplays));
   }, [collectionDisplays]);
+
+  const collectionOptions = useMemo(
+    () => collectionDrafts.length > 0 ? collectionDrafts : normalizeCollectionDisplays(collectionDisplays),
+    [collectionDrafts, collectionDisplays]
+  );
+
+  const dashboardCollections = useMemo(
+    () => collectionDisplays.length > 0 ? collectionDisplays : normalizeCollectionDisplays(null),
+    [collectionDisplays]
+  );
+
+  useEffect(() => {
+    if (collectionOptions.length > 0 && !collectionOptions.some(collection => collection.id === formCategory)) {
+      setFormCategory(collectionOptions[0].id);
+    }
+  }, [collectionOptions, formCategory]);
+
+  const getCollectionLabel = (categoryId: ProductCategory) => {
+    const collection = collectionOptions.find(item => item.id === categoryId) ||
+      dashboardCollections.find(item => item.id === categoryId);
+
+    return collection ? (isZh ? collection.titleZh : collection.titleEn) : categoryId;
+  };
 
   // Auto-clear messages
   const triggerSuccess = (msg: string) => {
@@ -201,6 +224,27 @@ export default function SellerDashboard({
   };
 
   const createMediaId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const createCollectionId = (value: string) => (
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+  );
+
+  const createUniqueCollectionId = (baseValue: string, existingCollections: CollectionDisplay[]) => {
+    const baseId = createCollectionId(baseValue) || 'collection';
+    let nextId = baseId;
+    let suffix = 2;
+
+    while (existingCollections.some(collection => collection.id === nextId)) {
+      nextId = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+
+    return nextId;
+  };
 
   const fileToMedia = (file: File): Promise<ProductMedia> => {
     return new Promise((resolve, reject) => {
@@ -294,6 +338,78 @@ export default function SellerDashboard({
     ));
   };
 
+  const handleAddCollectionDraft = () => {
+    setCollectionDrafts(prev => {
+      const nextNumber = prev.length + 1;
+      const id = createUniqueCollectionId(`collection-${nextNumber}`, prev);
+      return normalizeCollectionDisplays([
+        ...prev,
+        {
+          id,
+          titleZh: `系列 ${nextNumber}`,
+          titleEn: `Collection ${nextNumber}`,
+          descZh: '',
+          descEn: '',
+          image: prev[0]?.image || 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=1200&q=80',
+          imagePositionX: 50,
+          imagePositionY: 50,
+          imageScale: 1,
+        },
+      ]);
+    });
+  };
+
+  const handleCollectionIdChange = (id: ProductCategory, value: string) => {
+    const nextId = createCollectionId(value);
+    if (!nextId) return;
+
+    setCollectionDrafts(prev => {
+      const duplicate = prev.some(collection => collection.id !== id && collection.id === nextId);
+      if (duplicate) return prev;
+
+      return normalizeCollectionDisplays(
+        prev.map(collection => collection.id === id ? { ...collection, id: nextId } : collection)
+      );
+    });
+
+    if (formCategory === id) {
+      setFormCategory(nextId);
+    }
+  };
+
+  const handleRemoveCollectionDraft = async (id: ProductCategory) => {
+    const targetCollection = collectionDrafts.find(collection => collection.id === id);
+    if (!targetCollection) return;
+
+    const remainingCollections = normalizeCollectionDisplays(collectionDrafts.filter(collection => collection.id !== id));
+    const assignedProducts = products.filter(product => product.category === id);
+
+    if (assignedProducts.length > 0) {
+      const fallbackCollection = remainingCollections[0];
+      if (!fallbackCollection) {
+        triggerError(isZh ? '此系列仍有商品。请先新增另一个系列或把商品改到其他系列。' : 'This collection still has products. Add another collection or move the products first.');
+        return;
+      }
+
+      const confirmed = confirm(
+        isZh
+          ? `此系列有 ${assignedProducts.length} 个商品。删除后会自动移到「${fallbackCollection.titleZh}」。继续？`
+          : `This collection has ${assignedProducts.length} products. They will move to "${fallbackCollection.titleEn}". Continue?`
+      );
+      if (!confirmed) return;
+
+      await setProducts(products.map(product => (
+        product.category === id ? { ...product, category: fallbackCollection.id } : product
+      )));
+    }
+
+    setCollectionDrafts(remainingCollections);
+    if (formCategory === id) {
+      setFormCategory(remainingCollections[0]?.id || 'wild');
+    }
+    triggerSuccess(isZh ? '系列已删除。请保存系列设置同步到前台。' : 'Collection removed. Save collections to sync the storefront.');
+  };
+
   const handleCollectionImageUpload = async (id: ProductCategory, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -319,7 +435,7 @@ export default function SellerDashboard({
     const normalizedCollections = normalizeCollectionDisplays(collectionDrafts);
     await onSaveSettings?.({ collections: normalizedCollections });
     setCollectionDrafts(normalizedCollections);
-    triggerSuccess(isZh ? '首页系列图片与裁切设置已保存。' : 'Landing collection images and crop settings saved.');
+    triggerSuccess(isZh ? '系列设置已保存并同步到前台。' : 'Collection settings saved and synced to the storefront.');
   };
 
   // -------------------------------------------------------------
@@ -333,19 +449,15 @@ export default function SellerDashboard({
     const avgOrderVal = validOrders.length > 0 ? totalSales / validOrders.length : 0;
     
     // Revenue by category
-    const categoryRevenue: Record<string, number> = {
-      premium: 0,
-      wild: 0,
-      aquaculture: 0,
-      wellness: 0,
-    };
+    const categoryRevenue: Record<string, number> = {};
+    dashboardCollections.forEach(collection => {
+      categoryRevenue[collection.id] = 0;
+    });
 
     validOrders.forEach(order => {
       order.items?.forEach((item: any) => {
         const cat = item.product?.category || 'wild';
-        if (categoryRevenue[cat] !== undefined) {
-          categoryRevenue[cat] += item.product.pricePerKg * item.selectedWeightKg * item.quantity;
-        }
+        categoryRevenue[cat] = (categoryRevenue[cat] || 0) + item.product.pricePerKg * item.selectedWeightKg * item.quantity;
       });
     });
 
@@ -377,7 +489,7 @@ export default function SellerDashboard({
       categoryRevenue,
       bestSellers,
     };
-  }, [orderHistory]);
+  }, [dashboardCollections, orderHistory]);
 
   const customerInsights = useMemo(() => {
     const customerMap = new Map<string, CustomerInsight>();
@@ -765,17 +877,19 @@ export default function SellerDashboard({
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const searchLower = productSearch.toLowerCase();
+      const collectionLabel = getCollectionLabel(p.category).toLowerCase();
       const textMatch = 
         p.nameZh.toLowerCase().includes(searchLower) || 
         p.nameEn.toLowerCase().includes(searchLower) || 
         (p.scientificName && p.scientificName.toLowerCase().includes(searchLower)) || 
-        p.id.toLowerCase().includes(searchLower);
+        p.id.toLowerCase().includes(searchLower) ||
+        collectionLabel.includes(searchLower);
 
       const categoryMatch = productCategoryFilter === 'all' || p.category === productCategoryFilter;
 
       return textMatch && categoryMatch;
     });
-  }, [products, productSearch, productCategoryFilter]);
+  }, [collectionOptions, dashboardCollections, isZh, products, productSearch, productCategoryFilter]);
 
   return (
     <div id="seller-dashboard-page" className="rhs-admin-shell h-screen min-h-screen bg-slate-100 text-slate-800 overflow-hidden">
@@ -1053,12 +1167,13 @@ export default function SellerDashboard({
                   <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs lg:col-span-4">
                     <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-4">{isZh ? '鱼类产品品类收益' : 'Revenue by Categories'}</h4>
                     <div className="space-y-4">
-                      {[
-                        { key: 'premium', label: isZh ? '尊贵极品 (Premium)' : 'Premium Imperial', color: 'bg-amber-500' },
-                        { key: 'wild', label: isZh ? '纯野生捕捞 (Wild)' : '100% Wild caught', color: 'bg-sky-500' },
-                        { key: 'aquaculture', label: isZh ? '网箱养殖 (Aquaculture)' : 'Cage Culture', color: 'bg-emerald-500' },
-                        { key: 'wellness', label: isZh ? '生鱼养生 (Wellness)' : 'Wellness Products', color: 'bg-purple-500' },
-                      ].map(cat => {
+                      {dashboardCollections.map((collection, index) => {
+                        const colors = ['bg-amber-500', 'bg-sky-500', 'bg-emerald-500', 'bg-purple-500', 'bg-rose-500', 'bg-cyan-500'];
+                        const cat = {
+                          key: collection.id,
+                          label: isZh ? collection.titleZh : collection.titleEn,
+                          color: colors[index % colors.length],
+                        };
                         const rev = salesMetrics.categoryRevenue[cat.key] || 0;
                         const percent = salesMetrics.totalSales > 0 ? (rev / salesMetrics.totalSales) * 100 : 0;
                         return (
@@ -1704,10 +1819,11 @@ export default function SellerDashboard({
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-sky-500 cursor-pointer"
                     >
                       <option value="all">{isZh ? '所有河鱼分类' : 'All Categories'}</option>
-                      <option value="premium">{isZh ? '尊贵极品 (Premium)' : 'Premium'}</option>
-                      <option value="wild">{isZh ? '100% 纯野生捕捞 (Wild)' : 'Wild Captured'}</option>
-                      <option value="aquaculture">{isZh ? '清泉网箱养殖 (Aquaculture)' : 'Cage Aquaculture'}</option>
-                      <option value="wellness">{isZh ? '生鱼术后调理 (Wellness)' : 'Wellness / Haruan'}</option>
+                      {collectionOptions.map(collection => (
+                        <option key={collection.id} value={collection.id}>
+                          {isZh ? collection.titleZh : collection.titleEn}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -1740,7 +1856,7 @@ export default function SellerDashboard({
                           />
                           <div className="flex-1 min-w-0">
                             <span className="text-[9px] uppercase tracking-wider font-mono bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
-                              {prod.category}
+                              {getCollectionLabel(prod.category)}
                             </span>
                             <h4 className="text-xs font-bold text-slate-900 truncate mt-1">
                               {isZh ? prod.nameZh : prod.nameEn}
@@ -1834,13 +1950,14 @@ export default function SellerDashboard({
                           </label>
                           <select
                             value={formCategory}
-                            onChange={(e) => setFormCategory(e.target.value as any)}
+                            onChange={(e) => setFormCategory(e.target.value)}
                             className="w-full text-xs px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500"
                           >
-                            <option value="premium">{isZh ? '尊贵极品 (Premium)' : 'Premium'}</option>
-                            <option value="wild">{isZh ? '野生捕捞 (Wild Caught)' : 'Wild caught'}</option>
-                            <option value="aquaculture">{isZh ? '网箱养殖 (Aquaculture)' : 'Cage Aquaculture'}</option>
-                            <option value="wellness">{isZh ? '生鱼养生 (Wellness)' : 'Wellness/Maternity'}</option>
+                            {collectionOptions.map(collection => (
+                              <option key={collection.id} value={collection.id}>
+                                {isZh ? collection.titleZh : collection.titleEn}
+                              </option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -2248,14 +2365,24 @@ export default function SellerDashboard({
                     <h3 className="text-base font-bold text-slate-900">{isZh ? '首页系列展示管理' : 'Landing Collections Manager'}</h3>
                     <p className="text-xs text-slate-500">{isZh ? '管理首页中段系列卡片。每个系列可设置专属图片、缩放比例与裁切焦点。' : 'Manage the landing-page collection cards. Each collection supports its own image, zoom, and crop focus.'}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSaveCollections}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-md cursor-pointer"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>{isZh ? '保存首页系列设置' : 'Save Landing Collections'}</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddCollectionDraft}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold shadow-xs cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>{isZh ? '新增系列' : 'Add Collection'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveCollections}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-md cursor-pointer"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>{isZh ? '保存首页系列设置' : 'Save Landing Collections'}</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2268,9 +2395,19 @@ export default function SellerDashboard({
                             <span className="text-[10px] text-slate-400 font-mono block">CATEGORY_KEY: {coll.id.toUpperCase()}</span>
                             <h4 className="text-sm font-bold text-slate-900 mt-1">{isZh ? coll.titleZh : coll.titleEn}</h4>
                           </div>
-                          <span className="bg-sky-50 text-sky-700 border border-sky-100 text-xs font-bold px-2.5 py-1 rounded-full">
-                            {matchedProds.length} {isZh ? '款在售商品' : 'Species listed'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="bg-sky-50 text-sky-700 border border-sky-100 text-xs font-bold px-2.5 py-1 rounded-full">
+                              {matchedProds.length} {isZh ? '款在售商品' : 'Species listed'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCollectionDraft(coll.id)}
+                              className="p-1.5 rounded-lg border border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
+                              aria-label={isZh ? '删除系列' : 'Remove collection'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
 
                         <div className="grid sm:grid-cols-[180px_1fr] gap-4">
@@ -2301,6 +2438,74 @@ export default function SellerDashboard({
                           </div>
 
                           <div className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                  {isZh ? '系列 ID' : 'Collection ID'}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={coll.id}
+                                  onChange={(e) => handleCollectionIdChange(coll.id, e.target.value)}
+                                  disabled={matchedProds.length > 0}
+                                  className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono disabled:bg-slate-100 disabled:text-slate-400"
+                                />
+                                {matchedProds.length > 0 && (
+                                  <p className="mt-1 text-[10px] text-slate-400">
+                                    {isZh ? '已有商品使用，ID 已锁定。' : 'ID locked while products use it.'}
+                                  </p>
+                                )}
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                  {isZh ? '英文标题' : 'English title'}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={coll.titleEn}
+                                  onChange={(e) => handleUpdateCollectionDraft(coll.id, { titleEn: e.target.value })}
+                                  className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                {isZh ? '中文标题' : 'Chinese title'}
+                              </label>
+                              <input
+                                type="text"
+                                value={coll.titleZh}
+                                onChange={(e) => handleUpdateCollectionDraft(coll.id, { titleZh: e.target.value })}
+                                className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                  {isZh ? '中文说明' : 'Chinese description'}
+                                </label>
+                                <textarea
+                                  value={coll.descZh}
+                                  onChange={(e) => handleUpdateCollectionDraft(coll.id, { descZh: e.target.value })}
+                                  rows={3}
+                                  className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg resize-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                  {isZh ? '英文说明' : 'English description'}
+                                </label>
+                                <textarea
+                                  value={coll.descEn}
+                                  onChange={(e) => handleUpdateCollectionDraft(coll.id, { descEn: e.target.value })}
+                                  rows={3}
+                                  className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg resize-none"
+                                />
+                              </div>
+                            </div>
+
                             <div>
                               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
                                 {isZh ? '首页图片 URL' : 'Landing image URL'}

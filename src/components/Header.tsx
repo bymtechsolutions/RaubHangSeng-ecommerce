@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, Menu, X } from 'lucide-react';
-import { Language, User } from '../types';
+import { CollectionDisplay, Language, User } from '../types';
 
 interface HeaderProps {
   language: Language;
@@ -10,6 +10,7 @@ interface HeaderProps {
   activeSection: string;
   setActiveSection: (sec: string) => void;
   currentUser: User | null;
+  collections?: CollectionDisplay[];
   onAuthClick: () => void;
   onSellerClick?: () => void;
 }
@@ -24,6 +25,7 @@ export default function Header({
   activeSection,
   setActiveSection,
   currentUser,
+  collections = [],
   onAuthClick,
   onSellerClick,
 }: HeaderProps) {
@@ -43,10 +45,11 @@ export default function Header({
 
   const productMenuItems = [
     { id: 'products', zh: '全部河鱼', en: 'Shop All' },
-    { id: 'shop:premium', zh: '尊贵极品', en: 'Premium' },
-    { id: 'shop:wild', zh: '野生捕捞', en: 'Wild Caught' },
-    { id: 'shop:aquaculture', zh: '网箱养殖', en: 'Aquaculture' },
-    { id: 'shop:wellness', zh: '养生调理', en: 'Wellness' },
+    ...collections.map(collection => ({
+      id: `shop:${collection.id}`,
+      zh: collection.titleZh,
+      en: collection.titleEn,
+    })),
   ];
 
   const handleNavClick = (id: string) => {
