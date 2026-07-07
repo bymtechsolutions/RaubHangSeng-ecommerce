@@ -280,12 +280,20 @@ export default function App() {
 
   const persistOrders = async (nextOrders: OrderRecord[]) => {
     setOrderHistory(nextOrders);
-    localStorage.setItem('pahang_river_fish_orders', JSON.stringify(nextOrders));
+    try {
+      localStorage.setItem('pahang_river_fish_orders', JSON.stringify(nextOrders));
+    } catch (e) {
+      console.error('Failed to cache orders locally', e);
+    }
 
     try {
       const response = await replaceOrders(nextOrders);
       setOrderHistory(response.orders);
-      localStorage.setItem('pahang_river_fish_orders', JSON.stringify(response.orders));
+      try {
+        localStorage.setItem('pahang_river_fish_orders', JSON.stringify(response.orders));
+      } catch (e) {
+        console.error('Failed to cache orders locally', e);
+      }
     } catch (e) {
       console.error('Failed to persist orders to backend', e);
     }
@@ -427,12 +435,20 @@ export default function App() {
 
     const updatedHistory = [finalOrder, ...orderHistory];
     setOrderHistory(updatedHistory);
-    localStorage.setItem('pahang_river_fish_orders', JSON.stringify(updatedHistory));
+    try {
+      localStorage.setItem('pahang_river_fish_orders', JSON.stringify(updatedHistory));
+    } catch (e) {
+      console.error('Failed to cache orders locally', e);
+    }
 
     try {
       const response = await createOrder(finalOrder);
       setOrderHistory(response.orders);
-      localStorage.setItem('pahang_river_fish_orders', JSON.stringify(response.orders));
+      try {
+        localStorage.setItem('pahang_river_fish_orders', JSON.stringify(response.orders));
+      } catch (e) {
+        console.error('Failed to cache orders locally', e);
+      }
     } catch (e) {
       console.error('Failed to persist order to backend', e);
     }
@@ -885,16 +901,16 @@ export default function App() {
               <CheckCircle className="w-8 h-8" />
             </div>
             <h3 className="text-xl font-bold text-slate-950">
-              {language === 'zh' ? '订单模板已发送！' : 'Order Invoice Built!'}
+              {language === 'zh' ? '订单与水单已提交！' : 'Order & Payment Slip Submitted!'}
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               {language === 'zh'
-                ? '我们已在新窗口为您唤醒了 WhatsApp。发票清单已自动复制在您的输入框中，请点击【发送】联系客服专员。客服会立即与您确认网银付款并安排配送！'
-                : 'Your WhatsApp order has been prepared. Please send the pre-filled text in the chat to complete your booking. Support will reply immediately with credentials.'}
+                ? '我们已在新窗口为您唤醒 WhatsApp。请点击【发送】把订单清单发给客服。您上传的银行转账水单会保存在订单中，商家核对付款后会在后台确认并安排配送。'
+                : 'WhatsApp has opened with your order summary. Please press Send. Your uploaded bank transfer slip is saved with the order, and the seller will confirm payment in the dashboard before dispatch.'}
             </p>
             <div className="rhs-panel-soft border p-3 rounded-lg text-left text-[11px] font-mono text-slate-700">
               <span className="font-bold text-sky-600">Order ID: #{latestOrder}</span>
-              <p className="mt-1 text-slate-500">{language === 'zh' ? '请在 WhatsApp 聊天框中按发送键。' : 'Remember to click Send on the WhatsApp screen.'}</p>
+              <p className="mt-1 text-slate-500">{language === 'zh' ? '付款状态：等待商家核对水单。' : 'Payment status: waiting for seller slip review.'}</p>
             </div>
             <button
               onClick={() => setLatestOrder(null)}

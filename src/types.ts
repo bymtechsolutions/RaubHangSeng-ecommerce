@@ -61,6 +61,31 @@ export interface CartItem {
   cutType: ProductCutType;
 }
 
+export type PaymentMethod = 'bank_transfer';
+export type PaymentStatus = 'pending_review' | 'confirmed' | 'rejected';
+
+export interface PaymentSlip {
+  name: string;
+  type: string;
+  size: number;
+  dataUrl: string;
+  uploadedAt: string;
+}
+
+export interface PaymentRecord {
+  method: PaymentMethod;
+  status: PaymentStatus;
+  amount: number;
+  bankName?: string;
+  accountHolder?: string;
+  reference?: string;
+  slip?: PaymentSlip;
+  confirmedAt?: string;
+  confirmedBy?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+}
+
 export interface OrderRecord {
   id: string;
   items: CartItem[];
@@ -68,6 +93,7 @@ export interface OrderRecord {
   total: number;
   date: string;
   status?: string;
+  payment?: PaymentRecord;
   userId?: string;
 }
 

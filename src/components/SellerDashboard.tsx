@@ -32,7 +32,7 @@ import {
   Image as ImageIcon,
   Video
 } from 'lucide-react';
-import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductVariant, ProductCutType, StoreSettings, CollectionDisplay, ProductCategory, OrderRecord } from '../types';
+import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductVariant, ProductCutType, StoreSettings, CollectionDisplay, ProductCategory, OrderRecord, PaymentStatus } from '../types';
 import { normalizeCollectionDisplays } from '../data/collections';
 
 interface SellerDashboardProps {
@@ -622,6 +622,79 @@ export default function SellerDashboard({
     }
   };
 
+  const handleUpdatePaymentStatus = async (orderId: string, paymentStatus: PaymentStatus) => {
+    let nextSelectedOrder: OrderRecord | null = null;
+    const updatedOrders = orderHistory.map(order => {
+      if (order.id !== orderId) return order;
+
+      const nextOrder: OrderRecord = {
+        ...order,
+        status: paymentStatus === 'confirmed' && (order.status || 'pending') === 'pending'
+          ? 'processing'
+          : order.status,
+        payment: {
+          method: order.payment?.method || 'bank_transfer',
+          amount: order.payment?.amount || order.total,
+          ...order.payment,
+          status: paymentStatus,
+          ...(paymentStatus === 'confirmed'
+            ? {
+                confirmedAt: new Date().toISOString(),
+                confirmedBy: 'seller-dashboard',
+                rejectedAt: undefined,
+                rejectionReason: undefined,
+              }
+            : {}),
+          ...(paymentStatus === 'rejected'
+            ? {
+                rejectedAt: new Date().toISOString(),
+                confirmedAt: undefined,
+                confirmedBy: undefined,
+              }
+            : {}),
+        },
+      };
+
+      nextSelectedOrder = nextOrder;
+      return nextOrder;
+    });
+
+    await setOrderHistory(updatedOrders);
+    triggerSuccess(
+      paymentStatus === 'confirmed'
+        ? (isZh ? `订单 #${orderId} 付款已确认！` : `Order #${orderId} payment confirmed!`)
+        : (isZh ? `订单 #${orderId} 付款已标记为需复核。` : `Order #${orderId} payment marked for review.`)
+    );
+
+    if (selectedOrderDetail?.id === orderId && nextSelectedOrder) {
+      setSelectedOrderDetail(nextSelectedOrder);
+    }
+  };
+
+  const getPaymentStatusMeta = (status: PaymentStatus | undefined) => {
+    switch (status) {
+      case 'confirmed':
+        return {
+          label: isZh ? '付款已确认' : 'Payment Confirmed',
+          shortLabel: isZh ? '已确认' : 'Confirmed',
+          className: 'bg-emerald-100 text-emerald-800',
+        };
+      case 'rejected':
+        return {
+          label: isZh ? '水单需复核' : 'Slip Needs Review',
+          shortLabel: isZh ? '需复核' : 'Review',
+          className: 'bg-rose-100 text-rose-800',
+        };
+      case 'pending_review':
+      default:
+        return {
+          label: isZh ? '等待核对水单' : 'Awaiting Slip Review',
+          shortLabel: isZh ? '待核对' : 'Pending',
+          className: 'bg-amber-100 text-amber-800',
+        };
+    }
+  };
+
   // Handle test shipping calculation
   const handleTestShipment = (e: React.FormEvent) => {
     e.preventDefault();
@@ -654,12 +727,17 @@ export default function SellerDashboard({
   const filteredOrders = useMemo(() => {
     return orderHistory.filter(o => {
       // Search term matches: OrderID, customer name, phone number, city, or postcode
-      const idMatch = o.id.toLowerCase().includes(orderSearch.toLowerCase());
-      const nameMatch = o.details?.fullName?.toLowerCase().includes(orderSearch.toLowerCase());
+      const searchLower = orderSearch.toLowerCase();
+      const idMatch = o.id.toLowerCase().includes(searchLower);
+      const nameMatch = o.details?.fullName?.toLowerCase().includes(searchLower);
       const phoneMatch = o.details?.phoneNumber?.includes(orderSearch);
-      const locMatch = o.details?.city?.toLowerCase().includes(orderSearch.toLowerCase()) || o.details?.postcode?.includes(orderSearch);
+      const locMatch = o.details?.city?.toLowerCase().includes(searchLower) || o.details?.postcode?.includes(orderSearch);
+      const paymentMatch = Boolean(
+        o.payment?.status?.toLowerCase().includes(searchLower) ||
+        o.payment?.slip?.name?.toLowerCase().includes(searchLower)
+      );
       
-      const textMatch = idMatch || nameMatch || phoneMatch || locMatch;
+      const textMatch = idMatch || nameMatch || phoneMatch || locMatch || paymentMatch;
       
       // Status matches
       const currentStatus = o.status || 'pending';
@@ -1090,6 +1168,7 @@ export default function SellerDashboard({
                               <th className="p-3">{isZh ? '单号/日期' : 'ID & Date'}</th>
                               <th className="p-3">{isZh ? '收件客户' : 'Customer'}</th>
                               <th className="p-3 text-right">{isZh ? '总计' : 'Total'}</th>
+                              <th className="p-3 text-center">{isZh ? '付款' : 'Payment'}</th>
                               <th className="p-3 text-center">{isZh ? '当前状态' : 'Status'}</th>
                               <th className="p-3 text-right">{isZh ? '操作' : 'Action'}</th>
                             </tr>
@@ -1097,6 +1176,7 @@ export default function SellerDashboard({
                           <tbody className="divide-y divide-slate-100">
                             {filteredOrders.map((order) => {
                               const ordStatus = order.status || 'pending';
+                              const paymentMeta = getPaymentStatusMeta(order.payment?.status);
                               return (
                                 <tr 
                                   key={order.id} 
@@ -1113,6 +1193,11 @@ export default function SellerDashboard({
                                   </td>
                                   <td className="p-3 text-right font-mono font-bold text-slate-900">
                                     RM {order.total.toFixed(2)}
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${paymentMeta.className}`}>
+                                      {paymentMeta.shortLabel}
+                                    </span>
                                   </td>
                                   <td className="p-3 text-center">
                                     <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${
@@ -1191,6 +1276,95 @@ export default function SellerDashboard({
                               </div>
                             )}
                           </div>
+                        </div>
+
+                        {/* Payment transfer slip review */}
+                        <div className="bg-amber-50/70 p-3.5 rounded-xl text-xs space-y-3 border border-amber-200">
+                          {(() => {
+                            const paymentMeta = getPaymentStatusMeta(selectedOrderDetail.payment?.status);
+                            const slip = selectedOrderDetail.payment?.slip;
+                            return (
+                              <>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <h5 className="font-bold text-slate-800 flex items-center">
+                                      <DollarSign className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
+                                      {isZh ? '银行转账付款水单' : 'Bank Transfer Payment Slip'}
+                                    </h5>
+                                    <p className="text-[10px] text-slate-500 mt-0.5">
+                                      {isZh ? '核对水单后，点击确认付款即可进入处理流程。' : 'Review the slip, then confirm payment to move the order into processing.'}
+                                    </p>
+                                  </div>
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${paymentMeta.className}`}>
+                                    {paymentMeta.shortLabel}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                  <p className="flex flex-col">
+                                    <span className="text-slate-400">{isZh ? '付款方式' : 'Method'}</span>
+                                    <strong className="text-slate-700">{isZh ? '银行转账' : 'Bank Transfer'}</strong>
+                                  </p>
+                                  <p className="flex flex-col">
+                                    <span className="text-slate-400">{isZh ? '付款金额' : 'Amount'}</span>
+                                    <strong className="font-mono text-slate-900">RM {(selectedOrderDetail.payment?.amount || selectedOrderDetail.total).toFixed(2)}</strong>
+                                  </p>
+                                </div>
+
+                                {slip ? (
+                                  <div className="rounded-xl border border-amber-200 bg-white p-2 space-y-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className="truncate font-bold text-slate-800">{slip.name}</p>
+                                        <p className="text-[10px] text-slate-400">
+                                          {(slip.size / 1024).toFixed(0)} KB • {new Date(slip.uploadedAt).toLocaleString()}
+                                        </p>
+                                      </div>
+                                      <a
+                                        href={slip.dataUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="shrink-0 rounded-lg bg-slate-900 px-2.5 py-1.5 text-[10px] font-bold text-white hover:bg-slate-800"
+                                      >
+                                        {isZh ? '打开' : 'Open'}
+                                      </a>
+                                    </div>
+
+                                    {slip.type.startsWith('image/') && (
+                                      <a href={slip.dataUrl} target="_blank" rel="noreferrer" className="block">
+                                        <img
+                                          src={slip.dataUrl}
+                                          alt={isZh ? '付款水单' : 'Payment slip'}
+                                          className="max-h-52 w-full rounded-lg border border-slate-100 object-contain bg-slate-50"
+                                        />
+                                      </a>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="rounded-xl border border-dashed border-amber-300 bg-white/70 p-3 text-[11px] text-amber-700">
+                                    {isZh ? '此订单没有上传付款水单。旧订单可继续用物流状态处理。' : 'No payment slip was uploaded for this order. Existing orders can still be handled with fulfillment status.'}
+                                  </div>
+                                )}
+
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdatePaymentStatus(selectedOrderDetail.id, 'confirmed')}
+                                    className="py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors"
+                                  >
+                                    {isZh ? '确认付款' : 'Confirm Payment'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdatePaymentStatus(selectedOrderDetail.id, 'rejected')}
+                                    className="py-1.5 px-2 bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-lg text-xs font-bold cursor-pointer transition-colors"
+                                  >
+                                    {isZh ? '标记需复核' : 'Needs Review'}
+                                  </button>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
 
                         {/* Order items purchased list */}

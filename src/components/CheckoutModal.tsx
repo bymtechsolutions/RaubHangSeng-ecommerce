@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, MessageSquare, Truck, HelpCircle, CheckCircle, ShieldCheck, ClipboardCheck, Info, Award } from 'lucide-react';
-import { CartItem, Language, DeliveryDetails, User } from '../types';
+import { X, MessageSquare, ShieldCheck, ClipboardCheck, Info, Award, Upload, FileCheck2 } from 'lucide-react';
+import { CartItem, Language, DeliveryDetails, User, OrderRecord, PaymentSlip } from '../types';
 
 interface CheckoutModalProps {
   cartItems: CartItem[];
@@ -8,7 +8,7 @@ interface CheckoutModalProps {
   onClose: () => void;
   shippingFee: number;
   totalAmount: number;
-  onOrderSuccess: (order: { id: string; items: CartItem[]; details: DeliveryDetails; total: number; date: string }) => void;
+  onOrderSuccess: (order: OrderRecord) => void;
   currentUser: User | null;
   onAuthClick: () => void;
 }
@@ -34,6 +34,7 @@ export default function CheckoutModal({
   const [postcode, setPostcode] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentSlip, setPaymentSlip] = useState<PaymentSlip | null>(null);
 
   // Autofill if logged in
   useEffect(() => {
@@ -51,6 +52,55 @@ export default function CheckoutModal({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isCheckingPostcode, setIsCheckingPostcode] = useState(false);
   const [postcodeStatus, setPostcodeStatus] = useState<'valid' | 'invalid' | null>(null);
+
+  const handlePaymentSlipUpload = (file?: File | null) => {
+    if (!file) return;
+
+    const maxSlipSize = 2 * 1024 * 1024;
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
+    if (!allowedTypes.includes(file.type)) {
+      setPaymentSlip(null);
+      setErrors(prev => ({
+        ...prev,
+        paymentSlip: isZh ? '请上传 JPG、PNG、WebP 或 PDF 水单。' : 'Upload a JPG, PNG, WebP, or PDF payment slip.',
+      }));
+      return;
+    }
+
+    if (file.size > maxSlipSize) {
+      setPaymentSlip(null);
+      setErrors(prev => ({
+        ...prev,
+        paymentSlip: isZh ? '水单文件不可超过 2MB。' : 'Payment slip must be 2MB or smaller.',
+      }));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPaymentSlip({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        dataUrl: String(reader.result),
+        uploadedAt: new Date().toISOString(),
+      });
+      setErrors(prev => {
+        const next = { ...prev };
+        delete next.paymentSlip;
+        return next;
+      });
+    };
+    reader.onerror = () => {
+      setPaymentSlip(null);
+      setErrors(prev => ({
+        ...prev,
+        paymentSlip: isZh ? '水单读取失败，请重新上传。' : 'Unable to read the slip. Please upload again.',
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Postcode checks (Simplified for Malaysian standard 5-digit postcodes)
   const handlePostcodeChange = (val: string) => {
@@ -92,6 +142,7 @@ export default function CheckoutModal({
       newErrors.postcode = isZh ? '抱歉，此地区冷链物流暂未覆盖' : 'Sorry, cold-chain is not available for this area';
     }
     if (!deliveryDate) newErrors.deliveryDate = isZh ? '请选择期望送达日期' : 'Select a delivery date';
+    if (!paymentSlip) newErrors.paymentSlip = isZh ? '请上传银行转账水单。' : 'Upload your bank transfer payment slip.';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -156,8 +207,11 @@ export default function CheckoutModal({
     waText += `💵 *商品小计:* RM ${(totalAmount - shippingFee).toFixed(2)}\n`;
     waText += `🚚 *冷链运费:* ${shippingFee === 0 ? 'FREE (免运费)' : `RM ${shippingFee.toFixed(2)}`}\n`;
     waText += `💰 *应付总额:* *RM ${totalAmount.toFixed(2)}*\n\n`;
+    waText += `🏦 *付款方式:* Manual Bank Transfer\n`;
+    waText += `📎 *付款水单:* ${paymentSlip?.name || '-'}\n`;
+    waText += `⏳ *付款状态:* 已上传水单，等待商家后台确认\n\n`;
     waText += `===============================\n`;
-    waText += `*💡 温馨说明:* 请发送此消息给客服，我们会在第一时间回复您银行转账资料（Maybank/DuitNow QR），确认付款后即可为您排单冷冻发货！感谢您的惠顾！`;
+    waText += `*💡 温馨说明:* 请发送此消息给客服。您已在网站上传银行转账水单，商家会在后台核对付款并确认订单，然后安排冷链发货。感谢您的惠顾！`;
 
     // 3. Callback order creation to parent (triggers state clean and saves in order list)
     onOrderSuccess({
@@ -166,6 +220,14 @@ export default function CheckoutModal({
       details,
       total: totalAmount,
       date: currentDate,
+      status: 'pending',
+      payment: {
+        method: 'bank_transfer',
+        status: 'pending_review',
+        amount: totalAmount,
+        bankName: 'Manual Bank Transfer',
+        slip: paymentSlip || undefined,
+      },
     });
 
     // 4. Trigger redirect to Merchant WhatsApp (Malaysia phone +60187682528, formatted standard merchant line)
@@ -392,6 +454,57 @@ export default function CheckoutModal({
               {errors.deliveryDate && <p className="text-[10px] text-red-500">{errors.deliveryDate}</p>}
             </div>
 
+            {/* Bank Transfer Payment Slip */}
+            <div className="space-y-2 rounded-xl border border-sky-100 bg-sky-50/60 p-3">
+              <div>
+                <label className="text-xs font-bold text-slate-600 block uppercase tracking-wide">
+                  {isZh ? '银行转账水单' : 'Bank Transfer Payment Slip'} <span className="text-red-500">*</span>
+                </label>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  {isZh
+                    ? '请完成手动银行转账后上传水单。商家会在后台核对付款后确认订单。'
+                    : 'Upload your payment slip after manual bank transfer. Seller will confirm payment from the dashboard.'}
+                </p>
+              </div>
+
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-sky-300 bg-white px-3 py-3 text-xs cursor-pointer hover:border-sky-500 transition-colors">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-9 h-9 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+                    {paymentSlip ? <FileCheck2 className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="block font-bold text-slate-800 truncate">
+                      {paymentSlip ? paymentSlip.name : (isZh ? '上传付款水单' : 'Upload payment slip')}
+                    </span>
+                    <span className="block text-[10px] text-slate-500">
+                      {paymentSlip
+                        ? `${(paymentSlip.size / 1024).toFixed(0)} KB`
+                        : (isZh ? 'JPG / PNG / WebP / PDF，最多 2MB' : 'JPG / PNG / WebP / PDF, max 2MB')}
+                    </span>
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-lg bg-sky-600 px-2.5 py-1.5 text-[10px] font-bold text-white">
+                  {isZh ? '选择文件' : 'Choose File'}
+                </span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={(e) => handlePaymentSlipUpload(e.target.files?.[0])}
+                  className="sr-only"
+                />
+              </label>
+
+              {paymentSlip?.type.startsWith('image/') && (
+                <img
+                  src={paymentSlip.dataUrl}
+                  alt={isZh ? '付款水单预览' : 'Payment slip preview'}
+                  className="max-h-40 w-full rounded-lg border border-sky-100 object-contain bg-white"
+                />
+              )}
+
+              {errors.paymentSlip && <p className="text-[10px] text-red-500">{errors.paymentSlip}</p>}
+            </div>
+
             {/* Notes */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 block uppercase tracking-wide">
@@ -455,6 +568,16 @@ export default function CheckoutModal({
                 </span>
               </div>
               <div className="h-px bg-slate-200 my-1.5" />
+              <div className="flex justify-between text-slate-500">
+                <span>{isZh ? '付款方式' : 'Payment Method'}</span>
+                <span className="font-bold text-slate-700">{isZh ? '银行转账' : 'Bank Transfer'}</span>
+              </div>
+              <div className="flex justify-between text-slate-500">
+                <span>{isZh ? '水单状态' : 'Slip Status'}</span>
+                <span className={`font-bold ${paymentSlip ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {paymentSlip ? (isZh ? '已上传' : 'Uploaded') : (isZh ? '待上传' : 'Required')}
+                </span>
+              </div>
               <div className="flex justify-between items-baseline text-slate-900">
                 <span className="text-xs font-bold">{isZh ? '应付总金额' : 'Grand Total'}</span>
                 <span className="text-lg font-black text-amber-600 font-mono">
@@ -471,9 +594,9 @@ export default function CheckoutModal({
               </p>
               <ol className="list-decimal pl-3.5 space-y-1">
                 <li>{isZh ? '点击下方按钮，会自动为您唤醒手机或电脑上的 WhatsApp API' : 'Click the submit button to launch WhatsApp with the generated message.'}</li>
-                <li>{isZh ? '直接发送已生成的发票信息给我们的客服专员' : 'Send the auto-written text template to our fish store support representative.'}</li>
-                <li>{isZh ? '我们将回复确认库存，并提供银行付款账号（Maybank/DuitNow）' : 'We will reply with inventory confirmation and Bank Transfer credentials.'}</li>
-                <li>{isZh ? '完成转账付款，发送水单，即为您安排顺丰/冷链直达配送' : 'Upload transaction screenshot, and your frozen box is dispatched.'}</li>
+                <li>{isZh ? '请先完成手动银行转账，并在左侧上传付款水单。' : 'Complete manual bank transfer first and upload the payment slip on the left.'}</li>
+                <li>{isZh ? '直接发送已生成的发票信息给我们的客服专员。' : 'Send the auto-written invoice text to our support representative.'}</li>
+                <li>{isZh ? '商家会在后台核对水单并确认订单，再安排冷链配送。' : 'Seller reviews the slip in the dashboard, confirms payment, then arranges cold-chain delivery.'}</li>
               </ol>
             </div>
 
@@ -484,7 +607,7 @@ export default function CheckoutModal({
                 className="w-full flex items-center justify-center space-x-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-bold rounded-xl transition-all shadow-xs cursor-pointer text-sm"
               >
                 <MessageSquare className="w-4 h-4 text-emerald-100" />
-                <span>{isZh ? '通过 WhatsApp 确认下单' : 'Send Order to WhatsApp'}</span>
+                <span>{isZh ? '提交订单与付款水单' : 'Submit Order & Payment Slip'}</span>
               </button>
               
               <button
