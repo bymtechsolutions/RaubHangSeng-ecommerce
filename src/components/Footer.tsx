@@ -15,7 +15,9 @@ export default function Footer({ language, setLanguage, onNavigate, onPolicyClic
 
   const links = [
     { label: isZh ? '首页' : 'Home', id: 'home' },
+    { label: isZh ? '关于我们' : 'About Us', id: 'about' },
     { label: isZh ? '河鱼产品' : 'Our Fish Catalog', id: 'products' },
+    { label: isZh ? '商务订购' : 'Business Order', id: 'business-order' },
     { label: isZh ? '真空锁鲜' : 'Process & Quality', id: 'process' },
     { label: isZh ? '冷链配送' : 'Shipping Methods', id: 'delivery' },
     { label: isZh ? '顾客反馈' : 'Customer Reviews', id: 'reviews' },

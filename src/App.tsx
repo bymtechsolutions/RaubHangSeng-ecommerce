@@ -4,6 +4,8 @@ import Header from './components/Header';
 import Hero from './components/Hero';
 import Products from './components/Products';
 import ProductPage from './components/ProductPage';
+import AboutUs from './components/AboutUs';
+import BusinessOrder from './components/BusinessOrder';
 import ProductDetailModal from './components/ProductDetailModal';
 import Cart from './components/Cart';
 import CheckoutModal from './components/CheckoutModal';
@@ -22,13 +24,15 @@ import SellerDashboard from './components/SellerDashboard';
 import PolicyView from './components/PolicyView';
 import { createOrder, fetchStore, replaceOrders, replaceProducts, updateSellerPasscode, updateSettings, verifySellerPasscode } from './lib/api';
 
-type AppRoute = 'home' | 'shop' | 'product' | 'seller' | 'privacy' | 'terms' | 'refund';
+type AppRoute = 'home' | 'shop' | 'product' | 'about' | 'business-order' | 'seller' | 'privacy' | 'terms' | 'refund';
 
 const PRODUCT_ROUTE_PREFIX = '/product/';
 const DEFAULT_STORE_ANNOUNCEMENT = '【恒升河鱼公告】彭亨河主流特马鲁网箱及野生巴丁/苏丹鱼每日捕捞，西马冷链送达，消费满 RM250 免运费！';
 const getRouteFromPath = (): AppRoute => {
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
   if (path === '/shop') return 'shop';
+  if (path === '/about') return 'about';
+  if (path === '/business-order') return 'business-order';
   if (path.startsWith(PRODUCT_ROUTE_PREFIX) && path.length > PRODUCT_ROUTE_PREFIX.length) return 'product';
   if (path === '/seller') return 'seller';
   if (path === '/privacy') return 'privacy';
@@ -53,6 +57,8 @@ const routeToPath = (route: AppRoute, productId?: string | null) => {
 
 const routeToActiveSection = (route: AppRoute) => {
   if (route === 'shop' || route === 'product') return 'products';
+  if (route === 'about') return 'about';
+  if (route === 'business-order') return 'business-order';
   if (route === 'seller') return 'seller';
   if (route === 'privacy' || route === 'terms' || route === 'refund') return 'policy';
   return 'home';
@@ -561,6 +567,16 @@ export default function App() {
       return;
     }
 
+    if (section === 'about') {
+      navigateToRoute('about');
+      return;
+    }
+
+    if (section === 'business-order') {
+      navigateToRoute('business-order');
+      return;
+    }
+
     if (section === 'seller') {
       handleSellerAccess();
       return;
@@ -695,6 +711,21 @@ export default function App() {
             initialCategory={shopCategory}
             onProductClick={navigateToProduct}
             onAddToCart={handleAddToCart}
+            orderingPaused={isOrderingPaused}
+          />
+        </main>
+      ) : route === 'about' ? (
+        <main className="pt-[var(--rhs-topbar-height)]">
+          <AboutUs
+            language={language}
+            onShopClick={scrollToProducts}
+            onBusinessOrderClick={() => navigateToRoute('business-order')}
+          />
+        </main>
+      ) : route === 'business-order' ? (
+        <main className="pt-[var(--rhs-topbar-height)]">
+          <BusinessOrder
+            language={language}
             orderingPaused={isOrderingPaused}
           />
         </main>

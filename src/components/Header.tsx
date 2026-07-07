@@ -33,8 +33,9 @@ export default function Header({
 
   const navItems = [
     { id: 'home', zh: '首页', en: 'Home' },
-    { id: 'guarantees', zh: '关于我们', en: 'About' },
+    { id: 'about', zh: '关于我们', en: 'About' },
     { id: 'collections', zh: '产品系列', en: 'Products' },
+    { id: 'business-order', zh: '商务订购', en: 'Business Order' },
     { id: 'process', zh: '购物流程', en: 'How to Buy' },
     { id: 'delivery', zh: '配送方式', en: 'Delivery' },
     { id: 'contact', zh: '联系我们', en: 'Contact' },
@@ -82,7 +83,7 @@ export default function Header({
             </span>
           </button>
 
-          <nav id="desktop-nav" className="hidden lg:flex items-center justify-center gap-8 xl:gap-10 text-[14px] xl:text-[15px] font-semibold">
+          <nav id="desktop-nav" className="hidden lg:flex items-center justify-center gap-5 xl:gap-8 text-[13px] xl:text-[15px] font-semibold">
             {navItems.map((item) => {
               const isProductItem = item.id === 'collections';
               const isActive = activeSection === item.id || (isProductItem && activeSection === 'products');
