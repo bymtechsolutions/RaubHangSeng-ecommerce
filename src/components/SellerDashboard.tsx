@@ -2085,94 +2085,128 @@ export default function SellerDashboard({
                   </div>
                 </div>
 
-                {/* Split list / form layout */}
+                {/* Split catalog table / form layout */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                   
-                  {/* LEFT: Products dynamic grid list */}
-                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs lg:col-span-6 max-h-[110vh] overflow-y-auto p-4 space-y-3">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
-                      {isZh ? `上架目录（${filteredProducts.length} 款）` : `Active Storefront Catalog (${filteredProducts.length} items)`}
-                    </span>
+                  {/* LEFT: Products table list */}
+                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs lg:col-span-7">
+                    <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        {isZh ? `上架目录（${filteredProducts.length} 款）` : `Active Storefront Catalog (${filteredProducts.length} items)`}
+                      </span>
+                      <span className="text-[10px] text-slate-400">{isZh ? '点击编辑进入右侧详情' : 'Use Edit to open details'}</span>
+                    </div>
 
                     {filteredProducts.length === 0 ? (
-                      <p className="text-xs text-slate-400 py-6 text-center">{isZh ? '未搜索到任何河鱼。' : 'No matching fishes found.'}</p>
+                      <p className="text-xs text-slate-400 py-8 text-center">{isZh ? '未搜索到任何河鱼。' : 'No matching fishes found.'}</p>
                     ) : (
-                      filteredProducts.map(prod => (
-                        <div 
-                          key={prod.id} 
-                          className={`p-3 border rounded-xl flex items-center space-x-3 transition-all hover:border-slate-300 cursor-pointer ${
-                            editingProduct?.id === prod.id ? 'bg-sky-50/50 border-sky-300' : 'bg-slate-50 border-slate-200'
-                          }`}
-                          onClick={() => handleEditClick(prod)}
-                        >
-                          <img 
-                            src={prod.image} 
-                            alt={prod.nameEn} 
-                            className="w-14 h-14 object-cover rounded-lg border border-slate-200 shrink-0" 
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[9px] uppercase tracking-wider font-mono bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
-                              {getCollectionLabel(prod.category)}
-                            </span>
-                            <h4 className="text-xs font-bold text-slate-900 truncate mt-1">
-                              {isZh ? prod.nameZh : prod.nameEn}
-                            </h4>
-                            <p className="text-[10px] text-slate-400 font-mono italic truncate">{prod.scientificName}</p>
-                            <p className="text-xs text-slate-950 font-bold font-mono mt-0.5">
-                              RM {prod.pricePerKg}/kg <span className="text-[10px] text-slate-400 font-normal">({prod.averageWeightKg}kg/avg)</span>
-                            </p>
-                            <p className="text-[10px] text-slate-500 mt-1">
-                              {(prod.media?.length || 0)} {isZh ? '个媒体' : 'media'} · {(prod.variants?.length || 0)} {isZh ? '个规格图' : 'variant photos'}
-                            </p>
-                          </div>
-
-                          <div className="flex flex-col items-end justify-between h-14">
-                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
-                              prod.stockStatus === 'available' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                              prod.stockStatus === 'limited' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                              'bg-rose-50 text-rose-600 border border-rose-100'
-                            }`}>
-                              {prod.stockStatus === 'available' ? (isZh ? '有货' : 'Available') :
-                               prod.stockStatus === 'limited' ? (isZh ? '限量' : 'Limited') : (isZh ? '季节缺货' : 'Out Stock')}
-                            </span>
-                            <div className="flex space-x-1 mt-1.5">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEditClick(prod);
-                                }}
-                                className="p-1 text-slate-400 hover:text-sky-600 cursor-pointer"
-                                title="Edit"
+                      <div className="max-h-[78vh] overflow-auto">
+                        <table className="w-full min-w-[760px] text-left text-xs">
+                          <thead className="sticky top-0 z-10">
+                            <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 uppercase tracking-wider font-bold">
+                              <th className="p-3">{isZh ? '商品' : 'Product'}</th>
+                              <th className="p-3">{isZh ? '系列' : 'Collection'}</th>
+                              <th className="p-3 text-right">{isZh ? '价格' : 'Price'}</th>
+                              <th className="p-3 text-center">{isZh ? '媒体/规格' : 'Media / Variants'}</th>
+                              <th className="p-3 text-center">{isZh ? '库存' : 'Stock'}</th>
+                              <th className="p-3 text-right">{isZh ? '操作' : 'Action'}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {filteredProducts.map(prod => (
+                              <tr
+                                key={prod.id}
+                                className={`transition-colors hover:bg-slate-50/80 ${
+                                  editingProduct?.id === prod.id ? 'bg-sky-50/50' : ''
+                                }`}
                               >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteProduct(prod.id);
-                                }}
-                                className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))
+                                <td className="p-3">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <img
+                                      src={prod.image}
+                                      alt={prod.nameEn}
+                                      className="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                    <div className="min-w-0">
+                                      <h4 className="text-xs font-bold text-slate-900 truncate">
+                                        {isZh ? prod.nameZh : prod.nameEn}
+                                      </h4>
+                                      <p className="text-[10px] text-slate-400 font-mono truncate">#{prod.id}</p>
+                                      <p className="text-[10px] text-slate-400 font-mono italic truncate">{prod.scientificName}</p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="p-3">
+                                  <span className="inline-flex max-w-[140px] truncate rounded-md bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">
+                                    {getCollectionLabel(prod.category)}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-right font-mono">
+                                  <strong className="block text-slate-950">RM {prod.pricePerKg}/kg</strong>
+                                  <span className="text-[10px] text-slate-400">{prod.averageWeightKg}kg avg</span>
+                                </td>
+                                <td className="p-3 text-center font-mono text-[10px] text-slate-500">
+                                  <span className="block">{prod.media?.length || 0} {isZh ? '媒体' : 'media'}</span>
+                                  <span className="block">{prod.variants?.length || 0} {isZh ? '规格' : 'variants'}</span>
+                                </td>
+                                <td className="p-3 text-center">
+                                  <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                    prod.stockStatus === 'available' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                                    prod.stockStatus === 'limited' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                    'bg-rose-50 text-rose-700 border border-rose-100'
+                                  }`}>
+                                    {prod.stockStatus === 'available' ? (isZh ? '有货' : 'Available') :
+                                     prod.stockStatus === 'limited' ? (isZh ? '限量' : 'Limited') : (isZh ? '缺货' : 'Out Stock')}
+                                  </span>
+                                </td>
+                                <td className="p-3">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditClick(prod)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg border border-sky-100 bg-sky-50 px-2.5 py-1.5 text-[11px] font-bold text-sky-700 hover:border-sky-200 hover:bg-sky-100 cursor-pointer"
+                                      title={isZh ? '编辑商品详情' : 'Edit product details'}
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                      <span>{isZh ? '编辑' : 'Edit'}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteProduct(prod.id)}
+                                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-400 hover:border-rose-200 hover:text-rose-600 cursor-pointer"
+                                      title={isZh ? '删除商品' : 'Delete product'}
+                                      aria-label={isZh ? '删除商品' : 'Delete product'}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
 
                   {/* RIGHT: Add/Edit Product live form */}
-                  <div className="lg:col-span-6 bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                  <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
                     <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
                       <div>
                         <h4 className="text-sm font-bold text-slate-900">
-                          {isAddingNew ? (isZh ? '➕ 上架全新河鱼品类' : 'Add New Species Catalog') : (isZh ? '📝 修改河鱼商品资料' : 'Modify Species Profile')}
+                          {isAddingNew
+                            ? (isZh ? '上架全新河鱼品类' : 'Add New Species Catalog')
+                            : editingProduct
+                              ? (isZh ? '修改河鱼商品资料' : 'Modify Species Profile')
+                              : (isZh ? '商品详情编辑' : 'Product Details Editor')}
                         </h4>
                         <p className="text-[10px] text-slate-400">
-                          {isAddingNew ? (isZh ? '配置一尾全新彭亨野生或特马鲁养殖河鱼' : 'Configure a fresh wild caught species') : `Updating: ${editingProduct?.id}`}
+                          {isAddingNew
+                            ? (isZh ? '配置一尾全新彭亨野生或特马鲁养殖河鱼' : 'Configure a fresh wild caught species')
+                            : editingProduct
+                              ? `Updating: ${editingProduct.id}`
+                              : (isZh ? '从目录表格点击编辑来修改商品。' : 'Choose Edit from the catalog table to modify a product.')}
                         </p>
                       </div>
                       {(editingProduct || isAddingNew) && (
@@ -2185,6 +2219,17 @@ export default function SellerDashboard({
                       )}
                     </div>
 
+                    {!(editingProduct || isAddingNew) ? (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-8 text-center">
+                        <Package className="mx-auto h-9 w-9 text-slate-300" />
+                        <h5 className="mt-3 text-sm font-bold text-slate-700">
+                          {isZh ? '请选择一个商品' : 'Select a product'}
+                        </h5>
+                        <p className="mx-auto mt-1 max-w-[34ch] text-xs leading-5 text-slate-500">
+                          {isZh ? '使用左侧表格的编辑按钮打开商品详情，或点击上方新增商品。' : 'Use the table Edit button to open product details, or add a new product from the top action.'}
+                        </p>
+                      </div>
+                    ) : (
                     <form onSubmit={handleSaveProduct} className="space-y-4">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -2615,6 +2660,7 @@ export default function SellerDashboard({
                         {isZh ? '💾 保存并发布同步至商城' : 'Save & Sync Product to Store'}
                       </button>
                     </form>
+                    )}
                   </div>
 
                 </div>
