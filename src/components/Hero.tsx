@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Fish, MessageCircle, Package, ShoppingCart, Snowflake, Sparkles, Truck } from 'lucide-react';
 import { Language } from '../types';
 
@@ -76,16 +77,15 @@ export default function Hero({ language, onShopNowClick, onWhatsAppOrderClick, o
             {highlights.map((item, index) => {
               const Icon = item.icon;
               return (
-                <div
-                  key={item.zh}
-                  className="inline-flex items-center justify-center gap-1.5 min-h-8 md:min-h-9 px-2.5 sm:px-3 md:px-4 rounded-md bg-white/78 backdrop-blur-md border border-white/75 shadow-[0_3px_10px_rgba(12,42,61,0.12)] text-[#203c42] text-[12px] sm:text-[13px] md:text-[16px] font-semibold"
-                >
-                  <Icon className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#244b50]" />
-                  <span>{isZh ? item.zh : item.en}</span>
+                <Fragment key={item.zh}>
+                  <div className="inline-flex items-center justify-center gap-1.5 min-h-8 md:min-h-9 px-2.5 sm:px-3 md:px-4 rounded-md bg-white/78 backdrop-blur-md border border-white/75 shadow-[0_3px_10px_rgba(12,42,61,0.12)] text-[#203c42] text-[12px] sm:text-[13px] md:text-[16px] font-semibold">
+                    <Icon className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#244b50]" />
+                    <span>{isZh ? item.zh : item.en}</span>
+                  </div>
                   {index < highlights.length - 1 && (
-                    <span className="hidden md:block ml-1.5 h-4 w-px bg-[#203c42]/22" />
+                    <span aria-hidden="true" className="hidden md:block h-5 w-px shrink-0 bg-[#203c42]/28" />
                   )}
-                </div>
+                </Fragment>
               );
             })}
           </div>
