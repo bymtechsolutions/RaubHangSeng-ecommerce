@@ -25,6 +25,7 @@ export default function Products({ language, products = PRODUCTS, collections = 
 
   // Local states to track selected weight & cut types for each card before adding to cart
   const [cardSelections, setCardSelections] = useState<Record<string, {
+    selectedVariantId: string | null;
     weightKg: number;
     cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet';
     quantity: number;
@@ -79,9 +80,12 @@ export default function Products({ language, products = PRODUCTS, collections = 
 
   // Initialize selection settings for a product card if not set yet
   const getCardSelection = (product: Product) => {
+    const firstVariant = product.variants?.[0];
+
     return cardSelections[product.id] || {
-      weightKg: product.averageWeightKg,
-      cutType: 'cleaned',
+      selectedVariantId: firstVariant?.id ?? null,
+      weightKg: firstVariant?.weightKg ?? product.averageWeightKg,
+      cutType: firstVariant?.cutType ?? 'cleaned',
       quantity: 1,
     };
   };
@@ -271,6 +275,9 @@ export default function Products({ language, products = PRODUCTS, collections = 
               <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
             {filteredProducts.map((product) => {
               const selection = getCardSelection(product);
+              const hasVariants = Boolean(product.variants?.length);
+              const selectedVariant = product.variants?.find(variant => variant.id === selection.selectedVariantId)
+                || product.variants?.[0];
               const status = getStockStatusLabel(product.stockStatus);
               const calculatedTotalPrice = product.pricePerKg * selection.weightKg * selection.quantity;
 
@@ -303,7 +310,7 @@ export default function Products({ language, products = PRODUCTS, collections = 
                     aria-label={isZh ? `查看${product.nameZh}详情` : `View ${product.nameEn} details`}
                   >
                     <img
-                      src={resolveMediaUrl(product.image)}
+                      src={resolveMediaUrl(selectedVariant?.image || product.image)}
                       alt={isZh ? product.nameZh : product.nameEn}
                       className={`w-full h-full object-cover transition-transform duration-500 ${
                         orderingPaused
@@ -376,14 +383,33 @@ export default function Products({ language, products = PRODUCTS, collections = 
                       {/* Weight Selector */}
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-slate-500 font-semibold block uppercase tracking-wide">
-                          {isZh ? '估重(条)' : 'Weight / Fish'}
+                          {hasVariants ? (isZh ? '选择规格' : 'Choose Variant') : (isZh ? '估重(条)' : 'Weight / Fish')}
                         </label>
                         <select
-                          value={selection.weightKg}
-                          onChange={(e) => updateCardSelection(product.id, { weightKg: parseFloat(e.target.value) })}
+                          value={hasVariants ? selectedVariant?.id : selection.weightKg}
+                          onChange={(e) => {
+                            if (hasVariants) {
+                              const variant = product.variants?.find(item => item.id === e.target.value);
+                              if (variant) {
+                                updateCardSelection(product.id, {
+                                  selectedVariantId: variant.id,
+                                  weightKg: variant.weightKg,
+                                  cutType: variant.cutType,
+                                });
+                              }
+                              return;
+                            }
+
+                            updateCardSelection(product.id, { weightKg: parseFloat(e.target.value) });
+                          }}
                           disabled={orderingPaused}
                           className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-lg px-2 py-1.5 font-mono text-slate-700 focus:outline-none focus:border-sky-500 text-xs cursor-pointer"
                         >
+                          {hasVariants ? product.variants?.map(variant => (
+                            <option key={variant.id} value={variant.id}>
+                              {isZh ? variant.nameZh : variant.nameEn} ({variant.weightKg.toFixed(1)} kg)
+                            </option>
+                          )) : <>
                           <option value={product.averageWeightKg * 0.8}>
                             {(product.averageWeightKg * 0.8).toFixed(1)} kg ({isZh ? '小' : 'Small'})
                           </option>
@@ -399,6 +425,7 @@ export default function Products({ language, products = PRODUCTS, collections = 
                           <option value="whatsapp-custom-weight" disabled>
                             {isZh ? '其他规格请 WhatsApp 客服' : 'Other size? Contact WhatsApp'}
                           </option>
+                          </>}
                         </select>
                       </div>
 
@@ -410,12 +437,13 @@ export default function Products({ language, products = PRODUCTS, collections = 
                         <select
                           value={selection.cutType}
                           onChange={(e) => updateCardSelection(product.id, { cutType: e.target.value as any })}
-                          disabled={orderingPaused}
-                          className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-lg px-2 py-1.5 text-slate-700 focus:outline-none focus:border-sky-500 text-xs cursor-pointer"
+                          disabled={orderingPaused || hasVariants}
+                          className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-lg px-2 py-1.5 text-slate-700 focus:outline-none focus:border-sky-500 text-xs cursor-pointer disabled:cursor-not-allowed disabled:text-slate-500"
                         >
                           <option value="cleaned">{isZh ? '活杀去内脏 (Cleaned)' : 'Cleaned & Gutted'}</option>
                           <option value="whole">{isZh ? '完整整条 (Whole)' : 'Whole intact'}</option>
                           <option value="steak">{isZh ? '切厚段/轮切 (Steak Cuts)' : 'Thick Steaks'}</option>
+                          <option value="sliced">{isZh ? '薄切鱼片 (Sliced)' : 'Thin Slices'}</option>
                           <option value="fillet">{isZh ? '纯去骨片 (Fillet Cuts)' : 'Boneless Fillets'}</option>
                           <option value="whatsapp-custom-cut" disabled>
                             {isZh ? '特殊处理请 WhatsApp 客服' : 'Custom cut? Contact WhatsApp'}
