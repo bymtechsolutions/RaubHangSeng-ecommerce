@@ -272,6 +272,14 @@ app.put('/api/products', async (req, res, next) => {
       return;
     }
 
+    const invalidProduct = products.find(product => (
+      (product.options?.length || 0) > 3 || (product.variants?.length || 0) > 2048
+    ));
+    if (invalidProduct) {
+      res.status(400).json({ error: `product ${invalidProduct.id || 'unknown'} exceeds option or variant limits` });
+      return;
+    }
+
     const store = await updateStore(current => ({
       ...current,
       ...(draft

@@ -25,6 +25,7 @@ import PolicyView from './components/PolicyView';
 import { createOrder, fetchStore, replaceOrders, replaceProducts, updateSellerPasscode, updateSettings, verifySellerPasscode } from './lib/api';
 import { calculateDiscounts } from './lib/discounts';
 import { resolveMediaUrl } from './lib/media';
+import { getCartItemPricePerKg } from './lib/productOptions';
 
 type AppRoute = 'home' | 'shop' | 'product' | 'about' | 'business-order' | 'login' | 'seller' | 'privacy' | 'terms' | 'refund';
 
@@ -465,15 +466,17 @@ export default function App() {
     product: Product,
     quantity: number,
     weightKg: number,
-    cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet'
+    cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet',
+    variantId?: string,
   ) => {
     if (isMaintenanceMode) return;
 
     const existingIndex = cartItems.findIndex(
       (item) =>
         item.product.id === product.id &&
-        item.selectedWeightKg === weightKg &&
-        item.cutType === cutType
+        (variantId
+          ? item.variantId === variantId
+          : !item.variantId && item.selectedWeightKg === weightKg && item.cutType === cutType)
     );
 
     let updatedCart = [...cartItems];
@@ -485,6 +488,7 @@ export default function App() {
         quantity,
         selectedWeightKg: weightKg,
         cutType,
+        variantId,
       });
     }
 
@@ -564,7 +568,7 @@ export default function App() {
   const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
   const subtotal = cartItems.reduce((acc, item) => {
-    return acc + item.product.pricePerKg * item.selectedWeightKg * item.quantity;
+    return acc + getCartItemPricePerKg(item) * item.selectedWeightKg * item.quantity;
   }, 0);
 
   const isFreeShipping = subtotal >= freeShippingThreshold;

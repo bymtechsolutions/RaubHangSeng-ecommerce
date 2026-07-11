@@ -32,10 +32,11 @@ import {
   Image as ImageIcon,
   Video
 } from 'lucide-react';
-import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductVariant, ProductCutType, StoreSettings, StoreDiscount, StoreDiscountScope, StoreDiscountValueType, CollectionDisplay, ProductCategory, OrderRecord, PaymentStatus } from '../types';
+import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductOption, ProductOptionKind, ProductOptionValue, ProductVariant, ProductCutType, StoreSettings, StoreDiscount, StoreDiscountScope, StoreDiscountValueType, CollectionDisplay, ProductCategory, OrderRecord, PaymentStatus } from '../types';
 import { normalizeCollectionDisplays } from '../data/collections';
 import { uploadStorefrontMedia } from '../lib/api';
 import { resolveMediaUrl } from '../lib/media';
+import { getCartItemOptionSummary, getCartItemPricePerKg, getCutTypeLabel, getProductConfiguration, syncVariantsWithOptions } from '../lib/productOptions';
 
 interface SellerDashboardProps {
   language: Language;
@@ -168,6 +169,7 @@ export default function SellerDashboard({
   const [formAverageWeightKg, setFormAverageWeightKg] = useState<number>(1.2);
   const [formImage, setFormImage] = useState('');
   const [formMedia, setFormMedia] = useState<ProductMedia[]>([]);
+  const [formOptions, setFormOptions] = useState<ProductOption[]>([]);
   const [formVariants, setFormVariants] = useState<ProductVariant[]>([]);
   const [formTastingNotesZh, setFormTastingNotesZh] = useState('');
   const [formTastingNotesEn, setFormTastingNotesEn] = useState('');
@@ -583,30 +585,108 @@ export default function SellerDashboard({
     setFormMedia(prev => prev.filter(media => media.id !== mediaId));
   };
 
-  const handleAddVariant = () => {
-    const variantNumber = formVariants.length + 1;
+  const cutTypes: ProductCutType[] = ['cleaned', 'whole', 'steak', 'sliced', 'fillet'];
+
+  const createOptionValue = (kind: ProductOptionKind, index: number, id = createMediaId('option-value')): ProductOptionValue => {
+    if (kind === 'weight') {
+      const weightKg = Number(formAverageWeightKg) || 1;
+      return { id, nameZh: `${weightKg.toFixed(1)} kg`, nameEn: `${weightKg.toFixed(1)} kg`, weightKg };
+    }
+
+    if (kind === 'cut') {
+      const cutType = cutTypes[index % cutTypes.length];
+      return {
+        id,
+        nameZh: getCutTypeLabel(cutType, 'zh'),
+        nameEn: getCutTypeLabel(cutType, 'en'),
+        cutType,
+      };
+    }
+
+    return { id, nameZh: `选项 ${index + 1}`, nameEn: `Value ${index + 1}` };
+  };
+
+  const applyFormOptions = (nextOptions: ProductOption[]) => {
     const fallbackImage = formMedia.find(media => media.type === 'image')?.url || formImage.trim();
-    setFormVariants(prev => [
-      ...prev,
-      {
-        id: createMediaId('variant'),
-        nameZh: `规格 ${variantNumber}`,
-        nameEn: `Variant ${variantNumber}`,
-        weightKg: Number(formAverageWeightKg) || 1,
-        cutType: 'cleaned',
-        image: fallbackImage,
-      },
-    ]);
+    setFormOptions(nextOptions);
+    setFormVariants(prev => syncVariantsWithOptions(nextOptions, prev, {
+      weightKg: Number(formAverageWeightKg) || 1,
+      cutType: 'cleaned',
+      image: fallbackImage,
+    }));
+  };
+
+  const handleAddOption = () => {
+    if (formOptions.length >= 3) {
+      triggerError(isZh ? '每个产品最多可添加 3 个销售选项。' : 'Each product can have up to 3 options.');
+      return;
+    }
+
+    const existingKinds = new Set(formOptions.map(option => option.kind));
+    const kind: ProductOptionKind = !existingKinds.has('weight') ? 'weight' : !existingKinds.has('cut') ? 'cut' : 'custom';
+    const optionNumber = formOptions.length + 1;
+    const names = kind === 'weight'
+      ? { zh: '重量', en: 'Weight' }
+      : kind === 'cut'
+        ? { zh: '屠宰处理', en: 'Processing' }
+        : { zh: `选项 ${optionNumber}`, en: `Option ${optionNumber}` };
+    const nextOptions = [...formOptions, {
+      id: createMediaId('option'),
+      nameZh: names.zh,
+      nameEn: names.en,
+      kind,
+      values: [createOptionValue(kind, 0)],
+    }];
+    applyFormOptions(nextOptions);
+  };
+
+  const handleUpdateOption = (index: number, updates: Partial<ProductOption>) => {
+    const nextOptions = formOptions.map((option, optionIndex) => {
+      if (optionIndex !== index) return option;
+      if (updates.kind && updates.kind !== option.kind) {
+        return {
+          ...option,
+          ...updates,
+          values: option.values.map((value, valueIndex) => createOptionValue(updates.kind!, valueIndex, value.id)),
+        };
+      }
+      return { ...option, ...updates };
+    });
+    applyFormOptions(nextOptions);
+  };
+
+  const handleRemoveOption = (index: number) => {
+    applyFormOptions(formOptions.filter((_, optionIndex) => optionIndex !== index));
+  };
+
+  const handleAddOptionValue = (optionIndex: number) => {
+    const nextOptions = formOptions.map((option, index) => index === optionIndex
+      ? { ...option, values: [...option.values, createOptionValue(option.kind, option.values.length)] }
+      : option);
+    applyFormOptions(nextOptions);
+  };
+
+  const handleUpdateOptionValue = (optionIndex: number, valueIndex: number, updates: Partial<ProductOptionValue>) => {
+    const nextOptions = formOptions.map((option, index) => index === optionIndex
+      ? {
+        ...option,
+        values: option.values.map((value, indexValue) => indexValue === valueIndex ? { ...value, ...updates } : value),
+      }
+      : option);
+    applyFormOptions(nextOptions);
+  };
+
+  const handleRemoveOptionValue = (optionIndex: number, valueIndex: number) => {
+    const nextOptions = formOptions.map((option, index) => index === optionIndex
+      ? { ...option, values: option.values.filter((_, indexValue) => indexValue !== valueIndex) }
+      : option);
+    applyFormOptions(nextOptions);
   };
 
   const handleUpdateVariant = (index: number, updates: Partial<ProductVariant>) => {
     setFormVariants(prev => prev.map((variant, variantIndex) => (
       variantIndex === index ? { ...variant, ...updates } : variant
     )));
-  };
-
-  const handleRemoveVariant = (index: number) => {
-    setFormVariants(prev => prev.filter((_, variantIndex) => variantIndex !== index));
   };
 
   const handleUpdateCollectionDraft = (id: ProductCategory, updates: Partial<CollectionDisplay>) => {
@@ -713,7 +793,7 @@ export default function SellerDashboard({
     validOrders.forEach(order => {
       order.items?.forEach((item: any) => {
         const cat = item.product?.category || 'wild';
-        categoryRevenue[cat] = (categoryRevenue[cat] || 0) + item.product.pricePerKg * item.selectedWeightKg * item.quantity;
+        categoryRevenue[cat] = (categoryRevenue[cat] || 0) + getCartItemPricePerKg(item) * item.selectedWeightKg * item.quantity;
       });
     });
 
@@ -722,7 +802,7 @@ export default function SellerDashboard({
     validOrders.forEach(order => {
       order.items?.forEach((item: any) => {
         const pId = item.product.id;
-        const subRev = item.product.pricePerKg * item.selectedWeightKg * item.quantity;
+        const subRev = getCartItemPricePerKg(item) * item.selectedWeightKg * item.quantity;
         if (!fishPopularity[pId]) {
           fishPopularity[pId] = {
             count: 0,
@@ -822,6 +902,7 @@ export default function SellerDashboard({
 
   // Handle Edit Product click
   const handleEditClick = (product: Product) => {
+    const configuration = getProductConfiguration(product);
     setEditingProduct(product);
     setIsAddingNew(false);
     
@@ -842,7 +923,8 @@ export default function SellerDashboard({
       type: 'image',
       name: 'Cover image',
     }] : []);
-    setFormVariants(product.variants || []);
+    setFormOptions(configuration.options);
+    setFormVariants(configuration.variants);
     setFormTastingNotesZh(product.tastingNotesZh || '');
     setFormTastingNotesEn(product.tastingNotesEn || '');
     setFormCookingSuggestionsZh(product.cookingSuggestionsZh ? product.cookingSuggestionsZh.join(', ') : '');
@@ -868,6 +950,7 @@ export default function SellerDashboard({
     setFormAverageWeightKg(1.2);
     setFormImage('');
     setFormMedia([]);
+    setFormOptions([]);
     setFormVariants([]);
     setFormTastingNotesZh('');
     setFormTastingNotesEn('');
@@ -904,6 +987,25 @@ export default function SellerDashboard({
       return;
     }
 
+    if (formOptions.some(option => !option.nameZh.trim() || !option.nameEn.trim() || option.values.length === 0)) {
+      triggerError(isZh ? '每个销售选项都需要中英文名称和至少一个选项值。' : 'Each option needs Chinese and English names and at least one value.');
+      return;
+    }
+
+    if (formOptions.some(option => option.values.some(value => (
+      !value.nameZh.trim() || !value.nameEn.trim() ||
+      (option.kind === 'weight' && (!value.weightKg || value.weightKg <= 0)) ||
+      (option.kind === 'cut' && !value.cutType)
+    )))) {
+      triggerError(isZh ? '请填写所有选项值，并确保重量大于 0。' : 'Complete every option value and make sure weights are greater than 0.');
+      return;
+    }
+
+    if (formVariants.length > 2048) {
+      triggerError(isZh ? '每个产品最多可生成 2,048 个规格组合。' : 'Each product can have up to 2,048 generated variants.');
+      return;
+    }
+
     const cleanId = formId.toLowerCase().trim().replace(/\s+/g, '-');
 
     const fallbackImage = 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=800&q=80';
@@ -912,7 +1014,23 @@ export default function SellerDashboard({
       ...media,
       name: media.name?.trim() || undefined,
     }));
-    const normalizedVariants = formVariants.map((variant, index) => ({
+    const normalizedOptions = formOptions.map(option => ({
+      ...option,
+      nameZh: option.nameZh.trim(),
+      nameEn: option.nameEn.trim(),
+      values: option.values.map(value => ({
+        ...value,
+        nameZh: value.nameZh.trim(),
+        nameEn: value.nameEn.trim(),
+        weightKg: value.weightKg !== undefined ? Number(value.weightKg) : undefined,
+      })),
+    }));
+    const syncedVariants = syncVariantsWithOptions(normalizedOptions, formVariants, {
+      weightKg: Number(formAverageWeightKg) || 1,
+      cutType: 'cleaned',
+      image: coverImage,
+    });
+    const normalizedVariants = syncedVariants.map((variant, index) => ({
       ...variant,
       id: variant.id || createMediaId('variant'),
       nameZh: variant.nameZh.trim() || `规格 ${index + 1}`,
@@ -920,6 +1038,9 @@ export default function SellerDashboard({
       weightKg: Number(variant.weightKg) || Number(formAverageWeightKg) || 1,
       cutType: variant.cutType,
       image: variant.image || coverImage,
+      pricePerKg: variant.pricePerKg && Number(variant.pricePerKg) > 0 ? Number(variant.pricePerKg) : undefined,
+      sku: variant.sku?.trim() || undefined,
+      isAvailable: variant.isAvailable !== false,
     }));
 
     const formattedProduct: Product = {
@@ -934,6 +1055,7 @@ export default function SellerDashboard({
       averageWeightKg: Number(formAverageWeightKg),
       image: coverImage,
       media: normalizedMedia,
+      options: normalizedOptions,
       variants: normalizedVariants,
       tastingNotesZh: formTastingNotesZh.trim(),
       tastingNotesEn: formTastingNotesEn.trim(),
@@ -1773,11 +1895,11 @@ export default function SellerDashboard({
                                 <div>
                                   <strong className="text-slate-800">{isZh ? item.product?.nameZh : item.product?.nameEn}</strong>
                                   <p className="text-[10px] text-slate-400 mt-0.5">
-                                    {item.quantity}x • {item.selectedWeightKg}kg • {isZh ? `宰杀:${item.cutType}` : `Cut:${item.cutType}`}
+                                    {item.quantity}x • {getCartItemOptionSummary(item, language) || `${item.selectedWeightKg}kg • ${isZh ? `宰杀:${item.cutType}` : `Cut:${item.cutType}`}`}
                                   </p>
                                 </div>
                                 <span className="font-mono font-bold text-slate-600">
-                                  RM {(item.product?.pricePerKg * item.selectedWeightKg * item.quantity).toFixed(2)}
+                                  RM {(getCartItemPricePerKg(item) * item.selectedWeightKg * item.quantity).toFixed(2)}
                                 </span>
                               </div>
                             ))}
@@ -2152,7 +2274,7 @@ export default function SellerDashboard({
                               <th className="p-3">{isZh ? '商品' : 'Product'}</th>
                               <th className="p-3">{isZh ? '系列' : 'Collection'}</th>
                               <th className="p-3 text-right">{isZh ? '价格' : 'Price'}</th>
-                              <th className="p-3 text-center">{isZh ? '媒体/规格' : 'Media / Variants'}</th>
+                              <th className="p-3 text-center">{isZh ? '媒体/选项/规格' : 'Media / Options / Variants'}</th>
                               <th className="p-3 text-center">{isZh ? '库存' : 'Stock'}</th>
                               <th className="p-3 text-right">{isZh ? '操作' : 'Action'}</th>
                             </tr>
@@ -2193,6 +2315,7 @@ export default function SellerDashboard({
                                 </td>
                                 <td className="p-3 text-center font-mono text-[10px] text-slate-500">
                                   <span className="block">{prod.media?.length || 0} {isZh ? '媒体' : 'media'}</span>
+                                  <span className="block">{getProductConfiguration(prod).options.length} {isZh ? '选项' : 'options'}</span>
                                   <span className="block">{prod.variants?.length || 0} {isZh ? '规格' : 'variants'}</span>
                                 </td>
                                 <td className="p-3 text-center">
@@ -2494,115 +2617,247 @@ export default function SellerDashboard({
                         )}
                       </div>
 
-                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-3">
-                        <div className="flex items-center justify-between gap-3">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-4">
+                        <div className="flex items-start justify-between gap-3">
                           <div>
                             <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                               <Package className="w-3.5 h-3.5 text-emerald-600" />
-                              {isZh ? '规格图片' : 'Variant Photos'}
+                              {isZh ? '销售选项 / Variations' : 'Options / Variations'}
                             </h5>
-                            <p className="text-[10px] text-slate-500 mt-0.5">
-                              {imageUploadGuidanceText[isZh ? 'zh' : 'en']}
+                            <p className="text-[10px] leading-4 text-slate-500 mt-0.5">
+                              {isZh ? '先添加重量、屠宰处理或自定义选项；系统会自动生成所有可销售规格组合。' : 'Add weight, processing, or custom options first. Sellable variant combinations are generated automatically.'}
                             </p>
                           </div>
                           <button
                             type="button"
-                            onClick={handleAddVariant}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-emerald-300 text-slate-700 text-[11px] font-bold cursor-pointer"
+                            onClick={handleAddOption}
+                            disabled={formOptions.length >= 3}
+                            className="inline-flex shrink-0 items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-emerald-300 text-slate-700 text-[11px] font-bold cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                           >
                             <Plus className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>{isZh ? '新增规格' : 'Add variant'}</span>
+                            <span>{isZh ? '添加销售选项' : 'Add option'}</span>
                           </button>
                         </div>
 
-                        {formVariants.length === 0 ? (
-                          <div className="border border-dashed border-slate-300 rounded-xl p-4 text-center text-[11px] text-slate-500">
-                            {isZh ? '没有规格图片时，前台会使用单条估重与清洗方式选择。' : 'Without variants, the storefront uses the standard weight and processing selectors.'}
+                        {formOptions.length === 0 ? (
+                          <div className="border border-dashed border-slate-300 rounded-xl p-4 text-center text-[11px] leading-5 text-slate-500">
+                            {isZh ? '尚未设置销售选项。产品会继续使用默认估重与处理方式。' : 'No options yet. The product will continue using its default weight and processing selectors.'}
                           </div>
                         ) : (
-                          <div className="space-y-3">
-                            {formVariants.map((variant, index) => (
-                              <div key={variant.id} className="rounded-xl border border-slate-200 bg-white p-3">
-                                <div className="flex gap-3">
-                                  <div className="w-24 shrink-0">
-                                    <div className="aspect-square rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
-                                      {variant.image ? (
-                                        <img src={resolveMediaUrl(variant.image)} alt={variant.nameEn || 'Variant'} className="w-full h-full object-cover" />
+                          <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+                            {formOptions.map((option, optionIndex) => (
+                              <div key={option.id} className="p-3 space-y-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <strong className="text-[11px] text-slate-800">
+                                    {isZh ? `销售选项 ${optionIndex + 1}` : `Option ${optionIndex + 1}`}
+                                  </strong>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveOption(optionIndex)}
+                                    className="inline-flex min-h-8 items-center gap-1 rounded-lg px-2 text-[10px] font-bold text-slate-500 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>{isZh ? '删除选项' : 'Delete option'}</span>
+                                  </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  <label className="space-y-1">
+                                    <span className="block text-[9px] font-bold text-slate-500">{isZh ? '选项类型' : 'Option type'}</span>
+                                    <select
+                                      value={option.kind}
+                                      onChange={(e) => handleUpdateOption(optionIndex, { kind: e.target.value as ProductOptionKind })}
+                                      className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                    >
+                                      <option value="weight" disabled={formOptions.some((item, index) => index !== optionIndex && item.kind === 'weight')}>{isZh ? '重量' : 'Weight'}</option>
+                                      <option value="cut" disabled={formOptions.some((item, index) => index !== optionIndex && item.kind === 'cut')}>{isZh ? '屠宰处理' : 'Processing'}</option>
+                                      <option value="custom">{isZh ? '自定义' : 'Custom'}</option>
+                                    </select>
+                                  </label>
+                                  <label className="space-y-1">
+                                    <span className="block text-[9px] font-bold text-slate-500">{isZh ? '中文名称' : 'Chinese name'}</span>
+                                    <input
+                                      type="text"
+                                      value={option.nameZh}
+                                      onChange={(e) => handleUpdateOption(optionIndex, { nameZh: e.target.value })}
+                                      className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                    />
+                                  </label>
+                                  <label className="space-y-1">
+                                    <span className="block text-[9px] font-bold text-slate-500">{isZh ? '英文名称' : 'English name'}</span>
+                                    <input
+                                      type="text"
+                                      value={option.nameEn}
+                                      onChange={(e) => handleUpdateOption(optionIndex, { nameEn: e.target.value })}
+                                      className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                    />
+                                  </label>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <span className="block text-[9px] font-bold text-slate-500">{isZh ? '选项值' : 'Option values'}</span>
+                                  {option.values.map((value, valueIndex) => (
+                                    <div key={value.id} className="flex items-center gap-2">
+                                      {option.kind === 'weight' ? (
+                                        <label className="flex flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2">
+                                          <span className="text-[10px] font-bold text-slate-500">kg</span>
+                                          <input
+                                            type="number"
+                                            min="0.1"
+                                            step="0.1"
+                                            value={value.weightKg ?? ''}
+                                            onChange={(e) => {
+                                              const weightKg = Number(e.target.value);
+                                              const label = weightKg > 0 ? `${weightKg.toFixed(1)} kg` : '';
+                                              handleUpdateOptionValue(optionIndex, valueIndex, { weightKg, nameZh: label, nameEn: label });
+                                            }}
+                                            className="w-full border-0 bg-transparent px-0 py-2 text-xs font-mono focus:ring-0"
+                                            aria-label={isZh ? `重量选项 ${valueIndex + 1}` : `Weight value ${valueIndex + 1}`}
+                                          />
+                                        </label>
+                                      ) : option.kind === 'cut' ? (
+                                        <select
+                                          value={value.cutType || 'cleaned'}
+                                          onChange={(e) => {
+                                            const cutType = e.target.value as ProductCutType;
+                                            handleUpdateOptionValue(optionIndex, valueIndex, {
+                                              cutType,
+                                              nameZh: getCutTypeLabel(cutType, 'zh'),
+                                              nameEn: getCutTypeLabel(cutType, 'en'),
+                                            });
+                                          }}
+                                          className="flex-1 text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                          aria-label={isZh ? `处理选项 ${valueIndex + 1}` : `Processing value ${valueIndex + 1}`}
+                                        >
+                                          {cutTypes.map(cutType => (
+                                            <option key={cutType} value={cutType}>{isZh ? getCutTypeLabel(cutType, 'zh') : getCutTypeLabel(cutType, 'en')}</option>
+                                          ))}
+                                        </select>
                                       ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-slate-300">
-                                          <ImageIcon className="w-7 h-7" />
+                                        <div className="grid flex-1 grid-cols-2 gap-2">
+                                          <input
+                                            type="text"
+                                            value={value.nameZh}
+                                            onChange={(e) => handleUpdateOptionValue(optionIndex, valueIndex, { nameZh: e.target.value })}
+                                            placeholder={isZh ? '中文选项值' : 'Chinese value'}
+                                            className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                          />
+                                          <input
+                                            type="text"
+                                            value={value.nameEn}
+                                            onChange={(e) => handleUpdateOptionValue(optionIndex, valueIndex, { nameEn: e.target.value })}
+                                            placeholder="English value"
+                                            className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                          />
                                         </div>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveOptionValue(optionIndex, valueIndex)}
+                                        disabled={option.values.length === 1}
+                                        className="h-9 w-9 shrink-0 rounded-lg border border-slate-200 text-slate-500 hover:border-rose-200 hover:text-rose-600 cursor-pointer disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed"
+                                        aria-label={isZh ? '删除选项值' : 'Delete option value'}
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5 mx-auto" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddOptionValue(optionIndex)}
+                                    className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 text-[10px] font-bold text-slate-600 hover:border-emerald-300 hover:text-emerald-700 cursor-pointer"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>{isZh ? '添加选项值' : 'Add value'}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {formOptions.length > 0 && (
+                          <div className="space-y-3 border-t border-slate-200 pt-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <h5 className="text-xs font-bold text-slate-900">
+                                  {isZh ? `自动生成规格（${formVariants.length}）` : `Generated variants (${formVariants.length})`}
+                                </h5>
+                                <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
+                                  {isZh ? '每个规格可覆盖产品基础单价、图片、SKU 和销售状态。' : 'Each variant can override the base price, image, SKU, and availability.'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              {formVariants.map((variant, index) => (
+                                <div key={variant.id} className="grid grid-cols-[56px_minmax(0,1fr)] gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[56px_minmax(150px,1fr)_minmax(110px,0.7fr)_minmax(120px,0.8fr)]">
+                                  <div>
+                                    <div className="h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                                      {variant.image ? (
+                                        <img src={resolveMediaUrl(variant.image)} alt={isZh ? variant.nameZh : variant.nameEn} className="h-full w-full object-cover" />
+                                      ) : (
+                                        <ImageIcon className="m-4 h-6 w-6 text-slate-300" />
                                       )}
                                     </div>
                                     <button
                                       type="button"
                                       onClick={() => setMediaPickerTarget({ kind: 'variant-image', index })}
-                                      className="mt-2 w-full inline-flex items-center justify-center px-2 py-1.5 rounded-md border border-slate-200 bg-slate-50 hover:border-sky-300 text-[10px] font-bold text-slate-600 cursor-pointer"
+                                      className="mt-1.5 w-14 rounded-md border border-slate-200 py-1 text-[9px] font-bold text-slate-600 hover:border-sky-300 cursor-pointer"
                                     >
-                                      {isZh ? '打开图库' : 'Open gallery'}
+                                      {isZh ? '图库' : 'Gallery'}
                                     </button>
                                   </div>
 
-                                  <div className="flex-1 min-w-0 space-y-2">
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <input
-                                        type="text"
-                                        value={variant.nameZh}
-                                        onChange={(e) => handleUpdateVariant(index, { nameZh: e.target.value })}
-                                        placeholder={isZh ? '中文规格名' : 'Chinese label'}
-                                        className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
-                                      />
-                                      <input
-                                        type="text"
-                                        value={variant.nameEn}
-                                        onChange={(e) => handleUpdateVariant(index, { nameEn: e.target.value })}
-                                        placeholder="Variant label"
-                                        className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
-                                      />
+                                  <div className="min-w-0 space-y-2">
+                                    <div>
+                                      <strong className="block truncate text-[11px] text-slate-900">{isZh ? variant.nameZh : variant.nameEn}</strong>
+                                      <span className="block truncate text-[9px] text-slate-400">{isZh ? variant.nameEn : variant.nameZh}</span>
                                     </div>
+                                    <input
+                                      type="text"
+                                      value={variant.sku || ''}
+                                      onChange={(e) => handleUpdateVariant(index, { sku: e.target.value })}
+                                      placeholder="SKU"
+                                      className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono"
+                                    />
+                                  </div>
 
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <input
-                                        type="number"
-                                        step="0.1"
-                                        value={variant.weightKg}
-                                        onChange={(e) => handleUpdateVariant(index, { weightKg: Number(e.target.value) })}
-                                        className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono"
-                                      />
-                                      <select
-                                        value={variant.cutType}
-                                        onChange={(e) => handleUpdateVariant(index, { cutType: e.target.value as ProductCutType })}
-                                        className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
-                                      >
-                                        <option value="cleaned">{isZh ? '活杀去内脏' : 'Cleaned'}</option>
-                                        <option value="whole">{isZh ? '完整整条' : 'Whole'}</option>
-                                        <option value="steak">{isZh ? '厚段轮切' : 'Steak'}</option>
-                                        <option value="sliced">{isZh ? '薄切鱼片' : 'Sliced'}</option>
-                                        <option value="fillet">{isZh ? '去骨鱼片' : 'Fillet'}</option>
-                                      </select>
-                                    </div>
+                                  <label className="space-y-1">
+                                    <span className="block text-[9px] font-bold text-slate-500">{isZh ? '每公斤价格' : 'Price per kg'}</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={variant.pricePerKg ?? ''}
+                                      onChange={(e) => handleUpdateVariant(index, { pricePerKg: e.target.value ? Number(e.target.value) : undefined })}
+                                      placeholder={`RM ${formPricePerKg}`}
+                                      className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg font-mono"
+                                    />
+                                    <span className="block text-[9px] text-slate-400">{isZh ? '留空继承基础价格' : 'Blank inherits base price'}</span>
+                                  </label>
 
-                                    <div className="flex gap-2">
+                                  <div className="space-y-2">
+                                    <label className="flex min-h-9 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-600">
+                                      <span>{isZh ? '可销售' : 'Available'}</span>
                                       <input
-                                        type="text"
-                                        value={variant.image}
-                                        onChange={(e) => handleUpdateVariant(index, { image: e.target.value })}
-                                        placeholder={isZh ? '或贴上规格图片 URL' : 'Or paste variant photo URL'}
-                                        className="flex-1 min-w-0 text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                        type="checkbox"
+                                        checked={variant.isAvailable !== false}
+                                        onChange={(e) => handleUpdateVariant(index, { isAvailable: e.target.checked })}
+                                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                                       />
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveVariant(index)}
-                                        className="px-2.5 rounded-lg border border-slate-200 text-slate-500 hover:text-rose-600 hover:border-rose-200 cursor-pointer"
-                                        aria-label={isZh ? '删除规格' : 'Remove variant'}
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={variant.image}
+                                      onChange={(e) => handleUpdateVariant(index, { image: e.target.value })}
+                                      placeholder={isZh ? '图片 URL' : 'Image URL'}
+                                      className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg"
+                                    />
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, ShieldCheck, ClipboardCheck, Info, Award, Upload, FileCheck2, Landmark } from 'lucide-react';
 import { AppliedDiscount, CartItem, Language, DeliveryDetails, User, OrderRecord, PaymentSlip } from '../types';
 import { getDiscountLabel } from '../lib/discounts';
+import { getCartItemOptionSummary, getCartItemPricePerKg } from '../lib/productOptions';
 
 interface CheckoutModalProps {
   cartItems: CartItem[];
@@ -569,7 +570,8 @@ export default function CheckoutModal({
               {/* Items loop */}
               <div className="space-y-3 max-h-[25vh] overflow-y-auto pr-1 py-3 border-b border-slate-200">
                 {cartItems.map((item, idx) => {
-                  const subTotal = item.product.pricePerKg * item.selectedWeightKg * item.quantity;
+                  const subTotal = getCartItemPricePerKg(item) * item.selectedWeightKg * item.quantity;
+                  const optionSummary = getCartItemOptionSummary(item, language);
                   return (
                     <div key={idx} className="flex justify-between text-xs text-slate-600">
                       <div>
@@ -577,7 +579,7 @@ export default function CheckoutModal({
                           {isZh ? item.product.nameZh : item.product.nameEn}
                         </span>
                         <span className="text-[10px] text-slate-500">
-                          {item.quantity}条 • {item.selectedWeightKg.toFixed(1)}kg • {getCutTypeLabel(item.cutType)}
+                          {item.quantity}条 • {optionSummary || `${item.selectedWeightKg.toFixed(1)}kg • ${getCutTypeLabel(item.cutType)}`}
                         </span>
                       </div>
                       <span className="font-mono text-slate-500">RM {subTotal.toFixed(0)}</span>

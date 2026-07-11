@@ -2,29 +2,38 @@ import { X, CheckCircle, Flame, Compass, Snowflake, Info, ShoppingCart } from 'l
 import { Product, Language } from '../types';
 import { useState } from 'react';
 import { resolveMediaUrl } from '../lib/media';
+import { getInitialVariantSelection, getProductConfiguration, getVariantForSelection, getVariantPricePerKg } from '../lib/productOptions';
 
 interface ProductDetailModalProps {
   product: Product;
   language: Language;
   onClose: () => void;
-  onAddToCart: (product: Product, quantity: number, weightKg: number, cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet') => void;
+  onAddToCart: (product: Product, quantity: number, weightKg: number, cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet', variantId?: string) => void;
   orderingPaused?: boolean;
 }
 
 export default function ProductDetailModal({ product, language, onClose, onAddToCart, orderingPaused = false }: ProductDetailModalProps) {
   const isZh = language === 'zh';
+  const configuration = getProductConfiguration(product);
+  const initialSelection = getInitialVariantSelection(configuration.options, configuration.variants);
 
   // Modal local settings
-  const [weightKg, setWeightKg] = useState(product.averageWeightKg);
-  const [cutType, setCutType] = useState<'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet'>('cleaned');
+  const [weightKg, setWeightKg] = useState(initialSelection.variant?.weightKg ?? product.averageWeightKg);
+  const [cutType, setCutType] = useState<'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet'>(initialSelection.variant?.cutType ?? 'cleaned');
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(initialSelection.variant?.id ?? null);
+  const [selectedValueIds, setSelectedValueIds] = useState<Record<string, string>>(initialSelection.selectedValueIds);
   const [quantity, setQuantity] = useState(1);
 
-  const calculatedTotalPrice = product.pricePerKg * weightKg * quantity;
+  const selectedVariant = configuration.variants.find(variant => variant.id === selectedVariantId);
+  const selectedPricePerKg = getVariantPricePerKg(product, selectedVariant?.id);
+  const calculatedTotalPrice = selectedPricePerKg * weightKg * quantity;
+  const hasVariants = configuration.options.length > 0 && configuration.variants.length > 0;
 
   const handleAdd = () => {
     if (orderingPaused) return;
 
-    onAddToCart(product, quantity, weightKg, cutType);
+    if (selectedVariant?.isAvailable === false) return;
+    onAddToCart(product, quantity, weightKg, cutType, selectedVariant?.id);
     onClose();
   };
 
@@ -50,7 +59,7 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
           {/* Left Column: Image with overlays */}
           <div className="relative md:col-span-5 aspect-[4/3] md:aspect-auto md:h-full min-h-[300px] bg-slate-100">
             <img
-              src={resolveMediaUrl(product.image)}
+              src={resolveMediaUrl(selectedVariant?.image || product.image)}
               alt={isZh ? product.nameZh : product.nameEn}
               className={`w-full h-full object-cover saturate-[0.9] ${orderingPaused ? 'grayscale opacity-70' : ''}`}
               referrerPolicy="no-referrer"
@@ -80,7 +89,7 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
                 {isZh ? product.nameZh : product.nameEn}
               </h2>
               <div className="flex items-baseline space-x-2">
-                <span className="text-2xl font-black text-amber-600 font-mono">RM {product.pricePerKg}</span>
+                <span className="text-2xl font-black text-amber-600 font-mono">RM {selectedPricePerKg}</span>
                 <span className="text-sm text-slate-500">/ kg</span>
               </div>
             </div>
@@ -138,57 +147,64 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
                     : 'Product update in progress. Selection and cart are temporarily paused.'}
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Weight selector */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 block uppercase tracking-wide">
-                    {isZh ? '单条估重' : 'Single Fish Weight'}
-                  </label>
-                  <select
-                    value={weightKg}
-                    onChange={(e) => setWeightKg(parseFloat(e.target.value))}
-                    disabled={orderingPaused}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-mono text-slate-850 text-xs focus:outline-none focus:border-sky-500 cursor-pointer focus:ring-1 focus:ring-sky-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                  >
-                    <option value={product.averageWeightKg * 0.8}>
-                      {(product.averageWeightKg * 0.8).toFixed(1)} kg ({isZh ? '小' : 'Small'})
-                    </option>
-                    <option value={product.averageWeightKg}>
-                      {product.averageWeightKg.toFixed(1)} kg ({isZh ? '标准' : 'Standard'})
-                    </option>
-                    <option value={product.averageWeightKg * 1.3}>
-                      {(product.averageWeightKg * 1.3).toFixed(1)} kg ({isZh ? '肥美大条' : 'Large'})
-                    </option>
-                    <option value={product.averageWeightKg * 1.6}>
-                      {(product.averageWeightKg * 1.6).toFixed(1)} kg ({isZh ? '极品特大' : 'Extra Large'})
-                    </option>
-                    <option value="whatsapp-custom-weight" disabled>
-                      {isZh ? '其他规格请 WhatsApp 客服' : 'Other size? Contact WhatsApp'}
-                    </option>
-                  </select>
+              {hasVariants ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {configuration.options.map(option => (
+                    <div key={option.id} className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 block uppercase tracking-wide">
+                        {isZh ? option.nameZh : option.nameEn}
+                      </label>
+                      <select
+                        value={selectedValueIds[option.id] || ''}
+                        onChange={(event) => {
+                          const nextSelectedValueIds = { ...selectedValueIds, [option.id]: event.target.value };
+                          const variant = getVariantForSelection(configuration.variants, nextSelectedValueIds, configuration.options);
+                          setSelectedValueIds(nextSelectedValueIds);
+                          setSelectedVariantId(variant?.id ?? null);
+                          if (variant) {
+                            setWeightKg(variant.weightKg);
+                            setCutType(variant.cutType);
+                          }
+                        }}
+                        disabled={orderingPaused}
+                        className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-slate-850 text-xs focus:outline-none focus:border-sky-500 cursor-pointer focus:ring-1 focus:ring-sky-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                      >
+                        {option.values.map(value => {
+                          const candidateSelection = { ...selectedValueIds, [option.id]: value.id };
+                          const candidateVariant = getVariantForSelection(configuration.variants, candidateSelection, configuration.options);
+                          return (
+                            <option key={value.id} value={value.id} disabled={!candidateVariant || candidateVariant.isAvailable === false}>
+                              {isZh ? value.nameZh : value.nameEn}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  ))}
                 </div>
-
-                {/* Cut Type */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 block uppercase tracking-wide">
-                    {isZh ? '清洗及刀工' : 'Processing Style'}
-                  </label>
-                  <select
-                    value={cutType}
-                    onChange={(e) => setCutType(e.target.value as any)}
-                    disabled={orderingPaused}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-slate-850 text-xs focus:outline-none focus:border-sky-500 cursor-pointer focus:ring-1 focus:ring-sky-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                  >
-                    <option value="cleaned">{isZh ? '活杀去鳃去肚 (Cleaned)' : 'Gutted & Scaled'}</option>
-                    <option value="whole">{isZh ? '完整整条 (Whole Fish)' : 'Whole intact'}</option>
-                    <option value="steak">{isZh ? '切大厚片 (Steak Cut)' : 'Thick Steaks'}</option>
-                    <option value="fillet">{isZh ? '无刺纯鱼片 (Fillet Cut)' : 'Boneless Fillet'}</option>
-                    <option value="whatsapp-custom-cut" disabled>
-                      {isZh ? '特殊处理请 WhatsApp 客服' : 'Custom cut? Contact WhatsApp'}
-                    </option>
-                  </select>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 block uppercase tracking-wide">{isZh ? '单条估重' : 'Single Fish Weight'}</label>
+                    <select value={weightKg} onChange={(e) => setWeightKg(parseFloat(e.target.value))} disabled={orderingPaused} className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-mono text-slate-850 text-xs focus:outline-none focus:border-sky-500 cursor-pointer focus:ring-1 focus:ring-sky-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+                      <option value={product.averageWeightKg * 0.8}>{(product.averageWeightKg * 0.8).toFixed(1)} kg ({isZh ? '小' : 'Small'})</option>
+                      <option value={product.averageWeightKg}>{product.averageWeightKg.toFixed(1)} kg ({isZh ? '标准' : 'Standard'})</option>
+                      <option value={product.averageWeightKg * 1.3}>{(product.averageWeightKg * 1.3).toFixed(1)} kg ({isZh ? '肥美大条' : 'Large'})</option>
+                      <option value={product.averageWeightKg * 1.6}>{(product.averageWeightKg * 1.6).toFixed(1)} kg ({isZh ? '极品特大' : 'Extra Large'})</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 block uppercase tracking-wide">{isZh ? '清洗及刀工' : 'Processing Style'}</label>
+                    <select value={cutType} onChange={(e) => setCutType(e.target.value as any)} disabled={orderingPaused} className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-slate-850 text-xs focus:outline-none focus:border-sky-500 cursor-pointer focus:ring-1 focus:ring-sky-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+                      <option value="cleaned">{isZh ? '活杀去鳃去肚 (Cleaned)' : 'Gutted & Scaled'}</option>
+                      <option value="whole">{isZh ? '完整整条 (Whole Fish)' : 'Whole intact'}</option>
+                      <option value="steak">{isZh ? '切大厚片 (Steak Cut)' : 'Thick Steaks'}</option>
+                      <option value="sliced">{isZh ? '薄切鱼片 (Sliced)' : 'Thin Slices'}</option>
+                      <option value="fillet">{isZh ? '无刺纯鱼片 (Fillet Cut)' : 'Boneless Fillet'}</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Quantity counter */}
               <div className="flex items-center justify-between">
@@ -237,16 +253,16 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
               </button>
               <button
                 onClick={handleAdd}
-                disabled={orderingPaused}
+                disabled={orderingPaused || selectedVariant?.isAvailable === false}
                 className={`w-2/3 flex items-center justify-center space-x-2 py-3 rounded-xl font-bold text-xs md:text-sm transition-all shadow-xs ${
-                  orderingPaused
+                  orderingPaused || selectedVariant?.isAvailable === false
                     ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                     : 'bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white cursor-pointer shadow-lg active:scale-95'
                 }`}
               >
                 <ShoppingCart className="w-4 h-4" />
-                <span>{orderingPaused ? (isZh ? '维护中暂不可下单' : 'Ordering Paused') : (isZh ? '加入购物车' : 'Add To Cart')}</span>
-                {!orderingPaused && (
+                <span>{orderingPaused ? (isZh ? '维护中暂不可下单' : 'Ordering Paused') : selectedVariant?.isAvailable === false ? (isZh ? '此规格暂不可售' : 'Variant unavailable') : (isZh ? '加入购物车' : 'Add To Cart')}</span>
+                {!orderingPaused && selectedVariant?.isAvailable !== false && (
                   <span className="font-mono bg-sky-950/20 px-2 py-0.5 rounded text-[10px] ml-1">
                     RM {calculatedTotalPrice.toFixed(0)}
                   </span>

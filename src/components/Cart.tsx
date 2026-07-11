@@ -2,6 +2,8 @@ import { X, Trash2, ShoppingBag, Plus, Minus, Truck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { CartItem, Language, StoreDiscount } from '../types';
 import { calculateDiscounts, getDiscountLabel } from '../lib/discounts';
+import { getCartItemOptionSummary, getCartItemPricePerKg, getCartItemVariant } from '../lib/productOptions';
+import { resolveMediaUrl } from '../lib/media';
 
 interface CartProps {
   cartItems: CartItem[];
@@ -40,7 +42,7 @@ export default function Cart({
 
   // Calculations
   const subtotal = cartItems.reduce((acc, item) => {
-    return acc + item.product.pricePerKg * item.selectedWeightKg * item.quantity;
+    return acc + getCartItemPricePerKg(item) * item.selectedWeightKg * item.quantity;
   }, 0);
 
   const isFreeShipping = subtotal >= freeShippingThreshold;
@@ -190,8 +192,10 @@ export default function Cart({
               {/* Cart Items List */}
               <div className="space-y-3">
                 {cartItems.map((item, index) => {
-                  const itemPrice = item.product.pricePerKg * item.selectedWeightKg;
+                  const itemPrice = getCartItemPricePerKg(item) * item.selectedWeightKg;
                   const itemTotal = itemPrice * item.quantity;
+                  const variant = getCartItemVariant(item);
+                  const optionSummary = getCartItemOptionSummary(item, language);
 
                   return (
                     <div
@@ -200,7 +204,7 @@ export default function Cart({
                     >
                       {/* Image */}
                       <img
-                        src={item.product.image}
+                        src={resolveMediaUrl(variant?.image || item.product.image)}
                         alt={isZh ? item.product.nameZh : item.product.nameEn}
                         className="w-16 h-16 object-cover rounded-lg flex-shrink-0 bg-white border border-slate-150"
                         referrerPolicy="no-referrer"
@@ -223,7 +227,7 @@ export default function Cart({
                           
                           {/* Sizing description */}
                           <p className="text-[10px] text-slate-500 mt-0.5">
-                            {item.selectedWeightKg.toFixed(1)}kg • {getCutTypeLabel(item.cutType)}
+                            {optionSummary || `${item.selectedWeightKg.toFixed(1)}kg • ${getCutTypeLabel(item.cutType)}`}
                           </p>
                         </div>
 

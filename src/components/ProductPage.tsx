@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, ArrowLeft, CheckCircle, Compass, Flame, MessageCircle, Package, ShoppingCart, Snowflake, Truck } from 'lucide-react';
 import { Language, Product, ProductCutType, ProductMedia } from '../types';
 import { resolveMediaUrl } from '../lib/media';
+import { getInitialVariantSelection, getProductConfiguration, getVariantForSelection, getVariantPricePerKg } from '../lib/productOptions';
 
 type CutType = ProductCutType;
 const CUSTOM_VARIANT_INQUIRY_ID = 'whatsapp-custom-option';
@@ -12,7 +13,7 @@ interface ProductPageProps {
   relatedProducts: Product[];
   onBackToShop: () => void;
   onProductSelect: (product: Product) => void;
-  onAddToCart: (product: Product, quantity: number, weightKg: number, cutType: CutType) => void;
+  onAddToCart: (product: Product, quantity: number, weightKg: number, cutType: CutType, variantId?: string) => void;
   orderingPaused?: boolean;
 }
 
@@ -31,16 +32,20 @@ export default function ProductPage({
   const [quantity, setQuantity] = useState(1);
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [selectedValueIds, setSelectedValueIds] = useState<Record<string, string>>({});
   const [isMediaOverrideActive, setIsMediaOverrideActive] = useState(false);
 
   useEffect(() => {
     if (!product) return;
-    const firstVariant = product.variants?.[0];
+    const configuration = getProductConfiguration(product);
+    const initialSelection = getInitialVariantSelection(configuration.options, configuration.variants);
+    const firstVariant = initialSelection.variant;
     setWeightKg(firstVariant?.weightKg ?? product.averageWeightKg);
     setCutType(firstVariant?.cutType ?? 'cleaned');
     setQuantity(1);
     setSelectedMediaId(product.media?.[0]?.id ?? null);
     setSelectedVariantId(firstVariant?.id ?? null);
+    setSelectedValueIds(initialSelection.selectedValueIds);
     setIsMediaOverrideActive(false);
   }, [product]);
 
@@ -72,15 +77,17 @@ export default function ProductPage({
   const tastingNotes = isZh ? product.tastingNotesZh : product.tastingNotesEn;
   const cookingSuggestions = isZh ? product.cookingSuggestionsZh : product.cookingSuggestionsEn;
   const features = isZh ? product.featuresZh : product.featuresEn;
-  const calculatedTotalPrice = product.pricePerKg * weightKg * quantity;
+  const configuration = getProductConfiguration(product);
+  const selectedVariant = configuration.variants.find((variant) => variant.id === selectedVariantId);
+  const selectedPricePerKg = getVariantPricePerKg(product, selectedVariant?.id);
+  const calculatedTotalPrice = selectedPricePerKg * weightKg * quantity;
   const mediaItems: ProductMedia[] = product.media?.length
     ? product.media
     : product.image
       ? [{ id: 'cover', url: product.image, type: 'image', name: 'Cover image' }]
       : [];
   const selectedMedia = mediaItems.find((media) => media.id === selectedMediaId) || mediaItems[0];
-  const hasVariants = Boolean(product.variants?.length);
-  const selectedVariant = product.variants?.find((variant) => variant.id === selectedVariantId);
+  const hasVariants = configuration.options.length > 0 && configuration.variants.length > 0;
   const isCustomVariantInquiry = selectedVariantId === CUSTOM_VARIANT_INQUIRY_ID;
   const selectedVariantMedia = selectedVariant?.image
     ? { url: selectedVariant.image, type: 'image' as const }
@@ -110,7 +117,7 @@ export default function ProductPage({
   const selectedVariantName = selectedVariant
     ? (isZh ? selectedVariant.nameZh : selectedVariant.nameEn)
     : '';
-  const canAddToCart = !orderingPaused && !isCustomVariantInquiry && (!hasVariants || Boolean(selectedVariant));
+  const canAddToCart = !orderingPaused && !isCustomVariantInquiry && (!hasVariants || (Boolean(selectedVariant) && selectedVariant?.isAvailable !== false));
   const whatsappText = encodeURIComponent(
     isCustomVariantInquiry
       ? (isZh
@@ -208,7 +215,7 @@ export default function ProductPage({
                     {isZh ? '每公斤价格' : 'Price per kg'}
                   </p>
                   <p className="mt-0.5 text-2xl font-black text-amber-600 font-mono">
-                    RM {product.pricePerKg}
+                    RM {selectedPricePerKg}
                   </p>
                 </div>
                 <span className="px-2.5 py-1 rounded-full bg-[#edf5f4] border border-[#c4d5d9] text-[11px] font-bold text-[#17323d]">
@@ -217,54 +224,59 @@ export default function ProductPage({
               </div>
 
               <div className="mt-4 space-y-3">
-                {product.variants && product.variants.length > 0 && (
-                  <div>
-                    <span className="block text-[11px] font-bold text-[#536c74] mb-1.5">
-                      {isZh ? '选择规格' : 'Choose variant'}
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {product.variants.map((variant) => {
-                        const isActive = variant.id === selectedVariantId;
-                        return (
-                          <button
-                            key={variant.id}
-                            type="button"
-                            title={isZh ? variant.nameZh : variant.nameEn}
-                            onClick={() => {
-                              if (orderingPaused) return;
-                              setSelectedVariantId(variant.id);
-                              setWeightKg(variant.weightKg);
-                              setCutType(variant.cutType);
-                              setIsMediaOverrideActive(false);
+                {hasVariants && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {configuration.options.map(option => (
+                        <label key={option.id} className="block">
+                          <span className="block text-[11px] font-bold text-[#536c74] mb-1.5">
+                            {isZh ? option.nameZh : option.nameEn}
+                          </span>
+                          <select
+                            value={selectedValueIds[option.id] || ''}
+                            onChange={(event) => {
+                              const nextSelectedValueIds = { ...selectedValueIds, [option.id]: event.target.value };
+                              const variant = getVariantForSelection(configuration.variants, nextSelectedValueIds, configuration.options);
+                              setSelectedValueIds(nextSelectedValueIds);
+                              setSelectedVariantId(variant?.id ?? null);
+                              if (variant) {
+                                setWeightKg(variant.weightKg);
+                                setCutType(variant.cutType);
+                                setIsMediaOverrideActive(false);
+                              }
                             }}
                             disabled={orderingPaused}
-                            className={`inline-flex min-h-9 items-center justify-center rounded-full border px-3 py-1.5 text-xs font-extrabold transition-all cursor-pointer ${
-                              orderingPaused
-                                ? 'border-slate-200 bg-slate-100 opacity-70 cursor-not-allowed'
-                                : isActive ? 'border-sky-500 bg-sky-50 shadow-sm' : 'border-[#c4d5d9] bg-[#edf5f4] hover:border-sky-300'
-                            }`}
+                            className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-xl px-3 py-2.5 text-xs font-semibold text-[#17323d] focus:outline-none focus:border-sky-600 focus:ring-1 focus:ring-sky-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                           >
-                            {variant.weightKg.toFixed(1)}kg
-                          </button>
-                        );
-                      })}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (orderingPaused) return;
-                          setSelectedVariantId(CUSTOM_VARIANT_INQUIRY_ID);
-                        }}
-                        disabled={orderingPaused}
-                        className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-extrabold transition-all cursor-pointer ${
-                          orderingPaused
-                            ? 'border-slate-200 bg-slate-100 opacity-70 cursor-not-allowed'
-                            : isCustomVariantInquiry ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-[#c4d5d9] bg-[#edf5f4] hover:border-emerald-300'
-                        }`}
-                      >
-                        <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{isZh ? 'WhatsApp' : 'Contact WhatsApp'}</span>
-                      </button>
+                            {option.values.map(value => {
+                              const candidateSelection = { ...selectedValueIds, [option.id]: value.id };
+                              const candidateVariant = getVariantForSelection(configuration.variants, candidateSelection, configuration.options);
+                              return (
+                                <option key={value.id} value={value.id} disabled={!candidateVariant || candidateVariant.isAvailable === false}>
+                                  {isZh ? value.nameZh : value.nameEn}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </label>
+                      ))}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (orderingPaused) return;
+                        setSelectedVariantId(CUSTOM_VARIANT_INQUIRY_ID);
+                      }}
+                      disabled={orderingPaused}
+                      className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-extrabold transition-all cursor-pointer ${
+                        orderingPaused
+                          ? 'border-slate-200 bg-slate-100 opacity-70 cursor-not-allowed'
+                          : isCustomVariantInquiry ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-[#c4d5d9] bg-[#edf5f4] hover:border-emerald-300'
+                      }`}
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{isZh ? '其他规格请联系 WhatsApp' : 'Ask about another option'}</span>
+                    </button>
                   </div>
                 )}
 
@@ -392,7 +404,7 @@ export default function ProductPage({
                 <button
                   onClick={() => {
                     if (canAddToCart) {
-                      onAddToCart(product, quantity, weightKg, cutType);
+                      onAddToCart(product, quantity, weightKg, cutType, selectedVariant?.id);
                     }
                   }}
                   disabled={!canAddToCart}
@@ -408,6 +420,8 @@ export default function ProductPage({
                       ? (isZh ? '维护中暂不可下单' : 'Ordering Paused')
                       : isCustomVariantInquiry
                         ? (isZh ? '请用 WhatsApp 询问' : 'Use WhatsApp to ask')
+                        : selectedVariant?.isAvailable === false
+                          ? (isZh ? '此规格暂不可售' : 'Variant unavailable')
                         : (isZh ? '加入购物车' : 'Add to Cart')}
                   </span>
                 </button>

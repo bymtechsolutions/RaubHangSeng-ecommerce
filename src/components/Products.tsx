@@ -4,6 +4,7 @@ import { CollectionDisplay, Product, Language, ProductCategory } from '../types'
 import { PRODUCTS } from '../data/products';
 import { DEFAULT_COLLECTIONS } from '../data/collections';
 import { resolveMediaUrl } from '../lib/media';
+import { getInitialVariantSelection, getProductConfiguration, getVariantForSelection, getVariantPricePerKg } from '../lib/productOptions';
 
 interface ProductsProps {
   language: Language;
@@ -11,7 +12,7 @@ interface ProductsProps {
   collections?: CollectionDisplay[];
   initialCategory?: CategoryFilter;
   onProductClick: (product: Product) => void;
-  onAddToCart: (product: Product, quantity: number, weightKg: number, cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet') => void;
+  onAddToCart: (product: Product, quantity: number, weightKg: number, cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet', variantId?: string) => void;
   orderingPaused?: boolean;
 }
 
@@ -26,6 +27,7 @@ export default function Products({ language, products = PRODUCTS, collections = 
   // Local states to track selected weight & cut types for each card before adding to cart
   const [cardSelections, setCardSelections] = useState<Record<string, {
     selectedVariantId: string | null;
+    selectedValueIds: Record<string, string>;
     weightKg: number;
     cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet';
     quantity: number;
@@ -80,10 +82,13 @@ export default function Products({ language, products = PRODUCTS, collections = 
 
   // Initialize selection settings for a product card if not set yet
   const getCardSelection = (product: Product) => {
-    const firstVariant = product.variants?.[0];
+    const configuration = getProductConfiguration(product);
+    const initialSelection = getInitialVariantSelection(configuration.options, configuration.variants);
+    const firstVariant = initialSelection.variant;
 
     return cardSelections[product.id] || {
       selectedVariantId: firstVariant?.id ?? null,
+      selectedValueIds: initialSelection.selectedValueIds,
       weightKg: firstVariant?.weightKg ?? product.averageWeightKg,
       cutType: firstVariant?.cutType ?? 'cleaned',
       quantity: 1,
@@ -274,12 +279,15 @@ export default function Products({ language, products = PRODUCTS, collections = 
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
             {filteredProducts.map((product) => {
+              const configuration = getProductConfiguration(product);
               const selection = getCardSelection(product);
-              const hasVariants = Boolean(product.variants?.length);
-              const selectedVariant = product.variants?.find(variant => variant.id === selection.selectedVariantId)
-                || product.variants?.[0];
+              const hasVariants = configuration.options.length > 0 && configuration.variants.length > 0;
+              const selectedVariant = configuration.variants.find(variant => variant.id === selection.selectedVariantId)
+                || configuration.variants[0];
               const status = getStockStatusLabel(product.stockStatus);
-              const calculatedTotalPrice = product.pricePerKg * selection.weightKg * selection.quantity;
+              const selectedPricePerKg = getVariantPricePerKg(product, selectedVariant?.id);
+              const calculatedTotalPrice = selectedPricePerKg * selection.weightKg * selection.quantity;
+              const variantUnavailable = hasVariants && selectedVariant?.isAvailable === false;
 
               return (
                 <div
@@ -378,79 +386,83 @@ export default function Products({ language, products = PRODUCTS, collections = 
                       ))}
                     </div>
 
-                    {/* Purchase Sizing Controls */}
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      {/* Weight Selector */}
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] text-slate-500 font-semibold block uppercase tracking-wide">
-                          {hasVariants ? (isZh ? '选择规格' : 'Choose Variant') : (isZh ? '估重(条)' : 'Weight / Fish')}
-                        </label>
-                        <select
-                          value={hasVariants ? selectedVariant?.id : selection.weightKg}
-                          onChange={(e) => {
-                            if (hasVariants) {
-                              const variant = product.variants?.find(item => item.id === e.target.value);
-                              if (variant) {
+                    {/* Product Options / Legacy Sizing Controls */}
+                    {hasVariants ? (
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        {configuration.options.map(option => (
+                          <div key={option.id} className="space-y-1.5">
+                            <label className="text-[11px] text-slate-500 font-semibold block uppercase tracking-wide">
+                              {isZh ? option.nameZh : option.nameEn}
+                            </label>
+                            <select
+                              value={selection.selectedValueIds[option.id] || ''}
+                              onChange={(e) => {
+                                const selectedValueIds = { ...selection.selectedValueIds, [option.id]: e.target.value };
+                                const variant = getVariantForSelection(configuration.variants, selectedValueIds, configuration.options);
+                                if (!variant) return;
                                 updateCardSelection(product.id, {
+                                  selectedValueIds,
                                   selectedVariantId: variant.id,
                                   weightKg: variant.weightKg,
                                   cutType: variant.cutType,
                                 });
-                              }
-                              return;
-                            }
-
-                            updateCardSelection(product.id, { weightKg: parseFloat(e.target.value) });
-                          }}
-                          disabled={orderingPaused}
-                          className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-lg px-2 py-1.5 font-mono text-slate-700 focus:outline-none focus:border-sky-500 text-xs cursor-pointer"
-                        >
-                          {hasVariants ? product.variants?.map(variant => (
-                            <option key={variant.id} value={variant.id}>
-                              {isZh ? variant.nameZh : variant.nameEn} ({variant.weightKg.toFixed(1)} kg)
-                            </option>
-                          )) : <>
-                          <option value={product.averageWeightKg * 0.8}>
-                            {(product.averageWeightKg * 0.8).toFixed(1)} kg ({isZh ? '小' : 'Small'})
-                          </option>
-                          <option value={product.averageWeightKg}>
-                            {product.averageWeightKg.toFixed(1)} kg ({isZh ? '标准' : 'Standard'})
-                          </option>
-                          <option value={product.averageWeightKg * 1.3}>
-                            {(product.averageWeightKg * 1.3).toFixed(1)} kg ({isZh ? '肥大' : 'Large'})
-                          </option>
-                          <option value={product.averageWeightKg * 1.6}>
-                            {(product.averageWeightKg * 1.6).toFixed(1)} kg ({isZh ? '极品特大' : 'Extra Large'})
-                          </option>
-                          <option value="whatsapp-custom-weight" disabled>
-                            {isZh ? '其他规格请 WhatsApp 客服' : 'Other size? Contact WhatsApp'}
-                          </option>
-                          </>}
-                        </select>
+                              }}
+                              disabled={orderingPaused}
+                              className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-lg px-2 py-1.5 text-slate-700 focus:outline-none focus:border-sky-500 text-xs cursor-pointer"
+                            >
+                              {option.values.map(value => {
+                                const candidateSelection = { ...selection.selectedValueIds, [option.id]: value.id };
+                                const candidateVariant = getVariantForSelection(configuration.variants, candidateSelection, configuration.options);
+                                return (
+                                  <option key={value.id} value={value.id} disabled={!candidateVariant || candidateVariant.isAvailable === false}>
+                                    {isZh ? value.nameZh : value.nameEn}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+                        ))}
                       </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-slate-500 font-semibold block uppercase tracking-wide">
+                            {isZh ? '估重(条)' : 'Weight / Fish'}
+                          </label>
+                          <select
+                            value={selection.weightKg}
+                            onChange={(e) => updateCardSelection(product.id, { weightKg: parseFloat(e.target.value) })}
+                            disabled={orderingPaused}
+                            className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-lg px-2 py-1.5 font-mono text-slate-700 focus:outline-none focus:border-sky-500 text-xs cursor-pointer"
+                          >
+                            <option value={product.averageWeightKg * 0.8}>{(product.averageWeightKg * 0.8).toFixed(1)} kg ({isZh ? '小' : 'Small'})</option>
+                            <option value={product.averageWeightKg}>{product.averageWeightKg.toFixed(1)} kg ({isZh ? '标准' : 'Standard'})</option>
+                            <option value={product.averageWeightKg * 1.3}>{(product.averageWeightKg * 1.3).toFixed(1)} kg ({isZh ? '肥大' : 'Large'})</option>
+                            <option value={product.averageWeightKg * 1.6}>{(product.averageWeightKg * 1.6).toFixed(1)} kg ({isZh ? '极品特大' : 'Extra Large'})</option>
+                            <option value="whatsapp-custom-weight" disabled>{isZh ? '其他规格请 WhatsApp 客服' : 'Other size? Contact WhatsApp'}</option>
+                          </select>
+                        </div>
 
-                      {/* Cut Preference */}
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] text-slate-500 font-semibold block uppercase tracking-wide">
-                          {isZh ? '屠宰处理' : 'Cutting Choice'}
-                        </label>
-                        <select
-                          value={selection.cutType}
-                          onChange={(e) => updateCardSelection(product.id, { cutType: e.target.value as any })}
-                          disabled={orderingPaused || hasVariants}
-                          className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-lg px-2 py-1.5 text-slate-700 focus:outline-none focus:border-sky-500 text-xs cursor-pointer disabled:cursor-not-allowed disabled:text-slate-500"
-                        >
-                          <option value="cleaned">{isZh ? '活杀去内脏 (Cleaned)' : 'Cleaned & Gutted'}</option>
-                          <option value="whole">{isZh ? '完整整条 (Whole)' : 'Whole intact'}</option>
-                          <option value="steak">{isZh ? '切厚段/轮切 (Steak Cuts)' : 'Thick Steaks'}</option>
-                          <option value="sliced">{isZh ? '薄切鱼片 (Sliced)' : 'Thin Slices'}</option>
-                          <option value="fillet">{isZh ? '纯去骨片 (Fillet Cuts)' : 'Boneless Fillets'}</option>
-                          <option value="whatsapp-custom-cut" disabled>
-                            {isZh ? '特殊处理请 WhatsApp 客服' : 'Custom cut? Contact WhatsApp'}
-                          </option>
-                        </select>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-slate-500 font-semibold block uppercase tracking-wide">
+                            {isZh ? '屠宰处理' : 'Cutting Choice'}
+                          </label>
+                          <select
+                            value={selection.cutType}
+                            onChange={(e) => updateCardSelection(product.id, { cutType: e.target.value as any })}
+                            disabled={orderingPaused}
+                            className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-lg px-2 py-1.5 text-slate-700 focus:outline-none focus:border-sky-500 text-xs cursor-pointer"
+                          >
+                            <option value="cleaned">{isZh ? '活杀去内脏 (Cleaned)' : 'Cleaned & Gutted'}</option>
+                            <option value="whole">{isZh ? '完整整条 (Whole)' : 'Whole intact'}</option>
+                            <option value="steak">{isZh ? '切厚段/轮切 (Steak Cuts)' : 'Thick Steaks'}</option>
+                            <option value="sliced">{isZh ? '薄切鱼片 (Sliced)' : 'Thin Slices'}</option>
+                            <option value="fillet">{isZh ? '纯去骨片 (Fillet Cuts)' : 'Boneless Fillets'}</option>
+                            <option value="whatsapp-custom-cut" disabled>{isZh ? '特殊处理请 WhatsApp 客服' : 'Custom cut? Contact WhatsApp'}</option>
+                          </select>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Quantity Selector and Pricing */}
                     <div className="flex items-center justify-between pt-1">
@@ -459,7 +471,7 @@ export default function Products({ language, products = PRODUCTS, collections = 
                           {isZh ? '产地底价' : 'Unit Price'}
                         </span>
                         <div className="flex items-baseline space-x-1">
-                          <span className="text-xl font-black text-amber-600 font-mono">RM {product.pricePerKg}</span>
+                          <span className="text-xl font-black text-amber-600 font-mono">RM {selectedPricePerKg}</span>
                           <span className="text-xs text-slate-400">/ kg</span>
                         </div>
                       </div>
@@ -505,17 +517,17 @@ export default function Products({ language, products = PRODUCTS, collections = 
 
                       {/* Add to Cart Button */}
                       <button
-                        onClick={() => product.stockStatus === ('out_of_stock' as any) || orderingPaused ? null : onAddToCart(product, selection.quantity, selection.weightKg, selection.cutType)}
-                        disabled={product.stockStatus === ('out_of_stock' as any) || orderingPaused}
+                        onClick={() => product.stockStatus === ('out_of_stock' as any) || orderingPaused || variantUnavailable ? null : onAddToCart(product, selection.quantity, selection.weightKg, selection.cutType, selectedVariant?.id)}
+                        disabled={product.stockStatus === ('out_of_stock' as any) || orderingPaused || variantUnavailable}
                         className={`col-span-3 flex items-center justify-center space-x-1.5 md:space-x-2 px-3 py-2.5 rounded-xl transition-all whitespace-nowrap font-bold text-xs md:text-sm ${
-                          product.stockStatus === ('out_of_stock' as any) || orderingPaused
+                          product.stockStatus === ('out_of_stock' as any) || orderingPaused || variantUnavailable
                             ? 'bg-slate-300 text-slate-500 cursor-not-allowed border border-slate-200 shadow-none scale-100'
                             : 'bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white cursor-pointer shadow-md active:scale-95'
                         }`}
                       >
                         {orderingPaused ? (
                           <span>{isZh ? '更新中' : 'Updating'}</span>
-                        ) : product.stockStatus === ('out_of_stock' as any) ? (
+                        ) : product.stockStatus === ('out_of_stock' as any) || variantUnavailable ? (
                           <span>{isZh ? '暂时售罄' : 'Sold Out'}</span>
                         ) : (
                           <>

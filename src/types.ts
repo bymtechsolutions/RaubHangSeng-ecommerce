@@ -25,13 +25,35 @@ export interface ProductMedia {
   uploadedAt?: string;
 }
 
+export type ProductOptionKind = 'weight' | 'cut' | 'custom';
+
+export interface ProductOptionValue {
+  id: string;
+  nameZh: string;
+  nameEn: string;
+  weightKg?: number;
+  cutType?: ProductCutType;
+}
+
+export interface ProductOption {
+  id: string;
+  nameZh: string;
+  nameEn: string;
+  kind: ProductOptionKind;
+  values: ProductOptionValue[];
+}
+
 export interface ProductVariant {
   id: string;
   nameZh: string;
   nameEn: string;
+  optionValueIds?: string[];
   weightKg: number;
   cutType: ProductCutType;
   image: string;
+  pricePerKg?: number;
+  sku?: string;
+  isAvailable?: boolean;
 }
 
 export interface Product {
@@ -46,6 +68,7 @@ export interface Product {
   averageWeightKg: number; // typical weight per fish
   image: string;
   media?: ProductMedia[];
+  options?: ProductOption[];
   variants?: ProductVariant[];
   tastingNotesZh: string;
   tastingNotesEn: string;
@@ -62,6 +85,7 @@ export interface CartItem {
   quantity: number;
   selectedWeightKg: number;
   cutType: ProductCutType;
+  variantId?: string;
 }
 
 export type StoreDiscountScope = 'order' | 'shipping';
