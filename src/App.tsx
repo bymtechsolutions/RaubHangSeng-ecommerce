@@ -995,6 +995,7 @@ export default function App() {
             cartItems={cartItems}
             language={language}
             onClose={() => setIsCartOpen(false)}
+            onShopNow={scrollToProducts}
             onUpdateQuantity={handleUpdateQuantity}
             onRemoveItem={handleRemoveItem}
             onClearCart={handleClearCart}

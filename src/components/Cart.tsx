@@ -9,6 +9,7 @@ interface CartProps {
   cartItems: CartItem[];
   language: Language;
   onClose: () => void;
+  onShopNow: () => void;
   onUpdateQuantity: (index: number, quantity: number) => void;
   onRemoveItem: (index: number) => void;
   onClearCart: () => void;
@@ -26,6 +27,7 @@ export default function Cart({
   cartItems,
   language,
   onClose,
+  onShopNow,
   onUpdateQuantity,
   onRemoveItem,
   onClearCart,
@@ -141,7 +143,7 @@ export default function Cart({
                   : 'Browse our selected fresh-frozen river fishes and pick a delicious cut for your table!'}
               </p>
               <button
-                onClick={onClose}
+                onClick={onShopNow}
                 className="px-6 py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold text-sm rounded-lg transition-colors cursor-pointer"
               >
                 {isZh ? '立即逛逛' : 'Shop Now'}
