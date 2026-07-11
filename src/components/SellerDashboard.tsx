@@ -38,8 +38,6 @@ import { uploadStorefrontMedia } from '../lib/api';
 import { resolveMediaUrl } from '../lib/media';
 import { getCartItemOptionSummary, getCartItemPricePerKg, getCutTypeLabel, getProductConfiguration, syncVariantsWithOptions } from '../lib/productOptions';
 
-const logoMarkImage = new URL('../../assets/raub-hang-seng-logo-mark.jpg', import.meta.url).href;
-
 interface SellerDashboardProps {
   language: Language;
   onClose: () => void;
@@ -1293,15 +1291,10 @@ export default function SellerDashboard({
         
         {/* DASHBOARD HEADER */}
         <div className="rhs-admin-topbar bg-slate-900 text-white p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 gap-3 flex-shrink-0">
-          <div className="flex items-center space-x-3">
-            <div className="relative h-16 w-16 sm:h-20 sm:w-20 shrink-0 overflow-hidden rounded-full ring-2 ring-white/80 shadow-lg">
-              <img
-                src={logoMarkImage}
-                alt="Raub Hang Seng fish logo"
-                className="absolute inset-0 h-full w-full object-cover scale-[1.45]"
-                style={{ transformOrigin: '50% 60%' }}
-              />
-            </div>
+            <div className="flex items-center space-x-2.5">
+              <div className="p-1.5 bg-sky-500 text-white rounded-xl">
+                <Database className="w-5 h-5 text-white" />
+              </div>
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-base font-black tracking-wide font-sans text-white">

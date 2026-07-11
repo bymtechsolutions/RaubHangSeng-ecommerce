@@ -70,14 +70,17 @@ export default function Header({
           <button
             id="header-logo"
             onClick={() => handleNavClick('home')}
-            className="flex items-center gap-2.5 text-left cursor-pointer shrink-0"
+        className="flex items-center gap-3 text-left cursor-pointer shrink-0"
             aria-label={isZh ? '返回首页' : 'Back to home'}
           >
-            <img
-              src={logoImage}
-              alt="Raub Hang Seng Fish Supplier"
-              className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover object-center bg-[#314b59] border border-white/20 shadow-sm"
-            />
+        <span className="relative h-14 w-14 md:h-16 md:w-16 shrink-0 overflow-hidden rounded-full ring-2 ring-white/80 shadow-md">
+          <img
+            src={logoImage}
+            alt="Raub Hang Seng fish logo"
+            className="absolute inset-0 h-full w-full object-cover scale-[1.45]"
+            style={{ transformOrigin: '50% 60%' }}
+          />
+        </span>
             <span className="flex flex-col leading-none">
               <span className="text-[18px] md:text-[24px] font-semibold tracking-[0.02em]">
                 RaubHangSeng
