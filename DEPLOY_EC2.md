@@ -68,8 +68,10 @@ If another Docker proxy already owns port `80`, the script still starts this app
 If `docker ps` shows `mysellerbase-prod-proxy-1` publishing `0.0.0.0:80->80/tcp`, do not start a second public Nginx. Run this after `deploy/setup-ec2.sh`:
 
 ```bash
-bash deploy/configure-mysellerbase-proxy.sh /path/to/MySellerBase
+sudo env CERTBOT_EMAIL='you@example.com' bash deploy/configure-mysellerbase-proxy.sh /path/to/MySellerBase
 ```
+
+The helper connects the RHS Fish app to the existing proxy, provisions a Let's Encrypt certificate for all four fish domains, exposes port `443`, redirects HTTP to HTTPS, and installs a renewal hook that reloads the proxy after future certificate renewals.
 
 The script connects `rhsfish-app` to the MySellerBase proxy Docker network, then inserts these routes into MySellerBase `deploy/reverse-proxy.conf` before the storefront `default_server` block:
 
@@ -99,7 +101,7 @@ server {
 }
 ```
 
-If MySellerBase terminates TLS through Cloudflare, add `rhsfish.com`, `www.rhsfish.com`, `raubfish.com`, and `www.raubfish.com` in Cloudflare as proxied A records to this EC2 public IP. If these records are DNS-only and no service listens on port `443`, browser HTTPS requests will fail.
+If MySellerBase terminates TLS through Cloudflare instead, add `rhsfish.com`, `www.rhsfish.com`, `raubfish.com`, and `www.raubfish.com` in Cloudflare as proxied A records to this EC2 public IP. For DNS-only records, use the helper above so the origin serves HTTPS directly.
 
 To reload the MySellerBase proxy manually:
 
@@ -114,7 +116,9 @@ docker exec mysellerbase-prod-proxy-1 nginx -s reload
 ```bash
 curl http://127.0.0.1:9999/api/health
 curl -I http://rhsfish.com
+curl -I https://rhsfish.com
 curl -I http://raubfish.com
+sudo certbot renew --dry-run
 ```
 
 Expected local health response:
