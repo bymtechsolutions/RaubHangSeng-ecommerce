@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, User as UserIcon, Lock, Mail, Phone, MapPin, Award, LogOut, Save, Eye, EyeOff, CheckCircle, Clock, ShoppingBag } from 'lucide-react';
 import { Language, User } from '../types';
@@ -29,6 +29,8 @@ export default function AuthModal({
   // Modal active tab: 'login' | 'signup' | 'profile'
   const [tab, setTab] = useState<'login' | 'signup'>('login');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  const signupInFlight = useRef(false);
 
   // Form Fields
   const [username, setUsername] = useState('');
@@ -112,6 +114,7 @@ export default function AuthModal({
   // Handle Signup submission
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (signupInFlight.current) return;
     setError(null);
 
     if (!username || !password || !fullName || !phoneNumber) {
@@ -138,13 +141,23 @@ export default function AuthModal({
       memberPoints: 0,
     };
 
+    signupInFlight.current = true;
+    setIsSigningUp(true);
+
     try {
       const response = await registerMember(key, password, newProfile);
       setCurrentUser(response.profile);
       localStorage.setItem('raub_hang_seng_current_user', JSON.stringify(response.profile));
-    } catch {
-      setError(isZh ? '该用户名已被注册' : 'This username is already taken');
+    } catch (registrationError) {
+      const message = registrationError instanceof Error ? registrationError.message : '';
+      const usernameExists = message.includes('username already exists');
+      setError(usernameExists
+        ? (isZh ? '该用户名已被注册' : 'This username is already taken')
+        : (isZh ? '暂时无法完成注册，请稍后再试' : 'Unable to register right now. Please try again.'));
       return;
+    } finally {
+      signupInFlight.current = false;
+      setIsSigningUp(false);
     }
 
     setSuccess(isZh ? '注册成功！' : 'Registration successful!');
@@ -760,9 +773,12 @@ export default function AuthModal({
 
                   <button
                     type="submit"
-                    className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-bold rounded-xl text-xs cursor-pointer shadow-md transition-all flex items-center justify-center space-x-1.5"
+                    disabled={isSigningUp}
+                    className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-bold rounded-xl text-xs cursor-pointer shadow-md transition-all flex items-center justify-center space-x-1.5 disabled:cursor-wait disabled:opacity-60"
                   >
-                    <span>{isZh ? '确 认 注 册' : 'S I G N   U P   N O W'}</span>
+                    <span>{isSigningUp
+                      ? (isZh ? '注 册 中...' : 'CREATING ACCOUNT...')
+                      : (isZh ? '确 认 注 册' : 'S I G N   U P   N O W')}</span>
                   </button>
                 </form>
               )}
