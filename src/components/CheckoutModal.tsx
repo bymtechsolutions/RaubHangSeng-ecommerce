@@ -246,12 +246,12 @@ export default function CheckoutModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-hidden">
       {/* Click overlay to exit */}
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* Modal box */}
-      <div className="relative w-full max-w-3xl rhs-panel border rounded-2xl overflow-hidden shadow-2xl z-10 my-8">
+      <div className="relative z-10 flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border rhs-panel shadow-2xl">
         
         {/* Close Button */}
         <button
@@ -262,7 +262,7 @@ export default function CheckoutModal({
         </button>
 
         {/* Modal Header */}
-        <div className="p-5 border-b border-[#c4d5d9] rhs-panel-soft">
+        <div className="shrink-0 p-5 border-b border-[#c4d5d9] rhs-panel-soft">
           <h3 className="text-xl font-bold text-slate-900 flex items-center">
             <ClipboardCheck className="w-5 h-5 mr-2 text-sky-600" />
             {isZh ? '确认订单与配送资料' : 'Confirm Order & Delivery Details'}
@@ -275,10 +275,10 @@ export default function CheckoutModal({
         </div>
 
         {/* Form Body split into columns */}
-        <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6 max-h-[75vh] overflow-y-auto rhs-panel">
+        <form onSubmit={handleSubmit} className="grid min-h-0 flex-1 grid-cols-1 items-start gap-6 overflow-y-auto p-6 md:grid-cols-12 rhs-panel">
           
           {/* Left Column: Form Inputs (7 Cols) */}
-          <div className="md:col-span-7 space-y-4">
+          <div className="min-w-0 space-y-4 md:col-span-7">
             
             {/* Member Club Autofill Banner */}
             {currentUser ? (
@@ -541,17 +541,22 @@ export default function CheckoutModal({
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp,application/pdf"
-                  onChange={(e) => handlePaymentSlipUpload(e.target.files?.[0])}
+                  onChange={(e) => {
+                    handlePaymentSlipUpload(e.target.files?.[0]);
+                    e.currentTarget.value = '';
+                  }}
                   className="sr-only"
                 />
               </label>
 
               {paymentSlip?.type.startsWith('image/') && (
-                <img
-                  src={paymentSlip.dataUrl}
-                  alt={isZh ? '付款水单预览' : 'Payment slip preview'}
-                  className="max-h-40 w-full rounded-lg border border-sky-100 object-contain bg-white"
-                />
+                <div className="h-32 overflow-hidden rounded-lg border border-sky-100 bg-white p-2">
+                  <img
+                    src={paymentSlip.dataUrl}
+                    alt={isZh ? '付款水单预览' : 'Payment slip preview'}
+                    className="h-full w-full object-contain"
+                  />
+                </div>
               )}
 
               {errors.paymentSlip && <p className="text-[10px] text-red-500">{errors.paymentSlip}</p>}
@@ -573,7 +578,7 @@ export default function CheckoutModal({
           </div>
 
           {/* Right Column: Invoice Overview (5 Cols) */}
-          <div className="md:col-span-5 rhs-panel-soft border rounded-2xl p-4 flex flex-col justify-between space-y-4">
+          <div className="min-w-0 self-start md:col-span-5 rhs-panel-soft border rounded-2xl p-4 flex flex-col justify-between space-y-4">
             
             {/* Title */}
             <div>
