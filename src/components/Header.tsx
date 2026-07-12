@@ -73,7 +73,7 @@ export default function Header({
         className="flex items-center gap-3 text-left cursor-pointer shrink-0"
             aria-label={isZh ? '返回首页' : 'Back to home'}
           >
-        <span className="relative h-12 w-12 md:h-14 md:w-14 shrink-0 overflow-hidden rounded-full ring-2 ring-white/80 shadow-md">
+        <span className="relative h-10 w-10 md:h-12 md:w-12 shrink-0 overflow-hidden rounded-full ring-2 ring-white/80 shadow-md">
           <img
             src={logoImage}
             alt="Raub Hang Seng fish logo"
