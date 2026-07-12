@@ -39,6 +39,7 @@ import { uploadStorefrontMedia } from '../lib/api';
 import { resolveMediaUrl } from '../lib/media';
 import { getProductMediaAspectRatio, PRODUCT_MEDIA_ASPECT_RATIOS } from '../lib/productMedia';
 import { getCartItemOptionSummary, getCartItemPricePerKg, getCutTypeLabel, getProductConfiguration, syncVariantsWithOptions } from '../lib/productOptions';
+import ProductMediaEditor, { ProductMediaEditResult } from './ProductMediaEditor';
 
 interface SellerDashboardProps {
   language: Language;
@@ -196,6 +197,7 @@ export default function SellerDashboard({
   const [newSellerPasscode, setNewSellerPasscode] = useState('');
   const [confirmSellerPasscode, setConfirmSellerPasscode] = useState('');
   const [mediaPickerTarget, setMediaPickerTarget] = useState<MediaPickerTarget | null>(null);
+  const [editingMediaIndex, setEditingMediaIndex] = useState<number | null>(null);
   const [editingDiscountId, setEditingDiscountId] = useState<string | null>(null);
   const [discountTitleZh, setDiscountTitleZh] = useState('');
   const [discountTitleEn, setDiscountTitleEn] = useState('');
@@ -471,14 +473,14 @@ export default function SellerDashboard({
   };
 
   const saveMediaLibrary = async (uploadedMedia: ProductMedia[]) => {
-    if (uploadedMedia.length === 0) return;
+    if (uploadedMedia.length === 0) return true;
 
     const mediaByUrl = new Map<string, ProductMedia>();
     [...mediaLibrary, ...uploadedMedia].forEach(media => {
       mediaByUrl.set(media.url, media);
     });
 
-    await saveSettings({ mediaLibrary: Array.from(mediaByUrl.values()) });
+    return saveSettings({ mediaLibrary: Array.from(mediaByUrl.values()) });
   };
 
   const fileToMedia = async (file: File): Promise<ProductMedia> => {
@@ -608,6 +610,31 @@ export default function SellerDashboard({
       [reorderedMedia[mediaIndex], reorderedMedia[targetIndex]] = [reorderedMedia[targetIndex], reorderedMedia[mediaIndex]];
       return reorderedMedia;
     });
+  };
+
+  const handleSaveEditedMedia = async (result: ProductMediaEditResult) => {
+    if (editingMediaIndex === null) return;
+    const originalMedia = formMedia[editingMediaIndex];
+    if (!originalMedia || originalMedia.type !== 'image') return;
+
+    const response = await uploadStorefrontMedia({
+      name: result.name,
+      type: result.type,
+      size: result.size,
+      dataUrl: result.dataUrl,
+    });
+    const librarySaved = await saveMediaLibrary([response.media]);
+    if (!librarySaved) {
+      throw new Error(isZh ? '编辑副本已建立，但无法保存到媒体库。请重试。' : 'The edited copy was created but could not be saved to the media library. Please try again.');
+    }
+
+    setFormMedia(prev => prev.map((media, index) => index === editingMediaIndex ? response.media : media));
+    if (formImage === originalMedia.url) {
+      setFormImage(response.media.url);
+    }
+    setFormMediaAspectRatio(result.aspectRatio);
+    setEditingMediaIndex(null);
+    triggerSuccess(isZh ? '图片已裁剪，并以新副本加入产品图库。' : 'Image cropped and added to the product gallery as a new copy.');
   };
 
   const cutTypes: ProductCutType[] = ['cleaned', 'whole', 'steak', 'sliced', 'fillet'];
@@ -977,6 +1004,7 @@ export default function SellerDashboard({
     setFormImage('');
     setFormMedia([]);
     setFormMediaAspectRatio('landscape');
+    setEditingMediaIndex(null);
     setFormOptions([]);
     setFormVariants([]);
     setFormTastingNotesZh('');
@@ -2680,17 +2708,27 @@ export default function SellerDashboard({
                                   </div>
                                   <div className="flex items-center gap-1">
                                     {media.type === 'image' && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setFormImage(media.url)}
-                                        className={`flex-1 px-2 py-1 rounded-md text-[10px] font-bold border cursor-pointer ${
-                                          formImage === media.url
-                                            ? 'bg-sky-50 text-sky-700 border-sky-200'
-                                            : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300'
-                                        }`}
-                                      >
-                                        {formImage === media.url ? (isZh ? '封面' : 'Cover') : (isZh ? '设封面' : 'Set cover')}
-                                      </button>
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingMediaIndex(mediaIndex)}
+                                          className="inline-flex min-h-8 flex-1 items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-600 hover:border-sky-300 hover:text-sky-700 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-sky-500 cursor-pointer"
+                                        >
+                                          <Edit2 className="h-3 w-3" />
+                                          <span>{isZh ? '裁剪编辑' : 'Crop / edit'}</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setFormImage(media.url)}
+                                          className={`min-h-8 flex-1 px-2 rounded-md text-[10px] font-bold border cursor-pointer ${
+                                            formImage === media.url
+                                              ? 'bg-sky-50 text-sky-700 border-sky-200'
+                                              : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300'
+                                          }`}
+                                        >
+                                          {formImage === media.url ? (isZh ? '封面' : 'Cover') : (isZh ? '设封面' : 'Set cover')}
+                                        </button>
+                                      </>
                                     )}
                                     <button
                                       type="button"
@@ -3952,6 +3990,16 @@ export default function SellerDashboard({
             </div>
           </div>
         </div>
+      )}
+
+      {editingMediaIndex !== null && formMedia[editingMediaIndex]?.type === 'image' && (
+        <ProductMediaEditor
+          language={language}
+          media={formMedia[editingMediaIndex]}
+          initialAspectRatio={formMediaAspectRatio}
+          onClose={() => setEditingMediaIndex(null)}
+          onSave={handleSaveEditedMedia}
+        />
       )}
     </div>
   );
