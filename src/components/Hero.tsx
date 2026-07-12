@@ -1,4 +1,3 @@
-import { Fragment } from 'react';
 import { Fish, MessageCircle, Package, ShoppingCart, Snowflake, Sparkles, Truck } from 'lucide-react';
 import { Language } from '../types';
 
@@ -74,19 +73,17 @@ export default function Hero({ language, onShopNowClick, onWhatsAppOrderClick, o
           <p className="sr-only">{isZh ? '活杀河鱼 新鲜到家' : 'Fresh River Fish To Your Door'}</p>
 
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap justify-center gap-2 md:gap-2.5 w-full max-w-[300px] sm:max-w-none mx-auto">
-            {highlights.map((item, index) => {
+            {highlights.flatMap((item, index) => {
               const Icon = item.icon;
-              return (
-                <Fragment key={item.zh}>
-                  <div className="inline-flex items-center justify-center gap-1.5 min-h-8 md:min-h-9 px-2.5 sm:px-3 md:px-4 rounded-md bg-white/78 backdrop-blur-md border border-white/75 shadow-[0_3px_10px_rgba(12,42,61,0.12)] text-[#203c42] text-[12px] sm:text-[13px] md:text-[16px] font-semibold">
-                    <Icon className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#244b50]" />
-                    <span>{isZh ? item.zh : item.en}</span>
-                  </div>
-                  {index < highlights.length - 1 && (
-                    <span aria-hidden="true" className="hidden md:block h-5 w-px shrink-0 bg-[#203c42]/28" />
-                  )}
-                </Fragment>
-              );
+              return [
+                <div key={`${item.zh}-pill`} className="inline-flex items-center justify-center gap-1.5 min-h-8 md:min-h-9 px-2.5 sm:px-3 md:px-4 rounded-md bg-white/78 backdrop-blur-md border border-white/75 shadow-[0_3px_10px_rgba(12,42,61,0.12)] text-[#203c42] text-[12px] sm:text-[13px] md:text-[16px] font-semibold">
+                  <Icon className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#244b50]" />
+                  <span>{isZh ? item.zh : item.en}</span>
+                </div>,
+                index < highlights.length - 1
+                  ? <span key={`${item.zh}-separator`} aria-hidden="true" className="mx-0.5 hidden h-5 w-px shrink-0 self-center bg-[#203c42]/28 md:block" />
+                  : null,
+              ];
             })}
           </div>
 
