@@ -32,10 +32,11 @@ import {
   Image as ImageIcon,
   Video
 } from 'lucide-react';
-import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductOption, ProductOptionKind, ProductOptionValue, ProductVariant, ProductCutType, StoreSettings, StoreDiscount, StoreDiscountScope, StoreDiscountValueType, CollectionDisplay, ProductCategory, OrderRecord, PaymentStatus } from '../types';
+import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductMediaAspectRatio, ProductOption, ProductOptionKind, ProductOptionValue, ProductVariant, ProductCutType, StoreSettings, StoreDiscount, StoreDiscountScope, StoreDiscountValueType, CollectionDisplay, ProductCategory, OrderRecord, PaymentStatus } from '../types';
 import { normalizeCollectionDisplays } from '../data/collections';
 import { uploadStorefrontMedia } from '../lib/api';
 import { resolveMediaUrl } from '../lib/media';
+import { getProductMediaAspectRatio, PRODUCT_MEDIA_ASPECT_RATIOS } from '../lib/productMedia';
 import { getCartItemOptionSummary, getCartItemPricePerKg, getCutTypeLabel, getProductConfiguration, syncVariantsWithOptions } from '../lib/productOptions';
 
 interface SellerDashboardProps {
@@ -169,6 +170,7 @@ export default function SellerDashboard({
   const [formAverageWeightKg, setFormAverageWeightKg] = useState<number>(1.2);
   const [formImage, setFormImage] = useState('');
   const [formMedia, setFormMedia] = useState<ProductMedia[]>([]);
+  const [formMediaAspectRatio, setFormMediaAspectRatio] = useState<ProductMediaAspectRatio>('landscape');
   const [formOptions, setFormOptions] = useState<ProductOption[]>([]);
   const [formVariants, setFormVariants] = useState<ProductVariant[]>([]);
   const [formTastingNotesZh, setFormTastingNotesZh] = useState('');
@@ -201,6 +203,7 @@ export default function SellerDashboard({
   const [discountValue, setDiscountValue] = useState(10);
   const [discountMinSubtotal, setDiscountMinSubtotal] = useState(0);
   const [discountIsActive, setDiscountIsActive] = useState(true);
+  const formMediaAspect = getProductMediaAspectRatio(formMediaAspectRatio);
 
   useEffect(() => {
     setCollectionDrafts(normalizeCollectionDisplays(collectionDisplays));
@@ -933,6 +936,7 @@ export default function SellerDashboard({
       type: 'image',
       name: 'Cover image',
     }] : []);
+    setFormMediaAspectRatio(product.mediaAspectRatio || 'landscape');
     setFormOptions(configuration.options);
     setFormVariants(configuration.variants);
     setFormTastingNotesZh(product.tastingNotesZh || '');
@@ -960,6 +964,7 @@ export default function SellerDashboard({
     setFormAverageWeightKg(1.2);
     setFormImage('');
     setFormMedia([]);
+    setFormMediaAspectRatio('landscape');
     setFormOptions([]);
     setFormVariants([]);
     setFormTastingNotesZh('');
@@ -1065,6 +1070,7 @@ export default function SellerDashboard({
       averageWeightKg: Number(formAverageWeightKg),
       image: coverImage,
       media: normalizedMedia,
+      mediaAspectRatio: formMediaAspectRatio,
       options: normalizedOptions,
       variants: normalizedVariants,
       tastingNotesZh: formTastingNotesZh.trim(),
@@ -2574,6 +2580,43 @@ export default function SellerDashboard({
                           </button>
                         </div>
 
+                        <fieldset>
+                          <legend className="text-[10px] font-bold uppercase text-slate-500">
+                            {isZh ? '前台媒体比例' : 'Storefront media ratio'}
+                          </legend>
+                          <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
+                            {isZh ? '控制产品详情页图库的展示比例；图片会完整显示，不会强制裁切。' : 'Controls the product gallery shape. Media is fitted without forced cropping.'}
+                          </p>
+                          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                            {PRODUCT_MEDIA_ASPECT_RATIOS.map(option => (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => setFormMediaAspectRatio(option.value)}
+                                aria-pressed={formMediaAspectRatio === option.value}
+                                className={`flex min-h-12 items-center gap-2 rounded-lg border px-2 py-2 text-left text-[10px] font-bold transition-colors cursor-pointer ${
+                                  formMediaAspectRatio === option.value
+                                    ? 'border-sky-400 bg-sky-50 text-sky-800'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-sky-300'
+                                }`}
+                              >
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-slate-100">
+                                  <span
+                                    className={`block max-h-5 max-w-5 rounded-[2px] border-2 ${
+                                      formMediaAspectRatio === option.value ? 'border-sky-500' : 'border-slate-400'
+                                    }`}
+                                    style={{
+                                      width: option.value === 'portrait' ? 14 : 20,
+                                      height: option.value === 'wide' ? 11 : option.value === 'portrait' ? 20 : option.value === 'square' ? 20 : 15,
+                                    }}
+                                  />
+                                </span>
+                                <span>{isZh ? option.labelZh : option.labelEn}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </fieldset>
+
                         {formMedia.length === 0 ? (
                           <div className="border border-dashed border-slate-300 rounded-xl p-4 text-center text-[11px] text-slate-500">
                             {isZh ? '还没有上传媒体。保存时会使用上方图片 URL 作为封面。' : 'No media uploaded yet. The image URL above will be used as the cover.'}
@@ -2582,11 +2625,14 @@ export default function SellerDashboard({
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {formMedia.map(media => (
                               <div key={media.id} className="relative rounded-lg overflow-hidden border border-slate-200 bg-white">
-                                <div className="aspect-[4/3] bg-slate-100">
+                                <div
+                                  className={`flex items-center justify-center bg-slate-100 ${formMediaAspect.value === 'original' ? 'min-h-28' : ''}`}
+                                  style={formMediaAspect.ratio ? { aspectRatio: formMediaAspect.ratio } : undefined}
+                                >
                                   {media.type === 'video' ? (
-                                    <video src={resolveMediaUrl(media.url)} className="w-full h-full object-cover" muted />
+                                    <video src={resolveMediaUrl(media.url)} className={`${formMediaAspect.value === 'original' ? 'aspect-video' : 'h-full'} w-full object-contain`} muted />
                                   ) : (
-                                    <img src={resolveMediaUrl(media.url)} alt={media.name || 'Product media'} className="w-full h-full object-cover" />
+                                    <img src={resolveMediaUrl(media.url)} alt={media.name || 'Product media'} className={`${formMediaAspect.value === 'original' ? 'h-auto max-h-60' : 'h-full'} w-full object-contain`} />
                                   )}
                                 </div>
                                 <div className="p-2 space-y-1.5">

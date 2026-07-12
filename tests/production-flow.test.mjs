@@ -111,6 +111,24 @@ test('production auth and order boundaries', async () => {
   });
   assert.equal(settingsUpdate.status, 200);
 
+  const productsWithMediaRatio = publicStoreResult.body.products.map((product, index) => (
+    index === 0 ? { ...product, mediaAspectRatio: 'square' } : product
+  ));
+  const productRatioUpdate = await json(await request('/api/products', {
+    method: 'PUT',
+    cookie: sellerCookie,
+    body: { products: productsWithMediaRatio },
+  }));
+  assert.equal(productRatioUpdate.response.status, 200);
+  assert.equal(productRatioUpdate.body.products[0].mediaAspectRatio, 'square');
+
+  const invalidProductRatioUpdate = await request('/api/products', {
+    method: 'PUT',
+    cookie: sellerCookie,
+    body: { products: [{ ...productsWithMediaRatio[0], mediaAspectRatio: 'invalid-ratio' }] },
+  });
+  assert.equal(invalidProductRatioUpdate.status, 400);
+
   const username = `member_${Date.now()}`;
   const password = 'correct-horse-battery-staple';
   const registration = await request('/api/members/register', {

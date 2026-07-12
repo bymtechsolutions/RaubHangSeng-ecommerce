@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, ArrowLeft, CheckCircle, Compass, Flame, MessageCircle, Package, ShoppingCart, Snowflake, Truck } from 'lucide-react';
-import { Language, Product, ProductCutType, ProductMedia } from '../types';
+import { Language, Product, ProductCutType, ProductMedia, ProductOption } from '../types';
 import { resolveMediaUrl } from '../lib/media';
+import { getProductMediaAspectRatio } from '../lib/productMedia';
 import { getInitialVariantSelection, getProductConfiguration, getVariantForSelection, getVariantPricePerKg } from '../lib/productOptions';
 
 type CutType = ProductCutType;
@@ -16,6 +17,10 @@ interface ProductPageProps {
   onAddToCart: (product: Product, quantity: number, weightKg: number, cutType: CutType, variantId?: string) => void;
   orderingPaused?: boolean;
 }
+
+const formatPrice = (value: number) => (
+  Number.isInteger(value) ? value.toFixed(0) : value.toFixed(2)
+);
 
 export default function ProductPage({
   language,
@@ -62,7 +67,7 @@ export default function ProductPage({
           </p>
           <button
             onClick={onBackToShop}
-            className="mt-6 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#073c63] hover:bg-[#082f4e] text-white font-bold text-sm transition-colors cursor-pointer"
+            className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#073c63] px-5 text-sm font-bold text-white transition-colors hover:bg-[#082f4e] cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>{isZh ? '返回产品系列' : 'Back to Shop'}</span>
@@ -78,29 +83,27 @@ export default function ProductPage({
   const cookingSuggestions = isZh ? product.cookingSuggestionsZh : product.cookingSuggestionsEn;
   const features = isZh ? product.featuresZh : product.featuresEn;
   const configuration = getProductConfiguration(product);
-  const selectedVariant = configuration.variants.find((variant) => variant.id === selectedVariantId);
+  const selectedVariant = configuration.variants.find(variant => variant.id === selectedVariantId);
   const selectedPricePerKg = getVariantPricePerKg(product, selectedVariant?.id);
   const calculatedTotalPrice = selectedPricePerKg * weightKg * quantity;
   const mediaItems: ProductMedia[] = product.media?.length
     ? product.media
-    : product.image
-      ? [{ id: 'cover', url: product.image, type: 'image', name: 'Cover image' }]
-      : [];
-  const selectedMedia = mediaItems.find((media) => media.id === selectedMediaId) || mediaItems[0];
+    : [{ id: 'cover', url: product.image, type: 'image', name: 'Cover image' }];
+  const selectedMedia = mediaItems.find(media => media.id === selectedMediaId) || mediaItems[0];
   const hasVariants = configuration.options.length > 0 && configuration.variants.length > 0;
   const isCustomVariantInquiry = selectedVariantId === CUSTOM_VARIANT_INQUIRY_ID;
   const selectedVariantMedia = selectedVariant?.image
     ? { url: selectedVariant.image, type: 'image' as const }
     : null;
-  const heroMedia = isMediaOverrideActive
-    ? selectedMedia
-    : selectedVariantMedia || selectedMedia;
+  const heroMedia = isMediaOverrideActive ? selectedMedia : selectedVariantMedia || selectedMedia;
+  const mediaAspect = getProductMediaAspectRatio(product.mediaAspectRatio);
+  const isOriginalMediaRatio = mediaAspect.value === 'original';
 
   const stockLabel = {
-    available: isZh ? '常备现货' : 'Ready Stock',
-    limited: isZh ? '野生限量' : 'Limited Catch',
-    seasonal: isZh ? '季节供应' : 'Seasonal Catch',
-  }[product.stockStatus as 'available' | 'limited' | 'seasonal'] || (isZh ? '暂时售罄' : 'Out of Stock');
+    available: isZh ? '常备现货' : 'Ready stock',
+    limited: isZh ? '野生限量' : 'Limited catch',
+    seasonal: isZh ? '季节供应' : 'Seasonal catch',
+  }[product.stockStatus as 'available' | 'limited' | 'seasonal'] || (isZh ? '暂时售罄' : 'Out of stock');
 
   const cutOptions: { value: CutType; zh: string; en: string }[] = [
     { value: 'cleaned', zh: '活杀去内脏洗净', en: 'Gutted and cleaned' },
@@ -110,13 +113,11 @@ export default function ProductPage({
     { value: 'fillet', zh: '去骨鱼片', en: 'Boneless fillet' },
   ];
 
-  const selectedCutLabel = cutOptions.find((option) => option.value === cutType);
+  const selectedCutLabel = cutOptions.find(option => option.value === cutType);
   const selectedVariantCutLabel = selectedVariant
-    ? cutOptions.find((option) => option.value === selectedVariant.cutType)
+    ? cutOptions.find(option => option.value === selectedVariant.cutType)
     : null;
-  const selectedVariantName = selectedVariant
-    ? (isZh ? selectedVariant.nameZh : selectedVariant.nameEn)
-    : '';
+  const selectedVariantName = selectedVariant ? (isZh ? selectedVariant.nameZh : selectedVariant.nameEn) : '';
   const canAddToCart = !orderingPaused && !isCustomVariantInquiry && (!hasVariants || (Boolean(selectedVariant) && selectedVariant?.isAvailable !== false));
   const whatsappText = encodeURIComponent(
     isCustomVariantInquiry
@@ -128,426 +129,314 @@ export default function ProductPage({
         : `Hi, I want to order ${name}${selectedVariantName ? ` (${selectedVariantName})` : ''}, ${weightKg.toFixed(1)}kg, ${selectedVariantCutLabel?.en ?? selectedCutLabel?.en ?? ''}, quantity ${quantity}.`)
   );
 
+  const chooseOptionValue = (option: ProductOption, valueId: string) => {
+    if (orderingPaused) return;
+    const nextSelectedValueIds = { ...selectedValueIds, [option.id]: valueId };
+    const variant = getVariantForSelection(configuration.variants, nextSelectedValueIds, configuration.options);
+    setSelectedValueIds(nextSelectedValueIds);
+    setSelectedVariantId(variant?.id ?? null);
+    if (variant) {
+      setWeightKg(variant.weightKg);
+      setCutType(variant.cutType);
+      setIsMediaOverrideActive(false);
+    }
+  };
+
   return (
-    <main className="min-h-screen pt-[var(--rhs-topbar-height)] rhs-section-alt">
-      <section className="px-4 sm:px-6 lg:px-8 py-8 md:py-12 border-b border-[#c4d5d9]">
-        <div className="max-w-[1400px] mx-auto">
-          <button
-            onClick={onBackToShop}
-            className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-[#0b3854] hover:text-sky-700 transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>{isZh ? '返回全部河鱼' : 'Back to all fish'}</span>
-          </button>
+    <main className="min-h-screen bg-[#f4f7f6] pt-[var(--rhs-topbar-height)] text-[#17323d]">
+      <section className="border-b border-[#d5e1e2] px-4 py-5 sm:px-6 md:py-8 lg:px-8">
+        <div className="mx-auto max-w-[1360px]">
+          <nav aria-label={isZh ? '面包屑导航' : 'Breadcrumb'} className="mb-5 flex items-center gap-2 text-sm text-[#61767d]">
+            <button onClick={onBackToShop} className="inline-flex min-h-11 items-center gap-2 font-semibold transition-colors hover:text-[#073c63] cursor-pointer">
+              <ArrowLeft className="h-4 w-4" />
+              <span>{isZh ? '全部产品' : 'All products'}</span>
+            </button>
+            <span aria-hidden="true" className="text-[#a0b0b4]">/</span>
+            <span className="truncate" aria-current="page">{name}</span>
+          </nav>
 
-          <div className="grid lg:grid-cols-[minmax(0,1fr)_370px] gap-6 lg:gap-7 items-start">
-            <article className="rhs-panel border rounded-2xl overflow-hidden shadow-sm">
-              <div className="relative min-h-[320px] md:min-h-[520px] bg-slate-900 overflow-hidden">
-                {heroMedia?.type === 'video' ? (
-                  <video
-                    key={heroMedia.url}
-                    src={resolveMediaUrl(heroMedia.url)}
-                    className="absolute inset-0 w-full h-full object-contain bg-slate-950 saturate-[0.9]"
-                    controls
-                    muted
-                    playsInline
-                    preload="metadata"
-                  />
-                ) : (
-                  <img
-                    src={resolveMediaUrl(heroMedia?.url || product.image)}
-                    alt={name}
-                    className={`absolute inset-0 w-full h-full object-cover saturate-[0.9] ${orderingPaused ? 'grayscale opacity-70' : ''}`}
-                    referrerPolicy="no-referrer"
-                  />
-                )}
-                {orderingPaused && (
-                  <div className="absolute inset-0 z-10 bg-slate-200/20 pointer-events-none" />
-                )}
-              </div>
-
-              {mediaItems.length > 1 && (
-                <div className="px-5 md:px-8 py-4 border-b border-[#c4d5d9] bg-[#edf5f4]">
-                  <div className="flex gap-3 overflow-x-auto pb-1">
-                    {mediaItems.map((media) => {
-                      const isActive = isMediaOverrideActive && media.id === selectedMedia?.id;
+          <div className="grid min-w-0 items-start gap-8 lg:grid-cols-[minmax(0,1.16fr)_minmax(390px,0.84fr)] lg:gap-10 xl:gap-14">
+            <section aria-label={isZh ? '产品图库' : 'Product gallery'} className="min-w-0">
+              <div className="grid min-w-0 gap-3 sm:grid-cols-[76px_minmax(0,1fr)] sm:gap-4">
+                {mediaItems.length > 1 && (
+                  <div className="order-2 flex gap-3 overflow-x-auto pb-1 sm:order-1 sm:max-h-[760px] sm:flex-col sm:overflow-y-auto sm:pr-1">
+                    {mediaItems.map((media, index) => {
+                      const isActive = isMediaOverrideActive
+                        ? media.id === selectedMedia?.id
+                        : !selectedVariantMedia && media.id === selectedMedia?.id;
                       return (
                         <button
                           key={media.id}
+                          type="button"
                           onClick={() => {
                             setSelectedMediaId(media.id);
                             setIsMediaOverrideActive(true);
                           }}
-                          className={`relative w-24 h-20 shrink-0 rounded-xl overflow-hidden border-2 bg-slate-100 cursor-pointer transition-all ${
-                            isActive ? 'border-sky-500 shadow-md' : 'border-white hover:border-sky-300'
+                          aria-label={`${isZh ? '查看媒体' : 'View media'} ${index + 1}`}
+                          aria-pressed={isActive}
+                          className={`relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-xl border-2 bg-white transition-all cursor-pointer ${
+                            isActive
+                              ? 'border-[#0b7fa8] shadow-[0_0_0_2px_rgba(11,127,168,0.12)]'
+                              : 'border-transparent ring-1 ring-[#cfdddd] hover:border-[#8ec8d8]'
                           }`}
-                          aria-label={isZh ? '切换产品媒体' : 'Switch product media'}
                         >
                           {media.type === 'video' ? (
                             <>
-                              <video src={resolveMediaUrl(media.url)} className="w-full h-full object-cover" muted playsInline preload="metadata" />
-                              <span className="absolute bottom-1 left-1 rounded bg-slate-950/70 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                                Video
-                              </span>
+                              <video src={resolveMediaUrl(media.url)} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                              <span className="absolute inset-x-1 bottom-1 rounded bg-slate-950/75 px-1 py-0.5 text-[9px] font-bold text-white">Video</span>
                             </>
                           ) : (
-                            <img src={resolveMediaUrl(media.url)} alt={media.name || name} className="w-full h-full object-cover" />
+                            <img src={resolveMediaUrl(media.url)} alt={media.name || name} className="h-full w-full object-cover" />
                           )}
                         </button>
                       );
                     })}
                   </div>
-                </div>
-              )}
-            </article>
+                )}
 
-            <aside className="lg:sticky lg:top-[110px] rhs-panel border rounded-2xl shadow-lg p-4">
-              {orderingPaused && (
-                <div className="mb-4 rounded-xl border border-slate-200 bg-slate-100 p-3 text-xs font-semibold leading-5 text-slate-600">
-                  {isZh
-                    ? '产品资料更新中，暂时不能选择规格、加入购物车或下单。维护结束后会恢复订购。'
-                    : 'Product details are being updated. Selection, cart, and ordering are paused until maintenance ends.'}
+                <div className={`order-1 min-w-0 max-w-full overflow-hidden rounded-2xl border border-[#d5e1e2] bg-[#eaf0ef] shadow-[0_18px_50px_rgba(19,50,61,0.08)] sm:order-2 ${mediaItems.length <= 1 ? 'sm:col-span-2' : ''}`}>
+                  <div
+                    className={`relative flex w-full items-center justify-center overflow-hidden ${isOriginalMediaRatio ? 'min-h-[320px]' : ''}`}
+                    style={mediaAspect.ratio ? { aspectRatio: mediaAspect.ratio } : undefined}
+                  >
+                    {heroMedia?.type === 'video' ? (
+                      <video
+                        key={heroMedia.url}
+                        src={resolveMediaUrl(heroMedia.url)}
+                        className={isOriginalMediaRatio ? 'aspect-video w-full bg-slate-950 object-contain' : 'absolute inset-0 h-full w-full bg-slate-950 object-contain'}
+                        controls
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+                    ) : (
+                      <img
+                        src={resolveMediaUrl(heroMedia?.url || product.image)}
+                        alt={name}
+                        className={`${isOriginalMediaRatio ? 'block h-auto max-h-[820px] w-full object-contain' : 'absolute inset-0 h-full w-full object-contain'} ${orderingPaused ? 'grayscale opacity-70' : ''}`}
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
+                    {orderingPaused && <div className="pointer-events-none absolute inset-0 bg-slate-100/25" />}
+                  </div>
                 </div>
-              )}
-              <div className="flex items-baseline justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-bold text-[#536c74]">
-                    {isZh ? '每公斤价格' : 'Price per kg'}
-                  </p>
-                  <p className="mt-0.5 text-2xl font-black text-amber-600 font-mono">
-                    RM {selectedPricePerKg}
-                  </p>
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-[#edf5f4] border border-[#c4d5d9] text-[11px] font-bold text-[#17323d]">
-                  {product.averageWeightKg.toFixed(1)}kg {isZh ? '常见规格' : 'avg'}
+              </div>
+              <p className="mt-3 text-center text-xs text-[#71868c]">
+                {isZh ? '点击缩略图查看更多图片或视频' : 'Select a thumbnail to view more images or video'}
+              </p>
+            </section>
+
+            <aside className="min-w-0 max-w-full rounded-2xl border border-[#d5e1e2] bg-white p-5 shadow-[0_18px_50px_rgba(19,50,61,0.08)] sm:p-7 lg:sticky lg:top-[calc(var(--rhs-topbar-height)+24px)]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-[#e6f4f1] px-3 py-1 text-xs font-bold text-[#176b62]">{stockLabel}</span>
+                <span className="rounded-full border border-[#d5e1e2] px-3 py-1 text-xs font-bold text-[#48636b]">
+                  {product.isWild ? (isZh ? '彭亨野生捕捞' : 'Pahang wild catch') : (isZh ? '彭亨河水养殖' : 'River raised')}
                 </span>
               </div>
 
-              <div className="mt-4 space-y-3">
-                {hasVariants && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {configuration.options.map(option => (
-                        <label key={option.id} className="block">
-                          <span className="block text-[11px] font-bold text-[#536c74] mb-1.5">
-                            {isZh ? option.nameZh : option.nameEn}
-                          </span>
-                          <select
-                            value={selectedValueIds[option.id] || ''}
-                            onChange={(event) => {
-                              const nextSelectedValueIds = { ...selectedValueIds, [option.id]: event.target.value };
-                              const variant = getVariantForSelection(configuration.variants, nextSelectedValueIds, configuration.options);
-                              setSelectedValueIds(nextSelectedValueIds);
-                              setSelectedVariantId(variant?.id ?? null);
-                              if (variant) {
-                                setWeightKg(variant.weightKg);
-                                setCutType(variant.cutType);
-                                setIsMediaOverrideActive(false);
-                              }
-                            }}
-                            disabled={orderingPaused}
-                            className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-xl px-3 py-2.5 text-xs font-semibold text-[#17323d] focus:outline-none focus:border-sky-600 focus:ring-1 focus:ring-sky-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                          >
-                            {option.values.map(value => {
-                              const candidateSelection = { ...selectedValueIds, [option.id]: value.id };
-                              const candidateVariant = getVariantForSelection(configuration.variants, candidateSelection, configuration.options);
-                              return (
-                                <option key={value.id} value={value.id} disabled={!candidateVariant || candidateVariant.isAvailable === false}>
-                                  {isZh ? value.nameZh : value.nameEn}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </label>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (orderingPaused) return;
-                        setSelectedVariantId(CUSTOM_VARIANT_INQUIRY_ID);
-                      }}
-                      disabled={orderingPaused}
-                      className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-extrabold transition-all cursor-pointer ${
-                        orderingPaused
-                          ? 'border-slate-200 bg-slate-100 opacity-70 cursor-not-allowed'
-                          : isCustomVariantInquiry ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-[#c4d5d9] bg-[#edf5f4] hover:border-emerald-300'
-                      }`}
-                    >
-                      <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>{isZh ? '其他规格请联系 WhatsApp' : 'Ask about another option'}</span>
-                    </button>
-                  </div>
-                )}
+              <p className="mt-5 font-mono text-xs uppercase tracking-[0.14em] text-[#2483a2]">{product.scientificName}</p>
+              <h1 className="mt-2 break-words text-3xl font-black leading-tight tracking-[-0.025em] text-slate-950 [overflow-wrap:anywhere] sm:text-4xl">{name}</h1>
+              <p className="mt-4 text-base leading-7 text-[#526a72]">{description}</p>
 
-                {hasVariants ? (
-                  <div className="rounded-xl border border-[#c4d5d9] bg-[#edf5f4] p-2.5">
-                    <span className="block text-[11px] font-bold text-[#536c74] mb-1.5">
-                      {isZh ? '已选订购选项' : 'Selected order option'}
-                    </span>
-                    {isCustomVariantInquiry ? (
-                      <div className="flex items-start gap-2 text-xs font-semibold text-emerald-700">
-                        <MessageCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                        <span>{isZh ? '请使用 WhatsApp 询问其他规格或特殊处理。' : 'Use WhatsApp to ask about other options or custom processing.'}</span>
-                      </div>
-                    ) : selectedVariant ? (
-                      <div className="grid grid-cols-2 gap-3 text-[11px]">
-                        <div>
-                          <span className="block text-[#536c74]">{isZh ? '规格' : 'Variant'}</span>
-                          <strong className="mt-1 block text-[#17323d]">{selectedVariantName}</strong>
-                        </div>
-                        <div>
-                          <span className="block text-[#536c74]">{isZh ? '重量 / 刀工' : 'Weight / cut'}</span>
-                          <strong className="mt-1 block text-[#17323d]">
-                            {selectedVariant.weightKg.toFixed(1)}kg · {isZh ? selectedVariantCutLabel?.zh : selectedVariantCutLabel?.en}
-                          </strong>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs font-semibold text-[#536c74]">
-                        {isZh ? '请选择一个规格。' : 'Choose a variant.'}
-                      </p>
-                    )}
+              <div className="mt-6 border-y border-[#dbe5e6] py-5">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.08em] text-[#71868c]">{isZh ? '每公斤价格' : 'Price per kg'}</p>
+                    <p className="mt-1 text-3xl font-black tabular-nums text-[#c76a12]">RM {formatPrice(selectedPricePerKg)}</p>
                   </div>
-                ) : (
+                  <p className="rounded-full bg-[#f0f5f4] px-3 py-1.5 text-xs font-bold text-[#48636b]">
+                    {product.averageWeightKg.toFixed(1)}kg {isZh ? '常见重量' : 'average weight'}
+                  </p>
+                </div>
+              </div>
+
+              {orderingPaused && (
+                <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold leading-6 text-amber-800">
+                  {isZh ? '产品资料更新中，暂时不能选择规格或下单。' : 'Product details are being updated. Selection and ordering are temporarily paused.'}
+                </div>
+              )}
+
+              <div className="mt-6 space-y-6">
+                {hasVariants ? configuration.options.map(option => {
+                  const selectedValue = option.values.find(value => value.id === selectedValueIds[option.id]);
+                  return (
+                    <fieldset key={option.id}>
+                      <legend className="flex w-full items-center justify-between gap-3 text-sm font-bold text-slate-900">
+                        <span>{isZh ? option.nameZh : option.nameEn}</span>
+                        <span className="font-normal text-[#61767d]">{selectedValue ? (isZh ? selectedValue.nameZh : selectedValue.nameEn) : ''}</span>
+                      </legend>
+                      <div className="mt-3 flex flex-wrap gap-2.5">
+                        {option.values.map(value => {
+                          const candidateSelection = { ...selectedValueIds, [option.id]: value.id };
+                          const candidateVariant = getVariantForSelection(configuration.variants, candidateSelection, configuration.options);
+                          const isAvailable = Boolean(candidateVariant) && candidateVariant?.isAvailable !== false;
+                          const isSelected = selectedValueIds[option.id] === value.id;
+                          return (
+                            <button
+                              key={value.id}
+                              type="button"
+                              onClick={() => chooseOptionValue(option, value.id)}
+                              disabled={orderingPaused || !isAvailable}
+                              aria-pressed={isSelected}
+                              className={`min-h-11 rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
+                                isSelected
+                                  ? 'border-[#0b7fa8] bg-[#eaf6f8] text-[#075c79] shadow-[0_0_0_1px_#0b7fa8]'
+                                  : isAvailable
+                                    ? 'border-[#cbdadd] bg-white text-[#2c4a54] hover:border-[#70b8cc] cursor-pointer'
+                                    : 'border-[#e3e9ea] bg-[#f4f6f6] text-[#a3b0b3] line-through cursor-not-allowed'
+                              }`}
+                            >
+                              {isZh ? value.nameZh : value.nameEn}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  );
+                }) : (
                   <>
-                <label className="block">
-                  <span className="block text-[11px] font-bold text-[#536c74] mb-1.5">
-                    {isZh ? '单条估重' : 'Fish weight'}
-                  </span>
-                  <select
-                    value={weightKg}
-                    onChange={(event) => setWeightKg(parseFloat(event.target.value))}
-                    disabled={orderingPaused}
-                    className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-xl px-3 py-2.5 text-xs font-semibold text-[#17323d] focus:outline-none focus:border-sky-600 focus:ring-1 focus:ring-sky-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                  >
-                    <option value={product.averageWeightKg * 0.8}>
-                      {(product.averageWeightKg * 0.8).toFixed(1)} kg ({isZh ? '小条' : 'Small'})
-                    </option>
-                    <option value={product.averageWeightKg}>
-                      {product.averageWeightKg.toFixed(1)} kg ({isZh ? '标准' : 'Standard'})
-                    </option>
-                    <option value={product.averageWeightKg * 1.3}>
-                      {(product.averageWeightKg * 1.3).toFixed(1)} kg ({isZh ? '大条' : 'Large'})
-                    </option>
-                    <option value={product.averageWeightKg * 1.6}>
-                      {(product.averageWeightKg * 1.6).toFixed(1)} kg ({isZh ? '特大' : 'Extra large'})
-                    </option>
-                    <option value="whatsapp-custom-weight" disabled>
-                      {isZh ? '其他规格请 WhatsApp 客服' : 'Other size? Contact WhatsApp'}
-                    </option>
-                  </select>
-                </label>
+                    <fieldset>
+                      <legend className="flex w-full items-center justify-between text-sm font-bold text-slate-900">
+                        <span>{isZh ? '单条估重' : 'Fish weight'}</span>
+                        <span className="font-normal text-[#61767d]">{weightKg.toFixed(1)} kg</span>
+                      </legend>
+                      <div className="mt-3 flex flex-wrap gap-2.5">
+                        {[0.8, 1, 1.3, 1.6].map(multiplier => {
+                          const value = product.averageWeightKg * multiplier;
+                          const isSelected = Math.abs(weightKg - value) < 0.001;
+                          return (
+                            <button
+                              key={multiplier}
+                              type="button"
+                              onClick={() => setWeightKg(value)}
+                              disabled={orderingPaused}
+                              aria-pressed={isSelected}
+                              className={`min-h-11 rounded-xl border px-4 py-2 text-sm font-bold transition-all cursor-pointer ${
+                                isSelected ? 'border-[#0b7fa8] bg-[#eaf6f8] text-[#075c79] shadow-[0_0_0_1px_#0b7fa8]' : 'border-[#cbdadd] text-[#2c4a54] hover:border-[#70b8cc]'
+                              }`}
+                            >
+                              {value.toFixed(1)} kg
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
 
-                <label className="block">
-                  <span className="block text-[11px] font-bold text-[#536c74] mb-1.5">
-                    {isZh ? '清洗及刀工' : 'Processing style'}
-                  </span>
-                  <select
-                    value={cutType}
-                    onChange={(event) => setCutType(event.target.value as CutType)}
-                    disabled={orderingPaused}
-                    className="w-full bg-[#edf5f4] border border-[#c4d5d9] rounded-xl px-3 py-2.5 text-xs font-semibold text-[#17323d] focus:outline-none focus:border-sky-600 focus:ring-1 focus:ring-sky-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                  >
-                    {cutOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {isZh ? option.zh : option.en}
-                      </option>
-                    ))}
-                    <option value="whatsapp-custom-cut" disabled>
-                      {isZh ? '特殊处理请 WhatsApp 客服' : 'Custom cut? Contact WhatsApp'}
-                    </option>
-                  </select>
-                </label>
+                    <fieldset>
+                      <legend className="flex w-full items-center justify-between text-sm font-bold text-slate-900">
+                        <span>{isZh ? '清洗及刀工' : 'Processing style'}</span>
+                        <span className="font-normal text-[#61767d]">{isZh ? selectedCutLabel?.zh : selectedCutLabel?.en}</span>
+                      </legend>
+                      <div className="mt-3 flex flex-wrap gap-2.5">
+                        {cutOptions.map(option => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setCutType(option.value)}
+                            disabled={orderingPaused}
+                            aria-pressed={cutType === option.value}
+                            className={`min-h-11 rounded-xl border px-4 py-2 text-sm font-bold transition-all cursor-pointer ${
+                              cutType === option.value ? 'border-[#0b7fa8] bg-[#eaf6f8] text-[#075c79] shadow-[0_0_0_1px_#0b7fa8]' : 'border-[#cbdadd] text-[#2c4a54] hover:border-[#70b8cc]'
+                            }`}
+                          >
+                            {isZh ? option.zh : option.en}
+                          </button>
+                        ))}
+                      </div>
+                    </fieldset>
                   </>
                 )}
 
-                <div>
-                  <span className="block text-[11px] font-bold text-[#536c74] mb-1.5">
-                    {isZh ? '购买数量' : 'Quantity'}
-                  </span>
-                  <div className="inline-flex items-center rounded-xl border border-[#c4d5d9] bg-[#edf5f4] overflow-hidden">
-                    <button
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      disabled={orderingPaused}
-                      className="w-9 h-9 text-base font-bold text-[#536c74] hover:text-[#17323d] hover:bg-[#e3eeee] cursor-pointer disabled:text-slate-300 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                    >
-                      -
-                    </button>
-                    <span className="w-10 text-center font-mono text-sm font-black text-[#17323d]">{quantity}</span>
-                    <button
-                      onClick={() => setQuantity(quantity + 1)}
-                      disabled={orderingPaused}
-                      className="w-9 h-9 text-base font-bold text-[#536c74] hover:text-[#17323d] hover:bg-[#e3eeee] cursor-pointer disabled:text-slate-300 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                    >
-                      +
-                    </button>
+                {hasVariants && (
+                  <button
+                    type="button"
+                    onClick={() => !orderingPaused && setSelectedVariantId(CUSTOM_VARIANT_INQUIRY_ID)}
+                    disabled={orderingPaused}
+                    className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-emerald-700 transition-colors hover:text-emerald-600 cursor-pointer disabled:cursor-not-allowed disabled:text-slate-400"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    <span>{isZh ? '需要其他规格或特别处理？联系我们' : 'Need another size or custom processing?'}</span>
+                  </button>
+                )}
+
+                <div className="flex items-end justify-between gap-4 border-t border-[#dbe5e6] pt-5">
+                  <div>
+                    <span className="block text-sm font-bold text-slate-900">{isZh ? '数量' : 'Quantity'}</span>
+                    <div className="mt-2 inline-flex h-12 items-center overflow-hidden rounded-xl border border-[#cbdadd] bg-white">
+                      <button onClick={() => setQuantity(Math.max(1, quantity - 1))} disabled={orderingPaused} aria-label={isZh ? '减少数量' : 'Decrease quantity'} className="h-12 w-12 text-lg font-bold text-[#526a72] hover:bg-[#f0f5f4] cursor-pointer disabled:cursor-not-allowed disabled:text-slate-300">−</button>
+                      <span className="w-12 text-center text-base font-black tabular-nums text-slate-950">{quantity}</span>
+                      <button onClick={() => setQuantity(quantity + 1)} disabled={orderingPaused} aria-label={isZh ? '增加数量' : 'Increase quantity'} className="h-12 w-12 text-lg font-bold text-[#526a72] hover:bg-[#f0f5f4] cursor-pointer disabled:cursor-not-allowed disabled:text-slate-300">+</button>
+                    </div>
                   </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold uppercase tracking-[0.08em] text-[#71868c]">{isZh ? '预估小计' : 'Estimated subtotal'}</p>
+                    <p className="mt-1 text-2xl font-black tabular-nums text-slate-950">
+                      {isCustomVariantInquiry ? (isZh ? '客服确认' : 'Ask us') : `RM ${formatPrice(calculatedTotalPrice)}`}
+                    </p>
+                    {!isCustomVariantInquiry && <p className="mt-1 text-xs text-[#71868c]">{weightKg.toFixed(1)}kg × {quantity}</p>}
+                  </div>
+                </div>
+
+                <div className="grid gap-3">
+                  <button
+                    type="button"
+                    onClick={() => canAddToCart && onAddToCart(product, quantity, weightKg, cutType, selectedVariant?.id)}
+                    disabled={!canAddToCart}
+                    className={`inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-5 text-base font-extrabold transition-colors ${
+                      canAddToCart ? 'bg-[#073c63] text-white shadow-[0_10px_24px_rgba(7,60,99,0.2)] hover:bg-[#082f4e] cursor-pointer' : 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                    }`}
+                  >
+                    <ShoppingCart className="h-5 w-5" />
+                    <span>{orderingPaused ? (isZh ? '维护中暂不可下单' : 'Ordering paused') : isCustomVariantInquiry ? (isZh ? '请用 WhatsApp 询问' : 'Ask on WhatsApp') : selectedVariant?.isAvailable === false ? (isZh ? '此规格暂不可售' : 'Variant unavailable') : (isZh ? '加入购物车' : 'Add to cart')}</span>
+                  </button>
+                  <a
+                    href={orderingPaused ? undefined : `https://wa.me/60187682528?text=${whatsappText}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-disabled={orderingPaused}
+                    tabIndex={orderingPaused ? -1 : 0}
+                    className={`inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border px-5 text-base font-extrabold transition-colors ${
+                      orderingPaused ? 'pointer-events-none border-slate-200 bg-slate-100 text-slate-400' : 'border-emerald-500 bg-white text-emerald-700 hover:bg-emerald-50'
+                    }`}
+                  >
+                    <MessageCircle className="h-5 w-5" />
+                    <span>{isCustomVariantInquiry ? (isZh ? 'WhatsApp 询问规格' : 'Ask on WhatsApp') : (isZh ? 'WhatsApp 直接订购' : 'Order on WhatsApp')}</span>
+                  </a>
                 </div>
               </div>
 
-              <div className="mt-4 p-3 rounded-xl bg-[#edf5f4] border border-[#c4d5d9] flex items-end justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-bold text-[#536c74]">
-                    {isZh ? '预估总价' : 'Estimated subtotal'}
-                  </p>
-                  <p className="mt-0.5 text-2xl font-black text-amber-600 font-mono">
-                    {isCustomVariantInquiry ? (isZh ? 'WhatsApp' : 'Ask') : `RM ${calculatedTotalPrice.toFixed(0)}`}
-                  </p>
-                </div>
-                <p className="text-right text-[11px] leading-4 text-[#536c74]">
-                  {isCustomVariantInquiry ? (isZh ? '客服确认' : 'Confirm by chat') : `${weightKg.toFixed(1)}kg x ${quantity}`}
-                </p>
+              <div className="mt-7 divide-y divide-[#dbe5e6] border-y border-[#dbe5e6]">
+                <details className="group py-4" open>
+                  <summary className="flex min-h-7 cursor-pointer list-none items-center justify-between gap-4 font-bold text-slate-900 marker:content-none">
+                    <span>{isZh ? '风味与肉质' : 'Flavor and texture'}</span>
+                    <span className="text-xl font-normal text-[#71868c] transition-transform group-open:rotate-45">+</span>
+                  </summary>
+                  <div className="mt-3 flex gap-3 text-sm leading-6 text-[#526a72]"><Flame className="mt-1 h-4 w-4 shrink-0 text-amber-600" /><p>{tastingNotes}</p></div>
+                </details>
+                <details className="group py-4">
+                  <summary className="flex min-h-7 cursor-pointer list-none items-center justify-between gap-4 font-bold text-slate-900 marker:content-none">
+                    <span>{isZh ? '推荐煮法' : 'Recommended cooking'}</span>
+                    <span className="text-xl font-normal text-[#71868c] transition-transform group-open:rotate-45">+</span>
+                  </summary>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {cookingSuggestions.map(suggestion => <span key={suggestion} className="inline-flex items-center gap-1.5 rounded-full bg-[#eef5f4] px-3 py-1.5 text-sm font-semibold text-[#35545e]"><Compass className="h-3.5 w-3.5 text-sky-700" />{suggestion}</span>)}
+                  </div>
+                </details>
+                <details className="group py-4">
+                  <summary className="flex min-h-7 cursor-pointer list-none items-center justify-between gap-4 font-bold text-slate-900 marker:content-none">
+                    <span>{isZh ? '处理与品质' : 'Processing and quality'}</span>
+                    <span className="text-xl font-normal text-[#71868c] transition-transform group-open:rotate-45">+</span>
+                  </summary>
+                  <div className="mt-3 space-y-2.5">
+                    {features.map(feature => <div key={feature} className="flex items-start gap-2.5 text-sm leading-6 text-[#526a72]"><CheckCircle className="mt-1 h-4 w-4 shrink-0 text-emerald-600" /><span>{feature}</span></div>)}
+                  </div>
+                </details>
               </div>
 
-              <div className="mt-4 grid gap-2.5">
-                <button
-                  onClick={() => {
-                    if (canAddToCart) {
-                      onAddToCart(product, quantity, weightKg, cutType, selectedVariant?.id);
-                    }
-                  }}
-                  disabled={!canAddToCart}
-                  className={`w-full h-10 rounded-xl text-sm font-extrabold inline-flex items-center justify-center gap-2 shadow-md transition-colors ${
-                    !canAddToCart
-                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
-                      : 'bg-[#073c63] hover:bg-[#082f4e] text-white cursor-pointer'
-                  }`}
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  <span>
-                    {orderingPaused
-                      ? (isZh ? '维护中暂不可下单' : 'Ordering Paused')
-                      : isCustomVariantInquiry
-                        ? (isZh ? '请用 WhatsApp 询问' : 'Use WhatsApp to ask')
-                        : selectedVariant?.isAvailable === false
-                          ? (isZh ? '此规格暂不可售' : 'Variant unavailable')
-                        : (isZh ? '加入购物车' : 'Add to Cart')}
-                  </span>
-                </button>
-                <a
-                  href={orderingPaused ? undefined : `https://wa.me/60187682528?text=${whatsappText}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-disabled={orderingPaused}
-                  tabIndex={orderingPaused ? -1 : 0}
-                  className={`w-full h-10 rounded-xl text-sm font-extrabold inline-flex items-center justify-center gap-2 shadow-md transition-colors ${
-                    orderingPaused
-                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed pointer-events-none shadow-none'
-                      : 'bg-emerald-500 hover:bg-emerald-400 text-white'
-                  }`}
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  <span>
-                    {orderingPaused
-                      ? (isZh ? '暂不接受 WhatsApp 下单' : 'WhatsApp ordering paused')
-                      : isCustomVariantInquiry
-                        ? (isZh ? 'WhatsApp 询问规格' : 'Ask on WhatsApp')
-                        : (isZh ? 'WhatsApp 直接订购' : 'Order on WhatsApp')}
-                  </span>
-                </a>
-              </div>
-
-              <div className="mt-5 border-t border-[#c4d5d9] pt-5 space-y-5">
-                <div>
-                  <div className="mb-2.5 flex flex-wrap gap-1.5">
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-[#c4d5d9] text-[#073c63] text-[10px] font-bold">
-                      {product.isWild ? (isZh ? '彭亨野生捕捞' : 'Pahang Wild Catch') : (isZh ? '彭亨河水养殖' : 'Pahang River Raised')}
-                    </span>
-                    <span className="px-2.5 py-1 rounded-lg bg-emerald-500 text-white text-[10px] font-bold">
-                      {stockLabel}
-                    </span>
-                    <span className="px-2.5 py-1 rounded-lg bg-[#bc9655] text-white text-[10px] font-bold">
-                      {isZh ? '真空冷冻配送' : 'Vacuum Frozen Delivery'}
-                    </span>
-                  </div>
-                  <p className="text-[11px] font-mono tracking-wide text-sky-700">
-                    {product.scientificName}
-                  </p>
-                  <h1 className="mt-1.5 text-xl md:text-2xl font-black leading-tight text-slate-950">
-                    {name}
-                  </h1>
-                  <p className="mt-2 text-xs leading-6 text-[#425d65]">
-                    {description}
-                  </p>
-                </div>
-
-                <div>
-                  <h2 className="text-sm font-extrabold text-slate-950">
-                    {isZh ? '风味与肉质' : 'Flavor and Texture'}
-                  </h2>
-                  <div className="mt-2 rhs-panel-soft border rounded-xl p-3 flex gap-2.5">
-                    <Flame className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <p className="text-xs leading-6 text-[#425d65]">{tastingNotes}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <h2 className="text-sm font-extrabold text-slate-950">
-                    {isZh ? '推荐煮法' : 'Recommended Cooking'}
-                  </h2>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {cookingSuggestions.map((suggestion) => (
-                      <span
-                        key={suggestion}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg rhs-panel-soft border text-[11px] font-semibold text-[#17323d]"
-                      >
-                        <Compass className="w-3.5 h-3.5 text-sky-600" />
-                        {suggestion}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h2 className="text-sm font-extrabold text-slate-950">
-                    {isZh ? '我们处理到位' : 'Handled for Confidence'}
-                  </h2>
-                  <div className="mt-2 space-y-1.5">
-                    {features.map((feature) => (
-                      <div key={feature} className="flex items-start gap-2 text-xs leading-5 text-[#425d65]">
-                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                        <span>{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rhs-panel-soft border rounded-xl p-3 space-y-3">
-                  <div className="flex items-start gap-2.5">
-                    <Truck className="w-4 h-4 text-sky-700 shrink-0" />
-                    <div>
-                      <h3 className="text-xs font-extrabold text-slate-950">
-                        {isZh ? '全马冷链配送' : 'Malaysia Cold Chain'}
-                      </h3>
-                      <p className="mt-1 text-xs leading-5 text-[#536c74]">
-                        {isZh ? '真空包装后急速冷冻，配送到家仍保持扎实冰冻状态。' : 'Vacuum packed and flash frozen so the fish reaches you firm and chilled.'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <Snowflake className="w-4 h-4 text-sky-700 shrink-0" />
-                    <div>
-                      <h3 className="text-xs font-extrabold text-slate-950">
-                        {isZh ? '锁鲜处理' : 'Freshness Locked'}
-                      </h3>
-                      <p className="mt-1 text-xs leading-5 text-[#536c74]">
-                        {isZh ? '活杀处理，清洗后按您选择的刀工包装。' : 'Processed fresh, cleaned, then packed to your selected cut.'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <Package className="w-4 h-4 text-sky-700 shrink-0" />
-                    <div>
-                      <h3 className="text-xs font-extrabold text-slate-950">
-                        {isZh ? '适合家庭和餐馆' : 'Home and Restaurant Ready'}
-                      </h3>
-                      <p className="mt-1 text-xs leading-5 text-[#536c74]">
-                        {isZh ? '可整条、厚切、薄片或鱼片处理，方便下锅。' : 'Choose whole, steak, sliced, or fillet processing for easier cooking.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+              <div className="mt-6 grid gap-4 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                <div className="flex gap-3"><Truck className="mt-0.5 h-5 w-5 shrink-0 text-sky-700" /><div><strong className="block text-sm text-slate-900">{isZh ? '全马冷链' : 'Cold-chain delivery'}</strong><span className="mt-1 block text-xs leading-5 text-[#71868c]">{isZh ? '冰冻状态配送到家' : 'Delivered frozen to your door'}</span></div></div>
+                <div className="flex gap-3"><Snowflake className="mt-0.5 h-5 w-5 shrink-0 text-sky-700" /><div><strong className="block text-sm text-slate-900">{isZh ? '急速锁鲜' : 'Flash frozen'}</strong><span className="mt-1 block text-xs leading-5 text-[#71868c]">{isZh ? '处理后立即真空冷冻' : 'Vacuum packed after processing'}</span></div></div>
+                <div className="flex gap-3"><Package className="mt-0.5 h-5 w-5 shrink-0 text-sky-700" /><div><strong className="block text-sm text-slate-900">{isZh ? '按需处理' : 'Prepared your way'}</strong><span className="mt-1 block text-xs leading-5 text-[#71868c]">{isZh ? '依所选规格切洗包装' : 'Cut and packed to your selection'}</span></div></div>
               </div>
             </aside>
           </div>
@@ -555,57 +444,32 @@ export default function ProductPage({
       </section>
 
       {relatedProducts.length > 0 && (
-        <section className="px-4 sm:px-6 lg:px-8 py-12 md:py-16 rhs-section">
-          <div className="max-w-[1400px] mx-auto">
-            <div className="flex items-end justify-between gap-4 mb-6">
+        <section className="bg-[#e7efee] px-4 py-12 sm:px-6 md:py-16 lg:px-8">
+          <div className="mx-auto max-w-[1360px]">
+            <div className="mb-7 flex items-end justify-between gap-4">
               <div>
-                <h2 className="text-2xl md:text-3xl font-extrabold text-slate-950">
-                  {isZh ? '也可以看看' : 'You may also like'}
-                </h2>
-                <p className="mt-2 text-sm text-[#536c74]">
-                  {isZh ? '同类河鱼和适合一起比较的选择。' : 'Similar river fish worth comparing before ordering.'}
-                </p>
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#2483a2]">{isZh ? '更多河鲜' : 'More river fish'}</p>
+                <h2 className="mt-2 text-2xl font-black tracking-[-0.02em] text-slate-950 md:text-3xl">{isZh ? '您可能也喜欢' : 'You may also like'}</h2>
               </div>
-              <button
-                onClick={onBackToShop}
-                className="hidden sm:inline-flex px-4 py-2 rounded-xl border border-[#c4d5d9] bg-[#f4f8f7] hover:bg-[#edf5f4] text-sm font-bold text-[#17323d] cursor-pointer"
-              >
-                {isZh ? '全部产品' : 'All products'}
-              </button>
+              <button onClick={onBackToShop} className="hidden min-h-11 items-center rounded-xl border border-[#c4d5d9] bg-white px-4 text-sm font-bold text-[#17323d] hover:bg-[#f4f8f7] cursor-pointer sm:inline-flex">{isZh ? '查看全部' : 'View all'}</button>
             </div>
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {relatedProducts.map((relatedProduct) => (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {relatedProducts.map(relatedProduct => (
                 <button
                   key={relatedProduct.id}
-                  onClick={() => {
-                    if (!orderingPaused) onProductSelect(relatedProduct);
-                  }}
+                  type="button"
+                  onClick={() => !orderingPaused && onProductSelect(relatedProduct)}
                   disabled={orderingPaused}
-                  className={`group text-left border rounded-2xl overflow-hidden transition-all ${
-                    orderingPaused
-                      ? 'bg-slate-100 border-slate-200 opacity-75 cursor-not-allowed'
-                      : 'rhs-panel hover:border-sky-300 hover:shadow-lg cursor-pointer'
-                  }`}
+                  className={`group overflow-hidden rounded-2xl border text-left transition-all ${orderingPaused ? 'border-slate-200 bg-slate-100 opacity-75 cursor-not-allowed' : 'border-[#d1dfe1] bg-white hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-xl cursor-pointer'}`}
                 >
-                  <div className="aspect-[16/10] overflow-hidden bg-slate-100">
-                    <img
-                      src={resolveMediaUrl(relatedProduct.image)}
-                      alt={isZh ? relatedProduct.nameZh : relatedProduct.nameEn}
-                      className={`w-full h-full object-cover transition-transform duration-500 ${
-                        orderingPaused ? 'grayscale opacity-60' : 'group-hover:scale-105 saturate-[0.88] group-hover:saturate-100'
-                      }`}
-                      referrerPolicy="no-referrer"
-                    />
+                  <div className="aspect-[4/3] overflow-hidden bg-[#eaf0ef]">
+                    <img src={resolveMediaUrl(relatedProduct.image)} alt={isZh ? relatedProduct.nameZh : relatedProduct.nameEn} className={`h-full w-full object-contain transition-transform duration-500 ${orderingPaused ? 'grayscale opacity-60' : 'group-hover:scale-[1.03]'}`} referrerPolicy="no-referrer" />
                   </div>
-                  <div className="p-4">
-                    <p className="text-xs font-mono text-sky-700">{relatedProduct.scientificName}</p>
-                    <h3 className="mt-1 text-lg font-extrabold text-slate-950">
-                      {isZh ? relatedProduct.nameZh : relatedProduct.nameEn}
-                    </h3>
-                    <p className="mt-2 text-sm font-black text-amber-600 font-mono">
-                      RM {relatedProduct.pricePerKg}/kg
-                    </p>
+                  <div className="p-5">
+                    <p className="font-mono text-xs uppercase tracking-[0.08em] text-sky-700">{relatedProduct.scientificName}</p>
+                    <h3 className="mt-2 text-xl font-extrabold text-slate-950">{isZh ? relatedProduct.nameZh : relatedProduct.nameEn}</h3>
+                    <p className="mt-3 text-base font-black text-[#c76a12]">RM {formatPrice(relatedProduct.pricePerKg)} <span className="text-sm font-semibold text-[#71868c]">/ kg</span></p>
                   </div>
                 </button>
               ))}

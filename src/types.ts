@@ -1,5 +1,6 @@
 export type Language = 'zh' | 'en';
 export type ProductMediaType = 'image' | 'video';
+export type ProductMediaAspectRatio = 'square' | 'portrait' | 'landscape' | 'wide' | 'original';
 export type ProductCutType = 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet';
 export type ProductCategory = string;
 
@@ -68,6 +69,7 @@ export interface Product {
   averageWeightKg: number; // typical weight per fish
   image: string;
   media?: ProductMedia[];
+  mediaAspectRatio?: ProductMediaAspectRatio;
   options?: ProductOption[];
   variants?: ProductVariant[];
   tastingNotesZh: string;

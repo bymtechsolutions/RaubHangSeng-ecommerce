@@ -56,6 +56,7 @@ const allowedUploadTypes: Record<string, { extension: string; type: ProductMedia
   'video/webm': { extension: 'webm', type: 'video', maxBytes: maxVideoUploadBytes },
   'video/quicktime': { extension: 'mov', type: 'video', maxBytes: maxVideoUploadBytes },
 };
+const allowedProductMediaAspectRatios = new Set(['square', 'portrait', 'landscape', 'wide', 'original']);
 
 const defaultSettings: StoreSettings = {
   maintenanceMode: false,
@@ -686,6 +687,7 @@ app.put('/api/products', requireSeller, async (req, res, next) => {
     }
     const invalidProduct = products.find(product => (
       !product?.id || !product.nameZh || !product.nameEn ||
+      (product.mediaAspectRatio !== undefined && !allowedProductMediaAspectRatios.has(product.mediaAspectRatio)) ||
       (product.options?.length || 0) > 3 || (product.variants?.length || 0) > 2048
     ));
     if (invalidProduct) throw new HttpError(400, 'INVALID_PRODUCT', `Product ${invalidProduct.id || 'unknown'} is invalid`);
