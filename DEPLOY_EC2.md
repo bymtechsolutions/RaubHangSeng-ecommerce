@@ -47,7 +47,7 @@ Copy this repository into `/opt/rhsfish`.
 Run this from the project root on EC2:
 
 ```bash
-sudo env SELLER_PASSCODE='8888' CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
+sudo env SELLER_PASSCODE='use-a-strong-private-passcode' CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
 ```
 
 That command will:
@@ -58,6 +58,17 @@ That command will:
 - Install `/etc/nginx/conf.d/00-rhsfish.com.conf`.
 - Reload Nginx.
 - Enable HTTPS if all four DNS names already resolve to `54.251.150.167`.
+
+The deployment script requires a non-default seller passcode with at least 8 characters. It creates and preserves a random `SESSION_SECRET` in `/opt/rhsfish/.env`; keep that file private and stable because changing the secret signs every member and seller out. On the first hardened deployment, any legacy seller passcode is replaced by the `SELLER_PASSCODE` supplied to the deployment command.
+
+Before deployment, run the production boundary test:
+
+```bash
+npm run test:production
+npm run build:all
+```
+
+The single-container data store uses serialized atomic writes and keeps the previous valid state at `/app/data/store.json.backup`. Continue backing up the `rhsfish_data` Docker volume as part of the server backup schedule. Horizontal scaling requires migrating this store to a shared transactional database first.
 
 If DNS has not propagated yet, the script keeps HTTP working and skips HTTPS. Rerun the same command after DNS is ready.
 
@@ -156,7 +167,7 @@ From `/opt/rhsfish`:
 
 ```bash
 git pull
-sudo env SELLER_PASSCODE='8888' CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
+sudo env SELLER_PASSCODE='use-a-strong-private-passcode' CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
 docker image prune -f
 ```
 

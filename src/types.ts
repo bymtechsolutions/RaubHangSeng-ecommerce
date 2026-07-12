@@ -120,6 +120,7 @@ export interface PaymentSlip {
   size: number;
   dataUrl: string;
   uploadedAt: string;
+  storageKey?: string;
 }
 
 export interface PaymentRecord {
@@ -146,6 +147,7 @@ export interface OrderRecord {
   status?: string;
   payment?: PaymentRecord;
   userId?: string;
+  shippingRegion?: 'local' | 'outstation';
   subtotal?: number;
   baseShippingFee?: number;
   shippingFee?: number;

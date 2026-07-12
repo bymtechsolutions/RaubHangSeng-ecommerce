@@ -130,20 +130,37 @@ connect_existing_proxy_network() {
 load_or_create_env() {
   if [[ ! -f "$ROOT_DIR/.env" ]]; then
     log "Creating .env"
-    local passcode="${SELLER_PASSCODE:-8888}"
-    cat > "$ROOT_DIR/.env" <<EOF
-SELLER_PASSCODE=$passcode
-EOF
-    chmod 600 "$ROOT_DIR/.env"
-    if [[ "$passcode" == "8888" ]]; then
-      log "SELLER_PASSCODE was not provided, using default 8888. Change it in .env after deployment."
+    local passcode="${SELLER_PASSCODE:-}"
+    if [[ ${#passcode} -lt 8 || "$passcode" == "8888" ]]; then
+      echo "Set SELLER_PASSCODE to a non-default value with at least 8 characters before deployment." >&2
+      exit 1
     fi
+    local generated_session_secret
+    generated_session_secret="${SESSION_SECRET:-$(openssl rand -hex 32)}"
+    printf 'SELLER_PASSCODE=%q\nSESSION_SECRET=%q\n' "$passcode" "$generated_session_secret" > "$ROOT_DIR/.env"
+    chmod 600 "$ROOT_DIR/.env"
   fi
 
   set -a
   # shellcheck disable=SC1091
   source "$ROOT_DIR/.env"
   set +a
+
+  if [[ ${#SELLER_PASSCODE} -lt 8 || "$SELLER_PASSCODE" == "8888" ]]; then
+    echo "SELLER_PASSCODE in $ROOT_DIR/.env must be non-default and at least 8 characters." >&2
+    exit 1
+  fi
+
+  if [[ -z "${SESSION_SECRET:-}" ]]; then
+    SESSION_SECRET="$(openssl rand -hex 32)"
+    printf 'SESSION_SECRET=%q\n' "$SESSION_SECRET" >> "$ROOT_DIR/.env"
+    export SESSION_SECRET
+  fi
+
+  if [[ ${#SESSION_SECRET} -lt 32 ]]; then
+    echo "SESSION_SECRET in $ROOT_DIR/.env must contain at least 32 characters." >&2
+    exit 1
+  fi
 }
 
 run_container() {
@@ -172,7 +189,8 @@ run_container() {
     -e PORT="$CONTAINER_PORT" \
     -e RHS_DATA_FILE=/app/data/store.json \
     -e RHS_UPLOAD_DIR=/app/data/uploads \
-    -e SELLER_PASSCODE="${SELLER_PASSCODE:-8888}" \
+    -e SELLER_PASSCODE="$SELLER_PASSCODE" \
+    -e SESSION_SECRET="$SESSION_SECRET" \
     "$IMAGE_NAME" >/dev/null
 }
 

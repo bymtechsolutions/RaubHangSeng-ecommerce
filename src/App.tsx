@@ -22,7 +22,7 @@ import { PRODUCTS } from './data/products';
 import { DEFAULT_COLLECTIONS, normalizeCollectionDisplays } from './data/collections';
 import SellerDashboard, { type SellerDashboardTab } from './components/SellerDashboard';
 import PolicyView from './components/PolicyView';
-import { createOrder, fetchStore, replaceOrders, replaceProducts, updateSellerPasscode, updateSettings, verifySellerPasscode } from './lib/api';
+import { createOrder, fetchMemberOrders, fetchSellerStore, fetchSession, fetchStore, logoutMember, logoutSeller, replaceOrders, replaceProducts, updateSellerPasscode, updateSettings, verifySellerPasscode } from './lib/api';
 import { calculateDiscounts } from './lib/discounts';
 import { resolveMediaUrl } from './lib/media';
 import { getCartItemPricePerKg } from './lib/productOptions';
@@ -115,7 +115,7 @@ export default function App() {
   // Seller Dashboard / Store Configuration States
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [draftProducts, setDraftProducts] = useState<Product[] | null>(null);
-  const [sellerAccessGranted, setSellerAccessGranted] = useState(() => sessionStorage.getItem('raub_hang_seng_seller_access') === 'true');
+  const [sellerAccessGranted, setSellerAccessGranted] = useState(false);
   const [isPasscodeModalOpen, setIsPasscodeModalOpen] = useState(false);
   const [passcodeInput, setPasscodeInput] = useState('');
   const [passcodeError, setPasscodeError] = useState(false);
@@ -147,6 +147,18 @@ export default function App() {
     setDiscounts(Array.isArray(settings.discounts) ? settings.discounts : []);
   };
 
+  const applySellerStore = (store: Awaited<ReturnType<typeof fetchSellerStore>>) => {
+    setProducts(store.products);
+    setDraftProducts(store.draftProducts || null);
+    setOrderHistory(store.orders);
+    applyStoreSettings(store.settings);
+  };
+
+  const loadSellerStore = async () => {
+    const store = await fetchSellerStore();
+    applySellerStore(store);
+  };
+
   // Initialize session state locally and shared store data from backend.
   useEffect(() => {
     const savedCart = localStorage.getItem('pahang_river_fish_cart');
@@ -158,25 +170,11 @@ export default function App() {
       }
     }
 
-    const savedUser = localStorage.getItem('raub_hang_seng_current_user');
-    if (savedUser) {
-      try {
-        setCurrentUser(JSON.parse(savedUser));
-      } catch (e) {
-        console.error('Failed to parse user session', e);
-      }
-    }
+    localStorage.removeItem('raub_hang_seng_current_user');
+    localStorage.removeItem('pahang_river_fish_orders');
+    sessionStorage.removeItem('raub_hang_seng_seller_access');
 
     const loadLocalStoreFallback = () => {
-      const savedOrders = localStorage.getItem('pahang_river_fish_orders');
-      if (savedOrders) {
-        try {
-          setOrderHistory(JSON.parse(savedOrders));
-        } catch (e) {
-          console.error('Failed to parse order history', e);
-        }
-      }
-
       const savedProducts = localStorage.getItem('raub_hang_seng_products');
       if (savedProducts) {
         try {
@@ -248,19 +246,24 @@ export default function App() {
 
     const loadBackendStore = async () => {
       try {
-        const store = await fetchStore();
+        const [store, session] = await Promise.all([fetchStore(), fetchSession()]);
         setProducts(store.products);
-        setDraftProducts(store.draftProducts || null);
-        setOrderHistory(store.orders);
+        setDraftProducts(null);
+        setOrderHistory([]);
         applyStoreSettings(store.settings);
+        setCurrentUser(session.profile);
+        setSellerAccessGranted(session.sellerAuthenticated);
+
+        if (session.profile) {
+          const memberOrders = await fetchMemberOrders();
+          setOrderHistory(memberOrders.orders);
+        }
+        if (session.sellerAuthenticated && getRouteFromPath() === 'seller') {
+          await loadSellerStore();
+        }
 
         localStorage.setItem('raub_hang_seng_products', JSON.stringify(store.products));
-        if (store.draftProducts) {
-          localStorage.setItem('raub_hang_seng_products_draft', JSON.stringify(store.draftProducts));
-        } else {
-          localStorage.removeItem('raub_hang_seng_products_draft');
-        }
-        localStorage.setItem('pahang_river_fish_orders', JSON.stringify(store.orders));
+        localStorage.removeItem('raub_hang_seng_products_draft');
         localStorage.setItem('raub_hang_seng_maintenance', String(store.settings.maintenanceMode));
         localStorage.setItem('raub_hang_seng_free_shipping', String(store.settings.freeShippingThreshold));
         localStorage.setItem('raub_hang_seng_local_rate', String(store.settings.localShippingRate));
@@ -304,6 +307,17 @@ export default function App() {
     }
   }, [isMaintenanceMode]);
 
+  useEffect(() => {
+    if (sellerAccessGranted && route === 'seller') return;
+    if (!currentUser) {
+      setOrderHistory([]);
+      return;
+    }
+    void fetchMemberOrders()
+      .then(response => setOrderHistory(response.orders))
+      .catch(error => console.error('Failed to load member orders', error));
+  }, [currentUser?.username, sellerAccessGranted, route]);
+
   // Save cart to localStorage
   const saveCart = (items: CartItem[]) => {
     setCartItems(items);
@@ -311,37 +325,23 @@ export default function App() {
   };
 
   const publishProducts = async (nextProducts: Product[]) => {
-    setProducts(nextProducts);
-    localStorage.setItem('raub_hang_seng_products', JSON.stringify(nextProducts));
-
-    try {
-      const response = await replaceProducts(nextProducts);
-      setProducts(response.products);
-      setDraftProducts(response.draftProducts || null);
-      localStorage.setItem('raub_hang_seng_products', JSON.stringify(response.products));
-      if (response.draftProducts) {
-        localStorage.setItem('raub_hang_seng_products_draft', JSON.stringify(response.draftProducts));
-      } else {
-        localStorage.removeItem('raub_hang_seng_products_draft');
-      }
-    } catch (e) {
-      console.error('Failed to persist products to backend', e);
+    const response = await replaceProducts(nextProducts);
+    setProducts(response.products);
+    setDraftProducts(response.draftProducts || null);
+    localStorage.setItem('raub_hang_seng_products', JSON.stringify(response.products));
+    if (response.draftProducts) {
+      localStorage.setItem('raub_hang_seng_products_draft', JSON.stringify(response.draftProducts));
+    } else {
+      localStorage.removeItem('raub_hang_seng_products_draft');
     }
   };
 
   const persistProducts = async (nextProducts: Product[]) => {
     if (isMaintenanceMode) {
-      setDraftProducts(nextProducts);
-      localStorage.setItem('raub_hang_seng_products_draft', JSON.stringify(nextProducts));
-
-      try {
-        const response = await replaceProducts(nextProducts, { draft: true });
-        const nextDraft = response.draftProducts || nextProducts;
-        setDraftProducts(nextDraft);
-        localStorage.setItem('raub_hang_seng_products_draft', JSON.stringify(nextDraft));
-      } catch (e) {
-        console.error('Failed to persist draft products to backend', e);
-      }
+      const response = await replaceProducts(nextProducts, { draft: true });
+      const nextDraft = response.draftProducts || nextProducts;
+      setDraftProducts(nextDraft);
+      localStorage.setItem('raub_hang_seng_products_draft', JSON.stringify(nextDraft));
       return;
     }
 
@@ -349,96 +349,22 @@ export default function App() {
   };
 
   const persistOrders = async (nextOrders: OrderRecord[]) => {
-    setOrderHistory(nextOrders);
-    try {
-      localStorage.setItem('pahang_river_fish_orders', JSON.stringify(nextOrders));
-    } catch (e) {
-      console.error('Failed to cache orders locally', e);
-    }
-
-    try {
-      const response = await replaceOrders(nextOrders);
-      setOrderHistory(response.orders);
-      try {
-        localStorage.setItem('pahang_river_fish_orders', JSON.stringify(response.orders));
-      } catch (e) {
-        console.error('Failed to cache orders locally', e);
-      }
-    } catch (e) {
-      console.error('Failed to persist orders to backend', e);
-    }
+    const response = await replaceOrders(nextOrders);
+    setOrderHistory(response.orders);
   };
 
   const persistSettings = async (settingsPatch: Partial<StoreSettings>) => {
     if (settingsPatch.maintenanceMode === true && !draftProducts) {
-      setDraftProducts(products);
-      localStorage.setItem('raub_hang_seng_products_draft', JSON.stringify(products));
-      try {
-        const response = await replaceProducts(products, { draft: true });
-        const nextDraft = response.draftProducts || products;
-        setDraftProducts(nextDraft);
-        localStorage.setItem('raub_hang_seng_products_draft', JSON.stringify(nextDraft));
-      } catch (e) {
-        console.error('Failed to initialize draft products', e);
-      }
+      const response = await replaceProducts(products, { draft: true });
+      const nextDraft = response.draftProducts || products;
+      setDraftProducts(nextDraft);
+      localStorage.setItem('raub_hang_seng_products_draft', JSON.stringify(nextDraft));
     }
 
     if (settingsPatch.maintenanceMode === false && draftProducts) {
       await publishProducts(draftProducts);
       setDraftProducts(null);
       localStorage.removeItem('raub_hang_seng_products_draft');
-    }
-
-    if (settingsPatch.maintenanceMode !== undefined) {
-      setIsMaintenanceMode(Boolean(settingsPatch.maintenanceMode));
-      localStorage.setItem('raub_hang_seng_maintenance', String(settingsPatch.maintenanceMode));
-    }
-    if (settingsPatch.freeShippingThreshold !== undefined) {
-      setFreeShippingThreshold(Number(settingsPatch.freeShippingThreshold));
-      localStorage.setItem('raub_hang_seng_free_shipping', String(settingsPatch.freeShippingThreshold));
-    }
-    if (settingsPatch.localShippingRate !== undefined) {
-      setLocalShippingRate(Number(settingsPatch.localShippingRate));
-      localStorage.setItem('raub_hang_seng_local_rate', String(settingsPatch.localShippingRate));
-    }
-    if (settingsPatch.outstationShippingRate !== undefined) {
-      setOutstationShippingRate(Number(settingsPatch.outstationShippingRate));
-      localStorage.setItem('raub_hang_seng_outstation_rate', String(settingsPatch.outstationShippingRate));
-    }
-    if (settingsPatch.storeAnnouncement !== undefined) {
-      setStoreAnnouncement(settingsPatch.storeAnnouncement);
-      localStorage.setItem('raub_hang_seng_announcement', settingsPatch.storeAnnouncement);
-    }
-    if (settingsPatch.bankName !== undefined) {
-      setBankName(settingsPatch.bankName);
-      localStorage.setItem('raub_hang_seng_bank_name', settingsPatch.bankName);
-    }
-    if (settingsPatch.bankAccountHolder !== undefined) {
-      setBankAccountHolder(settingsPatch.bankAccountHolder);
-      localStorage.setItem('raub_hang_seng_bank_holder', settingsPatch.bankAccountHolder);
-    }
-    if (settingsPatch.bankAccountNumber !== undefined) {
-      setBankAccountNumber(settingsPatch.bankAccountNumber);
-      localStorage.setItem('raub_hang_seng_bank_number', settingsPatch.bankAccountNumber);
-    }
-    if (settingsPatch.bankTransferInstructions !== undefined) {
-      setBankTransferInstructions(settingsPatch.bankTransferInstructions);
-      localStorage.setItem('raub_hang_seng_bank_instructions', settingsPatch.bankTransferInstructions);
-    }
-    if (settingsPatch.collections !== undefined) {
-      const normalizedCollections = normalizeCollectionDisplays(settingsPatch.collections);
-      setCollectionDisplays(normalizedCollections);
-      localStorage.setItem('raub_hang_seng_collections', JSON.stringify(normalizedCollections));
-    }
-    if (settingsPatch.mediaLibrary !== undefined) {
-      const nextMediaLibrary = Array.isArray(settingsPatch.mediaLibrary) ? normalizeMediaLibraryUrls(settingsPatch.mediaLibrary) : [];
-      setMediaLibrary(nextMediaLibrary);
-      localStorage.setItem('raub_hang_seng_media_library', JSON.stringify(nextMediaLibrary));
-    }
-    if (settingsPatch.discounts !== undefined) {
-      const nextDiscounts = Array.isArray(settingsPatch.discounts) ? settingsPatch.discounts : [];
-      setDiscounts(nextDiscounts);
-      localStorage.setItem('raub_hang_seng_discounts', JSON.stringify(nextDiscounts));
     }
 
     try {
@@ -458,6 +384,7 @@ export default function App() {
       localStorage.setItem('raub_hang_seng_discounts', JSON.stringify(response.settings.discounts || []));
     } catch (e) {
       console.error('Failed to persist settings to backend', e);
+      throw e;
     }
   };
 
@@ -521,47 +448,18 @@ export default function App() {
 
   // Order success registration
   const handleOrderSuccess = async (order: OrderRecord) => {
-    if (isMaintenanceMode) return;
+    if (isMaintenanceMode) throw new Error('Ordering is paused');
 
-    let finalOrder = { ...order };
-    
+    const response = await createOrder(order);
+    if (response.profile) setCurrentUser(response.profile);
     if (currentUser) {
-      finalOrder.userId = currentUser.username;
-      
-      const earnedPoints = Math.round(order.total);
-      const updatedUser: User = {
-        ...currentUser,
-        memberPoints: currentUser.memberPoints + earnedPoints,
-      };
-      
-      setCurrentUser(updatedUser);
-      localStorage.setItem('raub_hang_seng_current_user', JSON.stringify(updatedUser));
+      setOrderHistory(previous => [response.order, ...previous.filter(existing => existing.id !== response.order.id)]);
     }
 
-    const updatedHistory = [finalOrder, ...orderHistory];
-    setOrderHistory(updatedHistory);
-    try {
-      localStorage.setItem('pahang_river_fish_orders', JSON.stringify(updatedHistory));
-    } catch (e) {
-      console.error('Failed to cache orders locally', e);
-    }
-
-    try {
-      const response = await createOrder(finalOrder);
-      setOrderHistory(response.orders);
-      try {
-        localStorage.setItem('pahang_river_fish_orders', JSON.stringify(response.orders));
-      } catch (e) {
-        console.error('Failed to cache orders locally', e);
-      }
-    } catch (e) {
-      console.error('Failed to persist order to backend', e);
-    }
-
-    setLatestOrder(order.id);
+    setLatestOrder(response.order.id);
     setIsCheckoutOpen(false);
     setIsCartOpen(false);
-    saveCart([]); // Empty cart after placing order
+    saveCart([]);
   };
 
   // Helper calculation
@@ -654,22 +552,30 @@ export default function App() {
     window.open('https://wa.me/60187682528', '_blank', 'noopener,noreferrer');
   };
 
-  const handleSellerAccess = () => {
+  const handleSellerAccess = async () => {
     setPasscodeInput('');
     setPasscodeError(false);
+    if (sellerAccessGranted) {
+      try {
+        await loadSellerStore();
+      } catch {
+        setSellerAccessGranted(false);
+      }
+    }
     navigateToRoute('seller');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logoutMember().catch(() => undefined);
     setCurrentUser(null);
-    localStorage.removeItem('raub_hang_seng_current_user');
+    setOrderHistory([]);
   };
 
   const handleVerifyPasscode = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await verifySellerPasscode(passcodeInput);
-      sessionStorage.setItem('raub_hang_seng_seller_access', 'true');
+      await loadSellerStore();
       setSellerAccessGranted(true);
       setPasscodeInput('');
       setPasscodeError(false);
@@ -680,6 +586,18 @@ export default function App() {
 
   const handleChangeSellerPasscode = async (currentPasscode: string, nextPasscode: string) => {
     await updateSellerPasscode(currentPasscode, nextPasscode);
+  };
+
+  const handleSellerLogout = async () => {
+    await logoutSeller().catch(() => undefined);
+    setSellerAccessGranted(false);
+    if (currentUser) {
+      const response = await fetchMemberOrders().catch(() => ({ orders: [] }));
+      setOrderHistory(response.orders);
+    } else {
+      setOrderHistory([]);
+    }
+    navigateToRoute('home');
   };
 
   const handleSellerTabChange = (tab: SellerDashboardTab) => {
@@ -738,9 +656,7 @@ export default function App() {
     return (
       <SellerDashboard
         language={language}
-        onClose={() => {
-          navigateToRoute('home');
-        }}
+        onClose={handleSellerLogout}
         initialTab={sellerTab}
         onTabChange={handleSellerTabChange}
         products={isMaintenanceMode ? draftProducts || products : products}
@@ -1026,6 +942,7 @@ export default function App() {
           }}
           shippingFee={shippingFee}
           totalAmount={totalAmount}
+          shippingRegion={shippingState}
           onOrderSuccess={handleOrderSuccess}
           currentUser={currentUser}
           onAuthClick={() => navigateToRoute('login')}

@@ -21,7 +21,8 @@ interface CheckoutModalProps {
     accountNumber: string;
     instructions: string;
   };
-  onOrderSuccess: (order: OrderRecord) => void;
+  shippingRegion: 'local' | 'outstation';
+  onOrderSuccess: (order: OrderRecord) => Promise<void>;
   currentUser: User | null;
   onAuthClick: () => void;
 }
@@ -38,6 +39,7 @@ export default function CheckoutModal({
   shippingDiscountTotal,
   discountApplications,
   bankTransferSettings,
+  shippingRegion,
   onOrderSuccess,
   currentUser,
   onAuthClick,
@@ -55,6 +57,8 @@ export default function CheckoutModal({
   const [deliveryDate, setDeliveryDate] = useState('');
   const [notes, setNotes] = useState('');
   const [paymentSlip, setPaymentSlip] = useState<PaymentSlip | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
 
   // Autofill if logged in
   useEffect(() => {
@@ -185,9 +189,11 @@ export default function CheckoutModal({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    if (isSubmitting || !validateForm()) return;
+    setSubmissionError(null);
+    setIsSubmitting(true);
 
     // 1. Generate Order ID
     const orderId = 'PFR-' + Math.floor(100000 + Math.random() * 900000);
@@ -206,28 +212,37 @@ export default function CheckoutModal({
     };
 
     // 2. Create website order. Seller confirms payment after reviewing the uploaded slip.
-    onOrderSuccess({
-      id: orderId,
-      items: cartItems,
-      details,
-      total: totalAmount,
-      date: currentDate,
-      status: 'pending',
-      subtotal,
-      baseShippingFee,
-      shippingFee,
-      discountTotal: itemDiscountTotal + shippingDiscountTotal,
-      discounts: discountApplications,
-      payment: {
-        method: 'bank_transfer',
-        status: 'pending_review',
-        amount: totalAmount,
-        bankName: bankTransferSettings.bankName,
-        accountHolder: bankTransferSettings.accountHolder,
-        accountNumber: bankTransferSettings.accountNumber,
-        slip: paymentSlip || undefined,
-      },
-    });
+    try {
+      await onOrderSuccess({
+        id: orderId,
+        items: cartItems,
+        details,
+        total: totalAmount,
+        date: currentDate,
+        status: 'pending',
+        shippingRegion,
+        subtotal,
+        baseShippingFee,
+        shippingFee,
+        discountTotal: itemDiscountTotal + shippingDiscountTotal,
+        discounts: discountApplications,
+        payment: {
+          method: 'bank_transfer',
+          status: 'pending_review',
+          amount: totalAmount,
+          bankName: bankTransferSettings.bankName,
+          accountHolder: bankTransferSettings.accountHolder,
+          accountNumber: bankTransferSettings.accountNumber,
+          slip: paymentSlip || undefined,
+        },
+      });
+    } catch {
+      setSubmissionError(isZh
+        ? '订单尚未提交成功。您的购物车和资料已保留，请检查网络后重试。'
+        : 'Your order was not submitted. Your cart and details are preserved—check your connection and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -646,12 +661,20 @@ export default function CheckoutModal({
 
             {/* Actions submit */}
             <div className="space-y-2 pt-2">
+              {submissionError && (
+                <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold leading-5 text-rose-700">
+                  {submissionError}
+                </div>
+              )}
               <button
                 type="submit"
-                className="w-full flex items-center justify-center space-x-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-bold rounded-xl transition-all shadow-xs cursor-pointer text-sm"
+                disabled={isSubmitting}
+                className="w-full flex items-center justify-center space-x-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white font-bold rounded-xl transition-all shadow-xs cursor-pointer text-sm disabled:cursor-wait disabled:opacity-60"
               >
                 <ClipboardCheck className="w-4 h-4 text-emerald-100" />
-                <span>{isZh ? '提交订单与付款水单' : 'Submit Website Order'}</span>
+                <span>{isSubmitting
+                  ? (isZh ? '订单提交中...' : 'Submitting order...')
+                  : (isZh ? '提交订单与付款水单' : 'Submit Website Order')}</span>
               </button>
               
               <button

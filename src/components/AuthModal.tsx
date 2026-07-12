@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, User as UserIcon, Lock, Mail, Phone, MapPin, Award, LogOut, Save, Eye, EyeOff, CheckCircle, Clock, ShoppingBag } from 'lucide-react';
 import { Language, User } from '../types';
-import { loginMember, registerMember, updateMemberProfile } from '../lib/api';
+import { ApiError, loginMember, logoutMember, registerMember, updateMemberProfile } from '../lib/api';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -93,14 +93,19 @@ export default function AuthModal({
     try {
       const response = await loginMember(username.toLowerCase().trim(), password);
       userObj = response.profile;
-    } catch {
-      setError(isZh ? '用户名或密码不正确' : 'Invalid username or password');
+    } catch (loginError) {
+      if (loginError instanceof ApiError && loginError.status === 429) {
+        setError(isZh ? '尝试次数过多，请稍后再试' : 'Too many attempts. Please try again later.');
+      } else if (loginError instanceof ApiError && loginError.status >= 500) {
+        setError(isZh ? '登录服务暂时不可用，请稍后再试' : 'Login is temporarily unavailable. Please try again.');
+      } else {
+        setError(isZh ? '用户名或密码不正确' : 'Invalid username or password');
+      }
       return;
     }
 
     // Success login
     setCurrentUser(userObj);
-    localStorage.setItem('raub_hang_seng_current_user', JSON.stringify(userObj));
     
     setSuccess(isZh ? '登录成功！欢迎回来！' : 'Login successful! Welcome back!');
     setTimeout(() => {
@@ -122,12 +127,17 @@ export default function AuthModal({
       return;
     }
 
-    if (username.length < 3) {
-      setError(isZh ? '用户名长度至少为 3 个字符' : 'Username must be at least 3 characters long');
+    const key = username.toLowerCase().trim();
+    if (!/^[a-z0-9_.-]{3,32}$/i.test(key)) {
+      setError(isZh ? '用户名须为 3–32 位英文字母、数字、点、横线或下划线' : 'Username must be 3–32 letters, numbers, dots, dashes, or underscores');
       return;
     }
 
-    const key = username.toLowerCase().trim();
+    if (password.length < 8 || password.length > 128) {
+      setError(isZh ? '密码长度须为 8–128 个字符' : 'Password must be 8–128 characters long');
+      return;
+    }
+
     // Save member details
     const newProfile: User = {
       username: username.trim(),
@@ -147,10 +157,8 @@ export default function AuthModal({
     try {
       const response = await registerMember(key, password, newProfile);
       setCurrentUser(response.profile);
-      localStorage.setItem('raub_hang_seng_current_user', JSON.stringify(response.profile));
     } catch (registrationError) {
-      const message = registrationError instanceof Error ? registrationError.message : '';
-      const usernameExists = message.includes('username already exists');
+      const usernameExists = registrationError instanceof ApiError && registrationError.status === 409;
       setError(usernameExists
         ? (isZh ? '该用户名已被注册' : 'This username is already taken')
         : (isZh ? '暂时无法完成注册，请稍后再试' : 'Unable to register right now. Please try again.'));
@@ -191,9 +199,9 @@ export default function AuthModal({
     try {
       const response = await updateMemberProfile(currentUser.username, updatedProfile);
       setCurrentUser(response.profile);
-      localStorage.setItem('raub_hang_seng_current_user', JSON.stringify(response.profile));
-    } catch {
-      setError(isZh ? 'ä¼šå‘˜èµ„æ–™æ›´æ–°å¤±è´¥ï¼Œè¯·é‡è¯•' : 'Unable to update profile. Please retry.');
+    } catch (profileError) {
+      if (profileError instanceof ApiError && profileError.status === 401) setCurrentUser(null);
+      setError(isZh ? '会员资料更新失败，请重试' : 'Unable to update profile. Please retry.');
       return;
     }
 
@@ -203,9 +211,9 @@ export default function AuthModal({
   };
 
   // Logout
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logoutMember().catch(() => undefined);
     setCurrentUser(null);
-    localStorage.removeItem('raub_hang_seng_current_user');
     setSuccess(isZh ? '已安全退出登录' : 'Logged out successfully');
     resetForm();
     setTimeout(() => {
@@ -644,6 +652,9 @@ export default function AuthModal({
                           placeholder="e.g. jason88"
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
+                          minLength={3}
+                          maxLength={32}
+                          pattern="[A-Za-z0-9_.-]+"
                           className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500"
                           required
                         />
@@ -657,6 +668,8 @@ export default function AuthModal({
                           placeholder="••••••"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
+                          minLength={8}
+                          maxLength={128}
                           className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500"
                           required
                         />

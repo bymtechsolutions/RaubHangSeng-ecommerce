@@ -239,6 +239,16 @@ export default function SellerDashboard({
     setTimeout(() => setErrorMsg(null), 3000);
   };
 
+  const saveSettings = async (settings: Partial<StoreSettings>) => {
+    try {
+      await onSaveSettings?.(settings);
+      return true;
+    } catch {
+      triggerError(isZh ? '保存失败，请检查网络后重试。' : 'Unable to save. Check your connection and try again.');
+      return false;
+    }
+  };
+
   const mediaLibraryImages = useMemo(
     () => mediaLibrary.filter(media => media.type === 'image'),
     [mediaLibrary]
@@ -275,7 +285,7 @@ export default function SellerDashboard({
 
   const handleMaintenanceToggle = async () => {
     const nextMaintenanceMode = !isMaintenanceMode;
-    await onSaveSettings?.({ maintenanceMode: nextMaintenanceMode });
+    if (!(await saveSettings({ maintenanceMode: nextMaintenanceMode }))) return;
     setIsMaintenanceMode(nextMaintenanceMode);
     triggerSuccess(
       nextMaintenanceMode
@@ -292,8 +302,8 @@ export default function SellerDashboard({
       return;
     }
 
-    if (newSellerPasscode.trim().length < 4) {
-      triggerError(isZh ? '新密码至少需要 4 个字符。' : 'New passcode must be at least 4 characters.');
+    if (newSellerPasscode.trim().length < 8) {
+      triggerError(isZh ? '新密码至少需要 8 个字符。' : 'New passcode must be at least 8 characters.');
       return;
     }
 
@@ -357,8 +367,8 @@ export default function SellerDashboard({
   };
 
   const persistDiscounts = async (nextDiscounts: StoreDiscount[], message: string) => {
+    if (!(await saveSettings({ discounts: nextDiscounts }))) return;
     setDiscounts(nextDiscounts);
-    await onSaveSettings?.({ discounts: nextDiscounts });
     triggerSuccess(message);
   };
 
@@ -464,7 +474,7 @@ export default function SellerDashboard({
       mediaByUrl.set(media.url, media);
     });
 
-    await onSaveSettings?.({ mediaLibrary: Array.from(mediaByUrl.values()) });
+    await saveSettings({ mediaLibrary: Array.from(mediaByUrl.values()) });
   };
 
   const fileToMedia = async (file: File): Promise<ProductMedia> => {
@@ -769,7 +779,7 @@ export default function SellerDashboard({
 
   const handleSaveCollections = async () => {
     const normalizedCollections = normalizeCollectionDisplays(collectionDrafts);
-    await onSaveSettings?.({ collections: normalizedCollections });
+    if (!(await saveSettings({ collections: normalizedCollections }))) return;
     setCollectionDrafts(normalizedCollections);
     triggerSuccess(isZh ? '系列设置已保存并同步到前台。' : 'Collection settings saved and synced to the storefront.');
   };
@@ -3457,11 +3467,11 @@ export default function SellerDashboard({
                       <button
                         type="button"
                         onClick={async () => {
-                          await onSaveSettings?.({
+                          if (!(await saveSettings({
                             freeShippingThreshold,
                             localShippingRate,
                             outstationShippingRate,
-                          });
+                          }))) return;
                           triggerSuccess(isZh ? '西马物流配送价格微调同步成功！' : 'Shipping rates updated & saved successfully!');
                         }}
                         className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold cursor-pointer transition-colors mt-2"
@@ -3572,7 +3582,7 @@ export default function SellerDashboard({
                       </span>
                       <button
                         onClick={async () => {
-                          await onSaveSettings?.({ storeAnnouncement });
+                          if (!(await saveSettings({ storeAnnouncement }))) return;
                           triggerSuccess(isZh ? '网站顶部公告更新成功！' : 'Top announcement banner synced successfully!');
                         }}
                         className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer"
@@ -3649,12 +3659,12 @@ export default function SellerDashboard({
                     </span>
                     <button
                       onClick={async () => {
-                        await onSaveSettings?.({
+                        if (!(await saveSettings({
                           bankName,
                           bankAccountHolder,
                           bankAccountNumber,
                           bankTransferInstructions,
-                        });
+                        }))) return;
                         triggerSuccess(isZh ? '银行转账资料已保存！' : 'Bank transfer settings saved!');
                       }}
                       className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer"

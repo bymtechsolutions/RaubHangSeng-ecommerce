@@ -2,8 +2,20 @@ import { OrderRecord, Product, ProductMedia, StoreSettings, StoreState, User } f
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(status: number, message: string, code?: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
 const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(init?.headers || {}),
@@ -12,14 +24,20 @@ const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
   });
 
   if (!response.ok) {
-    const message = await response.text().catch(() => response.statusText);
-    throw new Error(message || `Request failed with ${response.status}`);
+    const body = await response.json().catch(() => null) as { error?: string; code?: string } | null;
+    throw new ApiError(response.status, body?.error || response.statusText || `Request failed with ${response.status}`, body?.code);
   }
 
   return response.json() as Promise<T>;
 };
 
-export const fetchStore = () => requestJson<StoreState>('/api/store');
+export const fetchStore = () => requestJson<Pick<StoreState, 'products' | 'settings'>>('/api/store');
+
+export const fetchSession = () => requestJson<{ profile: User | null; sellerAuthenticated: boolean }>('/api/session');
+
+export const fetchSellerStore = () => requestJson<StoreState>('/api/seller/store');
+
+export const fetchMemberOrders = () => requestJson<{ orders: OrderRecord[] }>('/api/member/orders');
 
 export const replaceProducts = (products: Product[], options?: { draft?: boolean }) => (
   requestJson<{ products: Product[]; draftProducts?: Product[] }>('/api/products', {
@@ -29,7 +47,7 @@ export const replaceProducts = (products: Product[], options?: { draft?: boolean
 );
 
 export const createOrder = (order: OrderRecord) => (
-  requestJson<{ order: OrderRecord; orders: OrderRecord[] }>('/api/orders', {
+  requestJson<{ order: OrderRecord; profile: User | null }>('/api/orders', {
     method: 'POST',
     body: JSON.stringify({ order }),
   })
@@ -68,6 +86,10 @@ export const verifySellerPasscode = (passcode: string) => (
   })
 );
 
+export const logoutSeller = () => (
+  requestJson<{ ok: boolean }>('/api/seller/logout', { method: 'POST' })
+);
+
 export const updateSellerPasscode = (currentPasscode: string, nextPasscode: string) => (
   requestJson<{ ok: boolean }>('/api/seller/passcode', {
     method: 'PATCH',
@@ -80,6 +102,10 @@ export const loginMember = (username: string, password: string) => (
     method: 'POST',
     body: JSON.stringify({ username, password }),
   })
+);
+
+export const logoutMember = () => (
+  requestJson<{ ok: boolean }>('/api/members/logout', { method: 'POST' })
 );
 
 export const registerMember = (username: string, password: string, profile: User) => (
