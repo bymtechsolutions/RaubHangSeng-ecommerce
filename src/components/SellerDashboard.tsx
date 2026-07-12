@@ -25,6 +25,7 @@ import {
   Briefcase,
   ToggleLeft,
   ToggleRight,
+  ChevronLeft,
   ChevronRight,
   Info,
   KeyRound,
@@ -596,6 +597,17 @@ export default function SellerDashboard({
 
   const handleRemoveMedia = (mediaId: string) => {
     setFormMedia(prev => prev.filter(media => media.id !== mediaId));
+  };
+
+  const handleMoveMedia = (mediaIndex: number, direction: -1 | 1) => {
+    setFormMedia(prev => {
+      const targetIndex = mediaIndex + direction;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+
+      const reorderedMedia = [...prev];
+      [reorderedMedia[mediaIndex], reorderedMedia[targetIndex]] = [reorderedMedia[targetIndex], reorderedMedia[mediaIndex]];
+      return reorderedMedia;
+    });
   };
 
   const cutTypes: ProductCutType[] = ['cleaned', 'whole', 'steak', 'sliced', 'fillet'];
@@ -2623,7 +2635,7 @@ export default function SellerDashboard({
                           </div>
                         ) : (
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            {formMedia.map(media => (
+                            {formMedia.map((media, mediaIndex) => (
                               <div key={media.id} className="relative rounded-lg overflow-hidden border border-slate-200 bg-white">
                                 <div
                                   className={`flex items-center justify-center bg-slate-100 ${formMediaAspect.value === 'original' ? 'min-h-28' : ''}`}
@@ -2643,6 +2655,29 @@ export default function SellerDashboard({
                                   {media.size && (
                                     <p className="text-[9px] text-slate-400">{formatMediaSize(media.size)}</p>
                                   )}
+                                  <div className="flex items-center gap-1 rounded-lg bg-slate-50 p-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMoveMedia(mediaIndex, -1)}
+                                      disabled={mediaIndex === 0}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-700 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 cursor-pointer"
+                                      aria-label={isZh ? '向左移动媒体' : 'Move media left'}
+                                    >
+                                      <ChevronLeft className="h-4 w-4" />
+                                    </button>
+                                    <span className="flex-1 text-center text-[10px] font-bold tabular-nums text-slate-500">
+                                      {mediaIndex + 1} / {formMedia.length}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMoveMedia(mediaIndex, 1)}
+                                      disabled={mediaIndex === formMedia.length - 1}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-700 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-sky-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 cursor-pointer"
+                                      aria-label={isZh ? '向右移动媒体' : 'Move media right'}
+                                    >
+                                      <ChevronRight className="h-4 w-4" />
+                                    </button>
+                                  </div>
                                   <div className="flex items-center gap-1">
                                     {media.type === 'image' && (
                                       <button
