@@ -161,8 +161,8 @@ export const FAQS: FAQ[] = [
     id: 'faq-1',
     questionZh: '你们的河鱼真的是从彭亨河运来的吗？',
     questionEn: 'Are your river fish really from the Pahang River?',
-    answerZh: '是的！我们的鱼全部源自彭亨河主流流域（主要是特马鲁 Temerloh 及上游激流区）。这里水质天然，流速急，产出的河鱼比普通池塘养殖的更结实、毫无泥味。',
-    answerEn: 'Yes! All our fishes are harvested from the mainstream of the Pahang River (primarily the Temerloh and upstream rapid regions). The pristine running river water yields fish that are firmer and entirely free of any mud taste compared to static farm ponds.'
+    answerZh: '是的！我们的鱼全部源自彭亨河主流流域（主要来自Kuala Lipis & Kuala Kangsar 以及上游激流区）。这里水质天然，流速急，产出的河鱼比普通池塘养殖的更结实、毫无泥味。',
+    answerEn: 'Yes! All our fish come from the main Pahang River basin, primarily from Kuala Lipis, Kuala Kangsar, and upstream rapid-water areas. The natural, fast-flowing water produces firmer fish with none of the muddy taste commonly associated with pond-raised fish.'
   },
   {
     id: 'faq-2',
@@ -182,14 +182,14 @@ export const FAQS: FAQ[] = [
     id: 'faq-4',
     questionZh: '下单后几天可以收到货？',
     questionEn: 'How long does delivery take after placing an order?',
-    answerZh: '雪隆区和彭亨本地通常在下单后 24-48 小时内送达。其他外州（如柔佛、槟城、霹雳等）通常在 2-4 个工作日内由冷藏专车送达。发货前司机会提前电话联络您确认收货。',
-    answerEn: 'Deliveries within Klang Valley and Pahang typically take 24-48 hours. Other states (such as Johor, Penang, Perak, etc.) take 2-4 working days via cold-chain trucks. The driver will call you to confirm your availability before arriving.'
+    answerZh: '• 配送范围包括雪隆区、彭亨及其他外州（如柔佛、槟城、霹雳）。\n• 客服会在下单后 24 小时内通知您预计出货时间。\n• 订单通常会在 2–4 个工作日内由冷藏专车送达。\n• 发货前，客服会联系您确认收货安排。',
+    answerEn: '• Delivery is available to Klang Valley, Pahang, and other states including Johor, Penang, and Perak.\n• Our customer service team will notify you of the estimated dispatch time within 24 hours of your order.\n• Orders are usually delivered within 2–4 working days by a dedicated refrigerated vehicle.\n• Before dispatch, our customer service team will contact you to confirm the receiving arrangement.'
   },
   {
     id: 'faq-5',
     questionZh: '怎么进行退换货？如果收到时鱼解冻了怎么办？',
-    questionEn: 'How do returns work? What if the fish is deflated or melted upon arrival?',
-    answerZh: '我们承诺“融化包退换”！由于是冷链配送，鱼送到您手中必须是坚硬冰冻的。如果您收到货物时发现真空包装漏气、鱼体融化或任何质量问题，请立即拍照并在2小时内联系我们的微信或 WhatsApp 客服，我们将无条件为您安排免费补发或全额退款。',
-    answerEn: 'We offer a "Melt-Free Guarantee"! The fish must arrive rock-solid. If there is any packaging damage, major thawing, or quality issue, please take a photo and contact our WhatsApp support within 2 hours of receipt. We will arrange a free replacement or full refund immediately.'
+    questionEn: 'How do returns and exchanges work? What should I do if the fish arrives thawed?',
+    answerZh: '如果您收到货物时发现真空包装漏气、鱼体融化或任何质量问题，请立即拍照并在2小时内联系我们的微信或 WhatsApp 客服，我们将无条件为您安排免费补发或全额退款。',
+    answerEn: 'If the vacuum packaging is leaking, the fish has thawed, or you notice any other quality issue when your order arrives, take photos immediately and contact our WeChat or WhatsApp customer service within 2 hours. We will arrange a free replacement or full refund.'
   }
 ];

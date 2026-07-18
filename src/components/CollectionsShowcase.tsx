@@ -32,8 +32,8 @@ export default function CollectionsShowcase({
               </h2>
               <p className="max-w-xl text-sm md:text-base leading-7 text-[#536c74]">
                 {isZh
-                  ? '从宴席级野生珍品、日常网箱鲜鱼，到养生汤用品类，每个系列都可在后台配置专属封面图、缩放和裁切位置。'
-                  : 'From banquet-grade wild rarities to everyday cage-raised fish and wellness soup cuts, each collection can carry its own tuned storefront image.'}
+                  ? '从宴席级野生珍品、日常网箱鲜鱼，到养生汤用品类。'
+                  : 'From banquet-grade wild rarities and everyday cage-raised fish to nourishing soup selections.'}
               </p>
             </div>
           </div>

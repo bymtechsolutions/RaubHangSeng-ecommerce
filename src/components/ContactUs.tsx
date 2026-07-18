@@ -82,7 +82,7 @@ export default function ContactUs({ language }: ContactUsProps) {
                     </button>
 
                     {isOpen && (
-                      <div className="p-4 pt-0 border-t border-[#c4d5d9]/70 text-xs md:text-sm text-[#536c74] leading-relaxed bg-[#f8fbfa]/70">
+                      <div className="whitespace-pre-line p-4 pt-0 border-t border-[#c4d5d9]/70 text-xs md:text-sm text-[#536c74] leading-relaxed bg-[#f8fbfa]/70">
                         {isZh ? faq.answerZh : faq.answerEn}
                       </div>
                     )}

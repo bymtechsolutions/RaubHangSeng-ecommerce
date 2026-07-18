@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, Languages, LogOut, Menu, ShoppingBag, UserCircle, X } from 'lucide-react';
+import { ChevronDown, LogOut, Menu, ShoppingBag, UserCircle, X } from 'lucide-react';
 import { CollectionDisplay, Language, User } from '../types';
 
 interface HeaderProps {
@@ -70,23 +70,23 @@ export default function Header({
           <button
             id="header-logo"
             onClick={() => handleNavClick('home')}
-        className="flex items-center gap-3 text-left cursor-pointer shrink-0"
+            className="flex items-center gap-3 text-left cursor-pointer shrink-0"
             aria-label={isZh ? '返回首页' : 'Back to home'}
           >
-        <span className="relative h-10 w-10 md:h-12 md:w-12 shrink-0 overflow-hidden rounded-full ring-2 ring-white/80 shadow-md">
-          <img
-            src={logoImage}
-            alt="Raub Hang Seng fish logo"
-            className="absolute inset-0 h-full w-full object-cover scale-[1.45]"
-            style={{ transformOrigin: '50% 60%' }}
-          />
-        </span>
+            <span className="relative h-10 w-10 md:h-12 md:w-12 shrink-0 overflow-hidden rounded-full ring-2 ring-white/80 shadow-md">
+              <img
+                src={logoImage}
+                alt="Raub Hang Seng river fish logo"
+                className="absolute inset-0 h-full w-full object-cover scale-[1.7]"
+                style={{ transformOrigin: '50% 60%' }}
+              />
+            </span>
             <span className="flex flex-col leading-none">
-              <span className="text-[18px] md:text-[24px] font-semibold tracking-[0.02em]">
-                RaubHangSeng
+              <span className="text-[18px] md:text-[22px] font-semibold tracking-[0.01em]">
+                Raub Hang Seng
               </span>
-              <span className="mt-1.5 text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.14em] text-white/90">
-                Fish Supplier
+              <span className="mt-1.5 text-[10px] md:text-[11px] font-semibold tracking-[0.1em] text-white/90">
+                River Fish
               </span>
             </span>
           </button>
@@ -155,10 +155,13 @@ export default function Header({
           <div className="hidden lg:flex items-center gap-2 shrink-0">
             <button
               onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-white/90 hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
+              className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-white/10 px-2.5 text-[11px] font-bold text-white/90 hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
               aria-label={isZh ? 'Switch to English' : '切换中文'}
+              title={isZh ? 'Switch to English' : '切换中文'}
             >
-              <Languages className="w-4 h-4" />
+              <span className={isZh ? 'text-white' : 'text-white/60'}>中文</span>
+              <span aria-hidden="true" className="text-white/40">/</span>
+              <span className={isZh ? 'text-white/60' : 'text-white'}>EN</span>
             </button>
             <button
               onClick={onCartClick}
@@ -230,8 +233,9 @@ export default function Header({
               <button
                 onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
                 className="py-2.5 rounded-lg bg-white/10 text-white text-sm font-semibold"
+                aria-label={isZh ? 'Switch to English' : '切换中文'}
               >
-                {isZh ? 'English' : '中文'}
+                中文 / EN
               </button>
               <button
                 onClick={() => {

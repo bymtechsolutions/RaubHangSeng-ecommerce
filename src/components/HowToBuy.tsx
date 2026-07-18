@@ -46,8 +46,8 @@ export default function HowToBuy({ language }: HowToBuyProps) {
       stepNum: '05',
       zhTitle: '西马全程温控冷链货车配送',
       enTitle: 'Frozen Cold Chain Transport',
-      zhDesc: '保冷纸箱包装，放入高纯冰袋。交由顺丰冷链或保冷货运专车直达西马主要城镇。送到您手中依然坚硬如冰。',
-      enDesc: 'Packed inside insulated containers and delivered via cold-chain courier trucks. The fish reaches your kitchen rock-solid.',
+      zhDesc: '保冷纸箱包装，放入高纯冰袋。交由冷链或保冷货运专车直达西马主要城镇。送到您手中依然坚硬如冰。',
+      enDesc: 'Cold-chain delivery preserves the fish\'s quality, so it tastes as fresh as live fish after thawing. Packed in insulated cartons with high-purity ice packs, it is delivered to major Peninsular Malaysia towns by refrigerated or insulated trucks and arrives frozen solid.',
     },
     {
       icon: Heart,
@@ -104,7 +104,7 @@ export default function HowToBuy({ language }: HowToBuyProps) {
                     {isZh ? step.zhTitle : step.enTitle}
                   </h3>
                   <p className="text-xs text-[#536c74] leading-relaxed font-normal">
-                    {isZh ? step.stepNum === '05' && isZh ? '由于是全程保冷配送，鱼送到时一定是坚硬没有解冻的。解冻后口感不输活鱼！' + ' ' + step.zhDesc : step.zhDesc : step.enDesc}
+                    {isZh ? step.stepNum === '05' && isZh ? '由于是全程保冷配送，解冻后口感不输活鱼！' + ' ' + step.zhDesc : step.zhDesc : step.enDesc}
                   </p>
                 </div>
               </div>
@@ -124,8 +124,8 @@ export default function HowToBuy({ language }: HowToBuyProps) {
               </h4>
               <p className="text-xs text-slate-600 leading-relaxed mt-0.5 max-w-2xl">
                 {isZh
-                  ? '我们提供专业的冷链运输保障。凡配送过程中出现漏气融化、解冻软化、异味等，拍照反馈，我们无条件在 24 小时内免费为您重发或原路退款！'
-                  : 'We warrant a seamless freezing process. If your fish arrives melted or has leakage due to logistic courier transit, write to us on WhatsApp with photos for an immediate replacement.'}
+                  ? '我们提供专业的冷链运输保障。凡配送过程中出现解冻软化、异味等，拍照反馈，我们无条件在 24 小时内免费为您重发或原路退款！'
+                  : 'We provide professional cold-chain delivery protection. If the fish arrives softened from thawing or has an unusual odor, send us photos. Within 24 hours, we will arrange a free replacement or refund the payment to your original method.'}
               </p>
             </div>
           </div>
