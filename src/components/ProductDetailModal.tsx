@@ -2,6 +2,7 @@ import { X, CheckCircle, Flame, Compass, Snowflake, Info, ShoppingCart } from 'l
 import { Product, Language } from '../types';
 import { useState } from 'react';
 import { resolveMediaUrl } from '../lib/media';
+import { getProductMediaAspectRatio } from '../lib/productMedia';
 import { getInitialVariantSelection, getProductConfiguration, getVariantForSelection, getVariantPricePerKg } from '../lib/productOptions';
 
 interface ProductDetailModalProps {
@@ -28,6 +29,8 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
   const selectedPricePerKg = getVariantPricePerKg(product, selectedVariant?.id);
   const calculatedTotalPrice = selectedPricePerKg * weightKg * quantity;
   const hasVariants = configuration.options.length > 0 && configuration.variants.length > 0;
+  const mediaAspect = getProductMediaAspectRatio(product.mediaAspectRatio);
+  const isOriginalMediaRatio = mediaAspect.value === 'original';
 
   const handleAdd = () => {
     if (orderingPaused) return;
@@ -57,23 +60,28 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
         <div className="grid grid-cols-1 md:grid-cols-12">
           
           {/* Left Column: Image with overlays */}
-          <div className="relative md:col-span-5 aspect-[4/3] md:aspect-auto md:h-full min-h-[300px] bg-slate-100">
-            <img
-              src={resolveMediaUrl(selectedVariant?.image || product.image)}
-              alt={isZh ? product.nameZh : product.nameEn}
-              className={`w-full h-full object-cover saturate-[0.9] ${orderingPaused ? 'grayscale opacity-70' : ''}`}
-              referrerPolicy="no-referrer"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-100 via-transparent to-transparent opacity-90 md:bg-gradient-to-r md:from-transparent md:via-transparent md:to-slate-100/60" />
+          <div className="relative self-start overflow-hidden bg-slate-100 md:col-span-5">
+            <div
+              className={`relative flex w-full items-center justify-center overflow-hidden ${isOriginalMediaRatio ? 'min-h-[300px]' : ''}`}
+              style={mediaAspect.ratio ? { aspectRatio: mediaAspect.ratio } : undefined}
+            >
+              <img
+                src={resolveMediaUrl(selectedVariant?.image || product.image)}
+                alt={isZh ? product.nameZh : product.nameEn}
+                className={`${isOriginalMediaRatio ? 'block h-auto max-h-[760px] w-full object-contain' : 'absolute inset-0 h-full w-full object-contain'} saturate-[0.9] ${orderingPaused ? 'grayscale opacity-70' : ''}`}
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-100 via-transparent to-transparent opacity-90 md:bg-gradient-to-r md:from-transparent md:via-transparent md:to-slate-100/60" />
 
-            {/* Float badges */}
-            <div className="absolute top-4 left-4 flex flex-col gap-2">
-              <span className="px-3 py-1 bg-amber-600 text-white font-bold text-xs uppercase tracking-wider rounded-md shadow-md">
-                {product.isWild ? (isZh ? '彭亨野生' : 'Pahang Wild') : (isZh ? '优质饲养' : 'Pahang Raised')}
-              </span>
-              <span className="px-3 py-1 bg-white text-sky-600 border border-sky-200 font-bold text-xs rounded-md shadow-md">
-                {isZh ? '真空锁鲜' : 'Vacuum Sealed'}
-              </span>
+              {/* Float badges */}
+              <div className="absolute top-4 left-4 flex flex-col gap-2">
+                <span className="px-3 py-1 bg-amber-600 text-white font-bold text-xs uppercase tracking-wider rounded-md shadow-md">
+                  {product.isWild ? (isZh ? '彭亨野生' : 'Pahang Wild') : (isZh ? '优质饲养' : 'Pahang Raised')}
+                </span>
+                <span className="px-3 py-1 bg-white text-sky-600 border border-sky-200 font-bold text-xs rounded-md shadow-md">
+                  {isZh ? '真空锁鲜' : 'Vacuum Sealed'}
+                </span>
+              </div>
             </div>
           </div>
 

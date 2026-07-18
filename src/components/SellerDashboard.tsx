@@ -2330,7 +2330,7 @@ export default function SellerDashboard({
                               <th className="p-3">{isZh ? '商品' : 'Product'}</th>
                               <th className="p-3">{isZh ? '系列' : 'Collection'}</th>
                               <th className="p-3 text-right">{isZh ? '价格' : 'Price'}</th>
-                              <th className="p-3 text-center">{isZh ? '媒体/选项/规格' : 'Media / Options / Variants'}</th>
+                              <th className="p-3 text-center">{isZh ? '媒体比例/选项/规格' : 'Media ratio / Options / Variants'}</th>
                               <th className="p-3 text-center">{isZh ? '库存' : 'Stock'}</th>
                               <th className="p-3 text-right">{isZh ? '操作' : 'Action'}</th>
                             </tr>
@@ -2370,6 +2370,7 @@ export default function SellerDashboard({
                                   <span className="text-[10px] text-slate-400">{prod.averageWeightKg}kg avg</span>
                                 </td>
                                 <td className="p-3 text-center font-mono text-[10px] text-slate-500">
+                                  <span className="block">{isZh ? getProductMediaAspectRatio(prod.mediaAspectRatio).labelZh : getProductMediaAspectRatio(prod.mediaAspectRatio).labelEn}</span>
                                   <span className="block">{prod.media?.length || 0} {isZh ? '媒体' : 'media'}</span>
                                   <span className="block">{getProductConfiguration(prod).options.length} {isZh ? '选项' : 'options'}</span>
                                   <span className="block">{prod.variants?.length || 0} {isZh ? '规格' : 'variants'}</span>
@@ -2622,10 +2623,10 @@ export default function SellerDashboard({
 
                         <fieldset>
                           <legend className="text-[10px] font-bold uppercase text-slate-500">
-                            {isZh ? '前台媒体比例' : 'Storefront media ratio'}
+                            {isZh ? '产品详情媒体比例' : 'Product detail media ratio'}
                           </legend>
                           <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                            {isZh ? '控制产品详情页图库的展示比例；图片会完整显示，不会强制裁切。' : 'Controls the product gallery shape. Media is fitted without forced cropping.'}
+                            {isZh ? '仅保存到当前产品，并控制其详情页图库的展示比例；图片会完整显示，不会强制裁切。' : 'Saved for this product only. It controls this product detail gallery shape, with media fitted without forced cropping.'}
                           </p>
                           <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
                             {PRODUCT_MEDIA_ASPECT_RATIOS.map(option => (
