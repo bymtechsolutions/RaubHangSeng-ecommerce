@@ -31,7 +31,11 @@ import {
   KeyRound,
   Upload,
   Image as ImageIcon,
-  Video
+  Video,
+  Home,
+  LogOut,
+  Store,
+  Languages
 } from 'lucide-react';
 import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductMediaAspectRatio, ProductOption, ProductOptionKind, ProductOptionValue, ProductVariant, ProductCutType, StoreSettings, StoreDiscount, StoreDiscountScope, StoreDiscountValueType, CollectionDisplay, ProductCategory, OrderRecord, PaymentStatus } from '../types';
 import { normalizeCollectionDisplays } from '../data/collections';
@@ -39,11 +43,17 @@ import { uploadStorefrontMedia } from '../lib/api';
 import { resolveMediaUrl } from '../lib/media';
 import { getProductMediaAspectRatio, PRODUCT_MEDIA_ASPECT_RATIOS } from '../lib/productMedia';
 import { getCartItemOptionSummary, getCartItemPricePerKg, getCutTypeLabel, getProductConfiguration, syncVariantsWithOptions } from '../lib/productOptions';
+import { getInvoiceNumber } from '../lib/invoice';
 import ProductMediaEditor, { ProductMediaEditResult } from './ProductMediaEditor';
+import SellerInvoiceView from './SellerInvoiceView';
+
+const dashboardLogoImage = new URL('../../assets/raub-hang-seng-logo-mark.jpg', import.meta.url).href;
 
 interface SellerDashboardProps {
   language: Language;
   onClose: () => void;
+  onViewStorefront?: () => void;
+  onLanguageChange?: (language: Language) => void;
   initialTab?: SellerDashboardTab;
   onTabChange?: (tab: SellerDashboardTab) => void;
   products: Product[];
@@ -115,6 +125,8 @@ type MediaPickerTarget =
 export default function SellerDashboard({
   language,
   onClose,
+  onViewStorefront,
+  onLanguageChange,
   initialTab = 'overview',
   onTabChange,
   products,
@@ -1352,114 +1364,132 @@ export default function SellerDashboard({
     });
   }, [collectionOptions, dashboardCollections, isZh, products, productSearch, productCategoryFilter]);
 
+  const dashboardTabs = [
+    { id: 'overview', zh: '首页', en: 'Home', icon: Home },
+    { id: 'orders', zh: '订单', en: 'Orders', icon: ShoppingBag, count: orderHistory.filter(order => (order.status || 'pending') !== 'delivered' && order.status !== 'cancelled').length },
+    { id: 'customers', zh: '客户', en: 'Customers', icon: UserIcon },
+    { id: 'products', zh: '商品', en: 'Products', icon: Package },
+    { id: 'collections', zh: '产品分类', en: 'Collections', icon: Database },
+    { id: 'discounts', zh: '优惠折扣', en: 'Discounts', icon: DollarSign },
+    { id: 'shipping', zh: '配送设置', en: 'Shipping', icon: Truck },
+    { id: 'settings', zh: '店面设置', en: 'Settings', icon: Settings },
+  ] as const;
+  const activeTabLabel = dashboardTabs.find(tab => tab.id === activeTab);
+  const isViewingInvoice = Boolean(selectedOrderDetail);
+
   return (
     <div id="seller-dashboard-page" className="rhs-admin-shell h-screen min-h-screen bg-slate-100 text-slate-800 overflow-hidden">
-      <div className="rhs-admin-frame bg-slate-50 w-full h-full min-h-0 flex flex-col overflow-hidden">
-        
-        {/* DASHBOARD HEADER */}
-        <div className="rhs-admin-topbar bg-slate-900 text-white p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 gap-3 flex-shrink-0">
-            <div className="flex items-center space-x-2.5">
-              <div className="p-1.5 bg-sky-500 text-white rounded-xl">
-                <Database className="w-5 h-5 text-white" />
-              </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-base font-black tracking-wide font-sans text-white">
-                  {isZh ? '商家后台' : 'Seller Dashboard'}
-                </h2>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                  isMaintenanceMode 
-                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
-                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                }`}>
-                  {isMaintenanceMode 
-                    ? (isZh ? '维护模式 (Store Closed)' : 'Maintenance Mode') 
-                    : (isZh ? '正常营业中' : 'Active Store')}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                {isZh ? '监管彭亨河鱼销售分析、配置配送物流、调整店面及商品上架状况' : 'Manage wild caught catalog, shipments, sales metrics & settings'}
-              </p>
+      <a href="#seller-main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-white focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-slate-900 focus:shadow-lg">
+        {isZh ? '跳到主要内容' : 'Skip to main content'}
+      </a>
+      <div className="rhs-admin-frame flex h-full min-h-0 w-full overflow-hidden bg-slate-50">
+        <aside className="rhs-admin-sidebar hidden w-[232px] shrink-0 flex-col border-r border-slate-800 md:flex">
+          <div className="flex items-center gap-3 border-b border-white/10 px-4 py-5">
+            <img src={dashboardLogoImage} alt="Raub Hang Seng" className="h-11 w-11 rounded-full border border-white/20 object-cover" />
+            <div className="min-w-0">
+              <p className="truncate text-base font-bold text-white">Raub Hang Seng</p>
+              <p className="mt-0.5 text-xs font-semibold tracking-[0.08em] text-white/75">River Fish</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
-            <button
-              onClick={handleMaintenanceToggle}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                isMaintenanceMode 
-                  ? 'bg-amber-600 hover:bg-amber-500 text-white' 
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-              }`}
-            >
-              {isMaintenanceMode ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-              <span>{isMaintenanceMode ? (isZh ? '开启店面' : 'Open Store') : (isZh ? '维护店面' : 'Close to Restock')}</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 rounded-full transition-colors cursor-pointer border border-slate-700"
-              title={isZh ? '退出管理后台' : 'Close Admin Portal'}
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* FEEDBACK SYSTEM FLOATER BAR */}
-        {successMsg && (
-          <div className="bg-emerald-500 text-white px-6 py-3 text-xs font-bold flex items-center space-x-2 flex-shrink-0 shadow-inner">
-            <Check className="w-4 h-4 flex-shrink-0" />
-            <span>{successMsg}</span>
-          </div>
-        )}
-        {errorMsg && (
-          <div className="bg-rose-600 text-white px-6 py-3 text-xs font-bold flex items-center space-x-2 flex-shrink-0 shadow-inner">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-            <span>{errorMsg}</span>
-          </div>
-        )}
-
-        {/* MAIN BODY: SPLIT VIEW FOR DESKTOP / RESPONSIVE FOR MOBILE */}
-        <div className="flex flex-1 min-h-0 overflow-hidden flex-col md:flex-row">
-          
-          {/* LEFT RAIL NAVIGATION */}
-          <div className="rhs-admin-sidebar w-full md:w-64 bg-slate-900 border-r border-slate-800 flex flex-row md:flex-col overflow-x-auto overflow-y-hidden md:overflow-x-hidden md:overflow-y-auto shrink-0 p-2 md:p-4 gap-1 flex-shrink-0 min-h-0">
-            <span className="hidden md:block text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-3 px-3">
-              {isZh ? '商家中心管理分类' : 'Merchant Categories'}
+          <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4" aria-label={isZh ? '商家后台导航' : 'Seller dashboard navigation'}>
+            <span className="mb-1 px-3 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-white/45">
+              {isZh ? '店面管理' : 'Store management'}
             </span>
-            {[
-              { id: 'overview', zh: '销售分析 Overview', en: 'Sales Analysis', icon: TrendingUp },
-              { id: 'orders', zh: '订单管理 Orders', en: 'Orders Manager', icon: ShoppingBag },
-              { id: 'customers', zh: '客户分析 Customers', en: 'Customer Spend', icon: UserIcon },
-              { id: 'products', zh: '商品管理 Catalog', en: 'Product Manager', icon: Package },
-              { id: 'collections', zh: '鱼类分类 Collections', en: 'Fish Categories', icon: Database },
-              { id: 'discounts', zh: '优惠折扣 Discounts', en: 'Discounts', icon: DollarSign },
-              { id: 'shipping', zh: '物流物流 Shipping', en: 'Shipment Center', icon: Truck },
-              { id: 'settings', zh: '店面控制 Settings', en: 'Store Settings', icon: Settings },
-            ].map(tab => {
+            {dashboardTabs.slice(0, -1).map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
-                  onClick={() => {
-                    handleTabChange(tab.id as SellerDashboardTab);
-                  }}
-                  className={`flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer transition-all ${
-                    isActive 
-                      ? 'bg-sky-500 text-white font-extrabold shadow-md transform translate-x-1' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                  }`}
+                  type="button"
+                  onClick={() => handleTabChange(tab.id as SellerDashboardTab)}
+                  className={`rhs-admin-nav-item flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition-colors ${isActive ? 'is-active text-white' : 'text-white/72 hover:text-white'}`}
+                  aria-current={isActive ? 'page' : undefined}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-500'}`} />
-                  <span>{isZh ? tab.zh : tab.en}</span>
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{isZh ? tab.zh : tab.en}</span>
+                  {'count' in tab && tab.count > 0 && <span className="ml-auto rounded-full bg-white/12 px-2 py-0.5 text-[0.6875rem] tabular-nums text-white/85">{tab.count}</span>}
                 </button>
               );
             })}
-          </div>
 
-          {/* RIGHT VIEWPORT CONTENT */}
-          <div className="rhs-admin-main flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 min-h-0">
+            <div className="mt-auto border-t border-white/10 pt-3">
+              {dashboardTabs.slice(-1).map(tab => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => handleTabChange(tab.id as SellerDashboardTab)}
+                    className={`rhs-admin-nav-item flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold transition-colors ${isActive ? 'is-active text-white' : 'text-white/72 hover:text-white'}`}
+                    aria-current={isActive ? 'page' : undefined}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span>{isZh ? tab.zh : tab.en}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </aside>
+
+        <div className="rhs-admin-workspace flex min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="rhs-admin-topbar flex min-h-[64px] shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 md:px-6">
+            <div className="flex min-w-0 items-center gap-3">
+              <img src={dashboardLogoImage} alt="" className="h-9 w-9 rounded-full border border-slate-200 object-cover md:hidden" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-slate-900">{isZh ? activeTabLabel?.zh : activeTabLabel?.en}</p>
+                <p className="hidden truncate text-xs text-slate-500 sm:block">{selectedOrderDetail && activeTab === 'orders' ? getInvoiceNumber(selectedOrderDetail.id) : (isZh ? 'Raub Hang Seng 商家后台' : 'Raub Hang Seng seller admin')}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {onViewStorefront && (
+                <button type="button" onClick={onViewStorefront} className="hidden min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 lg:inline-flex">
+                  <Store className="h-4 w-4" /> {isZh ? '查看店面' : 'View storefront'}
+                </button>
+              )}
+              {onLanguageChange && (
+                <button type="button" onClick={() => onLanguageChange(isZh ? 'en' : 'zh')} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500" aria-label={isZh ? 'Switch to English' : '切换至中文'}>
+                  <Languages className="h-4 w-4" /> <span>{isZh ? '中文 / EN' : 'EN / 中文'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleMaintenanceToggle}
+                className={`hidden min-h-11 items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition-colors sm:inline-flex ${isMaintenanceMode ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+              >
+                {isMaintenanceMode ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+                <span>{isMaintenanceMode ? (isZh ? '维护中' : 'Maintenance') : (isZh ? '营业中' : 'Store active')}</span>
+              </button>
+              <button type="button" onClick={onClose} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500" title={isZh ? '退出管理后台' : 'Sign out of seller admin'}>
+                <LogOut className="h-4 w-4" /> <span className="hidden sm:inline">{isZh ? '退出' : 'Sign out'}</span>
+              </button>
+            </div>
+          </header>
+
+          {(successMsg || errorMsg) && (
+            <div className={`fixed right-4 top-20 z-[90] flex max-w-sm items-start gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-white shadow-lg ${successMsg ? 'bg-emerald-600' : 'bg-rose-600'}`} role="status" aria-live="polite">
+              {successMsg ? <Check className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
+              <span>{successMsg || errorMsg}</span>
+            </div>
+          )}
+
+          <nav className="rhs-admin-mobile-nav flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-white px-3 py-2 md:hidden" aria-label={isZh ? '商家后台导航' : 'Seller dashboard navigation'}>
+            {dashboardTabs.map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button key={tab.id} type="button" onClick={() => handleTabChange(tab.id as SellerDashboardTab)} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-semibold ${isActive ? 'bg-sky-50 text-sky-700' : 'text-slate-600'}`} aria-current={isActive ? 'page' : undefined}>
+                  <Icon className="h-4 w-4" /> {isZh ? tab.zh : tab.en}
+                </button>
+              );
+            })}
+          </nav>
+
+          <main id="seller-main-content" className="rhs-admin-main min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 md:p-6 lg:p-7">
             
             {/* TAB: OVERVIEW */}
             {activeTab === 'overview' && (
@@ -1690,12 +1720,27 @@ export default function SellerDashboard({
             )}
 
             {/* TAB: ORDERS MANAGER */}
-            {activeTab === 'orders' && (
+            {activeTab === 'orders' && isViewingInvoice && selectedOrderDetail && (
+              <SellerInvoiceView
+                language={language}
+                order={selectedOrderDetail}
+                bankName={bankName}
+                bankAccountHolder={bankAccountHolder}
+                bankAccountNumber={bankAccountNumber}
+                onBack={() => setSelectedOrderDetail(null)}
+                onUpdateOrderStatus={handleUpdateOrderStatus}
+                onUpdatePaymentStatus={handleUpdatePaymentStatus}
+                onNotify={triggerSuccess}
+                onError={triggerError}
+              />
+            )}
+
+            {activeTab === 'orders' && !isViewingInvoice && (
               <div className="space-y-6">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
-                    <h3 className="text-base font-bold text-slate-900">{isZh ? '订单核查与配送管理' : 'Orders Dispatch & Fulfillment'}</h3>
-                    <p className="text-xs text-slate-500">{isZh ? '处理顾客的河鱼冷链配送订单并配置最新状态。可点击更新状态或查阅完整地址' : 'Mark items processed, shipped, or delivered. Inspect full invoices.'}</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-950">{isZh ? '订单' : 'Orders'}</h1>
+                    <p className="mt-1 text-sm text-slate-500">{isZh ? '检查付款、管理冷链配送，并打开完整发票。' : 'Review payments, manage cold-chain fulfillment, and open complete invoices.'}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-medium text-slate-500">{isZh ? '筛选状态:' : 'Filter status:'}</span>
@@ -1726,11 +1771,10 @@ export default function SellerDashboard({
                   />
                 </div>
 
-                {/* Split layout: Table List & Active Detail Card */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <div>
                   
                   {/* LEFT: Orders list table */}
-                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs lg:col-span-7">
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
                     {filteredOrders.length === 0 ? (
                       <div className="p-8 text-center text-slate-400 text-xs">
                         {isZh ? '没有找到符合条件的订单数据。' : 'No orders matched your filtering criteria.'}
@@ -1791,9 +1835,10 @@ export default function SellerDashboard({
                                         e.stopPropagation();
                                         setSelectedOrderDetail(order);
                                       }}
-                                      className="text-sky-600 hover:text-sky-500 font-bold text-[11px] underline cursor-pointer"
+                                      className="min-h-11 rounded-lg px-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 hover:text-sky-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+                                      aria-label={isZh ? `打开发票 ${getInvoiceNumber(order.id)}` : `Open invoice ${getInvoiceNumber(order.id)}`}
                                     >
-                                      {isZh ? '详情' : 'Inspect'}
+                                      {isZh ? '打开发票' : 'Open invoice'}
                                     </button>
                                   </td>
                                 </tr>
@@ -1806,7 +1851,7 @@ export default function SellerDashboard({
                   </div>
 
                   {/* RIGHT: Selected Order detail panel */}
-                  <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                  <div className="hidden">
                     {selectedOrderDetail ? (
                       <div className="space-y-4">
                         <div className="flex justify-between items-start border-b border-slate-100 pb-3">
@@ -2180,10 +2225,10 @@ export default function SellerDashboard({
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setOrderSearch(customer.phoneNumber !== '-' ? customer.phoneNumber : customer.displayName);
+                                      const latestOrder = orderHistory.find(order => order.id === customer.lastOrderId);
                                       setOrderStatusFilter('all');
-                                      setSelectedOrderDetail(null);
                                       handleTabChange('orders');
+                                      setSelectedOrderDetail(latestOrder || null);
                                     }}
                                     className="text-sky-600 hover:text-sky-500 font-bold text-[11px] underline cursor-pointer mt-1"
                                   >
@@ -3911,7 +3956,7 @@ export default function SellerDashboard({
               </div>
             )}
 
-          </div>
+          </main>
 
         </div>
 

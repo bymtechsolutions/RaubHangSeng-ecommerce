@@ -56,20 +56,20 @@ body {
 }
 
 .rhs-admin-shell {
-  --rhs-admin-navy: #071827;
-  --rhs-admin-rail: #0a2030;
-  --rhs-admin-blue: #0b8fc3;
-  --rhs-admin-teal: #0c7d77;
-  --rhs-admin-page: #e5efed;
-  --rhs-admin-card: #f8fcfb;
-  --rhs-admin-card-soft: #eef7f5;
-  --rhs-admin-card-muted: #dfecea;
-  --rhs-admin-border: #c7dadd;
-  --rhs-admin-border-soft: #d8e7e7;
-  --rhs-admin-ink: #0b2638;
-  --rhs-admin-muted: #58707b;
+  --rhs-admin-navy: #083b57;
+  --rhs-admin-rail: #083b57;
+  --rhs-admin-blue: #0ea5e9;
+  --rhs-admin-page: #f6f6f7;
+  --rhs-admin-card: #ffffff;
+  --rhs-admin-card-soft: #f8fafc;
+  --rhs-admin-card-muted: #f1f5f9;
+  --rhs-admin-border: #d8dee4;
+  --rhs-admin-border-soft: #e7ebef;
+  --rhs-admin-ink: #1f2937;
+  --rhs-admin-muted: #667085;
   background: var(--rhs-admin-page);
   color: var(--rhs-admin-ink);
+  font-kerning: normal;
 }
 
 .rhs-admin-frame {
@@ -77,21 +77,19 @@ body {
 }
 
 .rhs-admin-topbar {
-  background:
-    linear-gradient(135deg, #071827 0%, #0a2c3f 52%, #0b4650 100%) !important;
-  border-color: rgba(156, 196, 203, 0.18) !important;
-  box-shadow: 0 16px 36px rgba(5, 22, 34, 0.28);
+  background: #ffffff !important;
+  border-color: var(--rhs-admin-border) !important;
+  box-shadow: none;
 }
 
 .rhs-admin-topbar :where(.bg-sky-500) {
-  background: linear-gradient(135deg, #0aa6d6 0%, #0b7d93 100%) !important;
-  box-shadow: 0 10px 24px rgba(0, 150, 190, 0.24);
+  background: var(--rhs-admin-blue) !important;
+  box-shadow: none;
 }
 
 .rhs-admin-sidebar {
-  background:
-    linear-gradient(180deg, #071827 0%, #0a1f31 58%, #0a2d35 100%) !important;
-  border-color: rgba(156, 196, 203, 0.16) !important;
+  background: var(--rhs-admin-rail) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 .rhs-admin-sidebar :where(button) {
@@ -99,25 +97,42 @@ body {
 }
 
 .rhs-admin-sidebar :where(button:hover) {
-  background: rgba(45, 105, 125, 0.22) !important;
-  border-color: rgba(156, 196, 203, 0.12);
+  background: rgba(255, 255, 255, 0.09) !important;
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .rhs-admin-sidebar :where(.bg-sky-500) {
-  background: linear-gradient(135deg, #0ba4d4 0%, #0a7d76 100%) !important;
-  border-color: rgba(190, 232, 232, 0.28);
-  box-shadow: 0 12px 26px rgba(0, 143, 176, 0.22);
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+
+.rhs-admin-nav-item {
+  position: relative;
+  text-align: left;
+}
+
+.rhs-admin-nav-item.is-active {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.rhs-admin-nav-item.is-active::before {
+  position: absolute;
+  inset: 8px auto 8px -13px;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--rhs-admin-blue);
+  content: '';
 }
 
 .rhs-admin-main {
-  background:
-    radial-gradient(circle at 12% 8%, rgba(20, 128, 145, 0.12), transparent 28%),
-    linear-gradient(180deg, #e9f2f0 0%, #e3efed 46%, #dbe9e8 100%) !important;
+  background: var(--rhs-admin-page) !important;
   color: var(--rhs-admin-ink);
 }
 
 .rhs-admin-main :where(.bg-white) {
-  background-color: rgba(248, 252, 251, 0.96) !important;
+  background-color: #ffffff !important;
 }
 
 .rhs-admin-main :where(.bg-slate-50) {
@@ -125,7 +140,7 @@ body {
 }
 
 .rhs-admin-main :where(.bg-slate-100) {
-  background-color: var(--rhs-admin-card-muted) !important;
+  background-color: #f1f5f9 !important;
 }
 
 .rhs-admin-main :where(.border-slate-200) {
@@ -141,7 +156,7 @@ body {
 }
 
 .rhs-admin-main :where(.text-slate-800, .text-slate-700) {
-  color: #17384a !important;
+  color: #344054 !important;
 }
 
 .rhs-admin-main :where(.text-slate-600, .text-slate-500) {
@@ -149,11 +164,11 @@ body {
 }
 
 .rhs-admin-main :where(.text-slate-400) {
-  color: #78909a !important;
+  color: #98a2b3 !important;
 }
 
 .rhs-admin-main :where(.shadow-xs) {
-  box-shadow: 0 10px 26px rgba(16, 54, 69, 0.07);
+  box-shadow: 0 1px 2px rgba(31, 41, 55, 0.05);
 }
 
 .rhs-admin-main :where(input, select, textarea) {
@@ -168,16 +183,16 @@ body {
 }
 
 .rhs-admin-main :where(input:disabled, select:disabled, textarea:disabled) {
-  background-color: #dce8ea !important;
-  color: #6b8088 !important;
+  background-color: #f1f5f9 !important;
+  color: #98a2b3 !important;
 }
 
 .rhs-admin-main :where(.bg-sky-600, .bg-slate-900) {
-  background: linear-gradient(135deg, #0a87bc 0%, #0b596f 100%) !important;
+  background: var(--rhs-admin-blue) !important;
 }
 
 .rhs-admin-main :where(.hover\:bg-slate-800:hover, .hover\:bg-sky-700:hover) {
-  background: linear-gradient(135deg, #086f9c 0%, #094d5f 100%) !important;
+  background: #0284c7 !important;
 }
 
 .rhs-admin-main :where(.bg-sky-50\/50) {
@@ -208,19 +223,83 @@ body {
 
 .rhs-admin-main::-webkit-scrollbar-track,
 .rhs-admin-sidebar::-webkit-scrollbar-track {
-  background: rgba(184, 207, 210, 0.35);
+  background: transparent;
 }
 
 .rhs-admin-main::-webkit-scrollbar-thumb,
 .rhs-admin-sidebar::-webkit-scrollbar-thumb {
-  background: #87aeb6;
+  background: #b9c0c8;
   border-radius: 999px;
-  border: 2px solid rgba(232, 241, 239, 0.9);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .rhs-admin-main::-webkit-scrollbar-thumb:hover,
 .rhs-admin-sidebar::-webkit-scrollbar-thumb:hover {
-  background: #638d98;
+  background: #8f99a5;
+  background-clip: padding-box;
+}
+
+.rhs-invoice-document {
+  width: 100%;
+  max-width: 210mm;
+  min-height: 270mm;
+  margin-inline: auto;
+}
+
+.rhs-invoice-document :where(.font-mono) {
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body,
+  #root,
+  #seller-dashboard-page,
+  .rhs-admin-frame,
+  .rhs-admin-workspace,
+  .rhs-admin-main,
+  .rhs-invoice-view {
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #seller-invoice-document,
+  #seller-invoice-document * {
+    visibility: visible !important;
+  }
+
+  #seller-invoice-document {
+    position: absolute;
+    inset: 0;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  #seller-invoice-document :where(table) {
+    min-width: 0;
+  }
+
+  #seller-invoice-document :where(tr, img) {
+    break-inside: avoid;
+  }
 }
 
 .mobile-menu-button {

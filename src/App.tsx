@@ -714,6 +714,8 @@ export default function App() {
         <SellerDashboard
           language={language}
           onClose={handleSellerLogout}
+          onViewStorefront={() => navigateToRoute('home')}
+          onLanguageChange={handleLanguageChange}
           initialTab={sellerTab}
           onTabChange={handleSellerTabChange}
           products={isMaintenanceMode ? draftProducts || products : products}
