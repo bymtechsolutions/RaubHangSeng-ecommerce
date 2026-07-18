@@ -160,6 +160,7 @@ export const buildInvoiceHtml = ({
         <p><strong>${escapeHtml(order.details.deliveryDate || 'To be arranged / 待安排')}</strong></p>
         <p>${escapeHtml(order.shippingRegion === 'local' ? 'Local cold-chain / 本地冷链' : 'Outstation cold-chain / 外州冷链')}</p>
         <p>Fulfillment: ${escapeHtml(order.status || 'pending')}</p>
+        ${order.trackingNumber ? `<p>Tracking / 物流追踪号码: <strong>${escapeHtml(order.trackingNumber)}</strong></p>` : ''}
       </section>
     </div>
     <table>
@@ -191,5 +192,6 @@ export const buildInvoiceHtml = ({
 
 export const getInvoiceShareText = (order: OrderRecord) => {
   const invoiceNumber = getInvoiceNumber(order.id);
-  return `${invoiceNumber} · ${order.details.fullName} · RM ${order.total.toFixed(2)}`;
+  const tracking = order.trackingNumber ? ` · Tracking: ${order.trackingNumber}` : '';
+  return `${invoiceNumber} · ${order.details.fullName} · RM ${order.total.toFixed(2)}${tracking}`;
 };

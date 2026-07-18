@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   Check,
@@ -32,7 +32,7 @@ interface SellerInvoiceViewProps {
   bankAccountHolder: string;
   bankAccountNumber: string;
   onBack: () => void;
-  onUpdateOrderStatus: (orderId: string, status: string) => void | Promise<void>;
+  onUpdateOrderStatus: (orderId: string, status: string, trackingNumber?: string) => void | Promise<void>;
   onUpdatePaymentStatus: (orderId: string, status: PaymentStatus) => void | Promise<void>;
   onNotify: (message: string) => void;
   onError: (message: string) => void;
@@ -99,8 +99,14 @@ export default function SellerInvoiceView({
   const totals = getInvoiceTotals(order);
   const paymentMeta = paymentStatusMeta(order.payment?.status, isZh);
   const currentStatus = order.status || 'pending';
+  const [draftStatus, setDraftStatus] = useState(currentStatus);
+  const [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || '');
+  const [isSavingFulfillment, setIsSavingFulfillment] = useState(false);
   const address = `${order.details.address}, ${order.details.postcode} ${order.details.city}, ${order.details.state}`;
   const phoneDigits = order.details.phoneNumber.replace(/[^\d]/g, '');
+  const customerMessage = order.trackingNumber
+    ? `${invoiceNumber} · ${invoiceIssuer.name} · ${isZh ? '物流追踪号码' : 'Tracking number'}: ${order.trackingNumber}`
+    : `${invoiceNumber} · ${invoiceIssuer.name}`;
   const invoiceHtml = useMemo(() => buildInvoiceHtml({
     order,
     language,
@@ -124,6 +130,33 @@ export default function SellerInvoiceView({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onBack]);
+
+  useEffect(() => {
+    setDraftStatus(order.status || 'pending');
+    setTrackingNumber(order.trackingNumber || '');
+  }, [order.id, order.status, order.trackingNumber]);
+
+  const saveFulfillment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const nextTrackingNumber = trackingNumber.trim();
+    if (draftStatus === 'shipped' && !nextTrackingNumber) {
+      onError(isZh ? '请填写物流追踪号码后再确认发货。' : 'Enter a tracking number before confirming shipment.');
+      return;
+    }
+
+    setIsSavingFulfillment(true);
+    try {
+      await onUpdateOrderStatus(
+        order.id,
+        draftStatus,
+        draftStatus === 'shipped' ? nextTrackingNumber : undefined,
+      );
+    } catch {
+      onError(isZh ? '无法更新配送资料，请重试。' : 'Could not update the shipment. Please try again.');
+    } finally {
+      setIsSavingFulfillment(false);
+    }
+  };
 
   const downloadInvoice = () => {
     const url = URL.createObjectURL(new Blob([invoiceHtml], { type: 'text/html;charset=utf-8' }));
@@ -245,6 +278,12 @@ export default function SellerInvoiceView({
                 <dd className="font-semibold capitalize text-slate-800">{order.shippingRegion || '—'}</dd>
                 <dt className="text-slate-500">{isZh ? '订单状态' : 'Fulfillment'}</dt>
                 <dd className="font-semibold capitalize text-slate-800">{currentStatus}</dd>
+                {order.trackingNumber && (
+                  <>
+                    <dt className="text-slate-500">{isZh ? '物流追踪号码' : 'Tracking number'}</dt>
+                    <dd className="break-all font-mono font-semibold text-slate-800">{order.trackingNumber}</dd>
+                  </>
+                )}
               </dl>
             </section>
           </div>
@@ -348,17 +387,56 @@ export default function SellerInvoiceView({
                 );
               })}
             </ol>
-            <label className="mt-3 block border-t border-slate-200 pt-4">
-              <span className="mb-1.5 block text-xs font-semibold text-slate-600">{isZh ? '更新配送状态' : 'Update fulfillment status'}</span>
-              <select
-                value={currentStatus}
-                onChange={(event) => onUpdateOrderStatus(order.id, event.target.value)}
-                className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
+            <form onSubmit={saveFulfillment} className="mt-3 space-y-3 border-t border-slate-200 pt-4">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-slate-600">{isZh ? '更新配送状态' : 'Update fulfillment status'}</span>
+                <select
+                  value={draftStatus}
+                  onChange={(event) => setDraftStatus(event.target.value)}
+                  className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                >
+                  {statusSteps.map(step => <option key={step.id} value={step.id}>{isZh ? step.zh : step.en}</option>)}
+                  <option value="cancelled">{isZh ? '取消订单' : 'Cancelled'}</option>
+                </select>
+              </label>
+
+              {draftStatus === 'shipped' ? (
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-600">
+                    {isZh ? '物流追踪号码' : 'Tracking number'} <span className="text-rose-600">*</span>
+                  </span>
+                  <input
+                    type="text"
+                    value={trackingNumber}
+                    onChange={(event) => setTrackingNumber(event.target.value)}
+                    maxLength={120}
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder={isZh ? '例如：MY1234567890' : 'e.g. MY1234567890'}
+                    className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-mono text-sm text-slate-800 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                    required
+                  />
+                  <span className="mt-1.5 block text-xs leading-5 text-slate-500">
+                    {isZh ? '保存后，客户可在会员订单中查看并复制此号码。' : 'Customers can view and copy this number from their member orders.'}
+                  </span>
+                </label>
+              ) : order.trackingNumber ? (
+                <div className="rounded-lg bg-slate-50 px-3 py-2.5">
+                  <p className="text-xs font-semibold text-slate-500">{isZh ? '物流追踪号码' : 'Tracking number'}</p>
+                  <p className="mt-1 break-all font-mono text-sm font-semibold text-slate-800">{order.trackingNumber}</p>
+                </div>
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={isSavingFulfillment || (draftStatus === 'shipped' && !trackingNumber.trim())}
+                className="min-h-11 w-full rounded-lg bg-sky-600 px-3 text-sm font-semibold text-white hover:bg-sky-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
-                {statusSteps.map(step => <option key={step.id} value={step.id}>{isZh ? step.zh : step.en}</option>)}
-                <option value="cancelled">{isZh ? '取消订单' : 'Cancelled'}</option>
-              </select>
-            </label>
+                {isSavingFulfillment
+                  ? (isZh ? '正在保存…' : 'Saving…')
+                  : (isZh ? '保存配送资料' : 'Save fulfillment')}
+              </button>
+            </form>
           </section>
 
           <section className="border border-slate-200 bg-white p-4 shadow-sm">
@@ -402,7 +480,7 @@ export default function SellerInvoiceView({
               {order.details.email ? (
                 <a href={`mailto:${order.details.email}`} aria-label={isZh ? '电邮客户' : 'Email customer'} className="flex min-h-11 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-sky-700"><Mail className="h-4 w-4" /></a>
               ) : <span className="flex min-h-11 items-center justify-center rounded-lg border border-slate-100 text-slate-300"><Mail className="h-4 w-4" /></span>}
-              <a href={`https://wa.me/${phoneDigits}?text=${encodeURIComponent(`${invoiceNumber} · ${invoiceIssuer.name}`)}`} target="_blank" rel="noreferrer" aria-label={isZh ? 'WhatsApp 客户' : 'WhatsApp customer'} className="flex min-h-11 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-emerald-700"><MessageCircle className="h-4 w-4" /></a>
+              <a href={`https://wa.me/${phoneDigits}?text=${encodeURIComponent(customerMessage)}`} target="_blank" rel="noreferrer" aria-label={isZh ? 'WhatsApp 客户' : 'WhatsApp customer'} className="flex min-h-11 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-emerald-700"><MessageCircle className="h-4 w-4" /></a>
             </div>
           </section>
 

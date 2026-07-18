@@ -50,7 +50,8 @@ const order = {
     amount: 5,
   }],
   total: 130.2,
-  status: 'processing',
+  status: 'shipped',
+  trackingNumber: 'RHS-MY-123456',
   shippingRegion: 'local',
   payment: {
     method: 'bank_transfer',
@@ -82,7 +83,8 @@ test('builds a complete escaped bilingual invoice from persisted order data', ()
   assert.match(html, /Welcome discount \/ 迎新优惠/);
   assert.match(html, /RM 130\.20/);
   assert.match(html, /BANK-1001/);
+  assert.match(html, /Tracking \/ 物流追踪号码: <strong>RHS-MY-123456<\/strong>/);
   assert.match(html, /&lt;script&gt;Customer&lt;\/script&gt;/);
   assert.doesNotMatch(html, /<script>Customer<\/script>/);
-  assert.equal(getInvoiceShareText(order), 'INV-RHS-1001 · <script>Customer</script> · RM 130.20');
+  assert.equal(getInvoiceShareText(order), 'INV-RHS-1001 · <script>Customer</script> · RM 130.20 · Tracking: RHS-MY-123456');
 });

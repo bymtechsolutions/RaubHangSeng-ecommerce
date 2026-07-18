@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, User as UserIcon, Lock, Mail, Phone, MapPin, Award, LogOut, Save, Eye, EyeOff, CheckCircle, Clock, ShoppingBag } from 'lucide-react';
-import { Language, User } from '../types';
+import { X, User as UserIcon, Lock, Mail, Phone, MapPin, Award, LogOut, Save, Eye, EyeOff, CheckCircle, Clock, ShoppingBag, Copy } from 'lucide-react';
+import { Language, OrderRecord, User } from '../types';
 import { ApiError, loginMember, logoutMember, registerMember, updateMemberProfile } from '../lib/api';
 
 interface AuthModalProps {
@@ -10,7 +10,7 @@ interface AuthModalProps {
   language: Language;
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
-  orderHistory?: any[]; // optional, to show user orders in their profile
+  orderHistory?: OrderRecord[]; // optional, to show user orders in their profile
   mode?: 'modal' | 'page';
 }
 
@@ -232,6 +232,39 @@ export default function AuthModal({
           o.userId === currentUser.username
       )
     : [];
+
+  const copyTrackingNumber = async (trackingNumber: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(trackingNumber);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = trackingNumber;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        textarea.remove();
+      }
+      setSuccess(isZh ? '物流追踪号码已复制。' : 'Tracking number copied.');
+      setTimeout(() => setSuccess(null), 2500);
+    } catch {
+      setError(isZh ? '无法复制，请手动选择追踪号码。' : 'Could not copy. Select the tracking number manually.');
+    }
+  };
+
+  const getOrderStatusLabel = (status?: string) => {
+    const labels: Record<string, { zh: string; en: string }> = {
+      pending: { zh: '待确认', en: 'Pending' },
+      processing: { zh: '处理中', en: 'Processing' },
+      shipped: { zh: '配送中', en: 'Shipped' },
+      delivered: { zh: '已送达', en: 'Delivered' },
+      cancelled: { zh: '已取消', en: 'Cancelled' },
+    };
+    const label = labels[status || 'pending'] || labels.pending;
+    return isZh ? label.zh : label.en;
+  };
 
   const panel = (
       <motion.div
@@ -508,21 +541,50 @@ export default function AuthModal({
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
-                    {userOrders.map((order, idx) => (
-                      <div key={idx} className="bg-white border border-slate-200 p-3 rounded-lg text-xs flex justify-between items-center shadow-xs">
-                        <div>
-                          <p className="font-mono font-bold text-sky-600">ID: #{order.id}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">{order.date}</p>
-                          <p className="text-[10px] text-slate-600 mt-1 truncate max-w-[200px]">
-                            {order.items.map((it: any) => `${it.quantity}x ${isZh ? it.product.nameZh : it.product.nameEn}`).join(', ')}
-                          </p>
+                    {userOrders.map((order) => (
+                      <div key={order.id} className="bg-white border border-slate-200 p-3 rounded-lg text-xs shadow-xs">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-mono font-bold text-sky-600">ID: #{order.id}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{order.date}</p>
+                            <p className="text-[10px] text-slate-600 mt-1 truncate max-w-[200px]">
+                              {order.items.map((item) => `${item.quantity}x ${isZh ? item.product.nameZh : item.product.nameEn}`).join(', ')}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <strong className="text-slate-800 font-mono">RM {order.total.toFixed(2)}</strong>
+                            <span className="text-[9px] bg-sky-50 border border-sky-100 text-sky-700 block mt-1 py-0.5 px-1.5 rounded-md font-bold">
+                              {getOrderStatusLabel(order.status)}
+                            </span>
+                            <span className="text-[9px] bg-amber-50 border border-amber-100 text-amber-600 block mt-1 py-0.5 px-1.5 rounded-md font-bold">
+                              +{Math.round(order.total)} {isZh ? '积分' : 'pts'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <strong className="text-slate-800 font-mono">RM {order.total.toFixed(2)}</strong>
-                          <span className="text-[9px] bg-amber-50 border border-amber-100 text-amber-600 block mt-1 py-0.5 px-1.5 rounded-md font-bold">
-                            +{Math.round(order.total)} {isZh ? '积分' : 'pts'}
-                          </span>
-                        </div>
+                        {order.trackingNumber && (
+                          <div className="mt-3 border-t border-slate-100 pt-3">
+                            <p className="text-[10px] font-semibold text-slate-500">
+                              {isZh ? '物流追踪号码' : 'Parcel tracking number'}
+                            </p>
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <code className="min-w-0 flex-1 select-all break-all rounded-md bg-slate-50 px-2.5 py-2 text-[11px] font-bold text-slate-800">
+                                {order.trackingNumber}
+                              </code>
+                              <button
+                                type="button"
+                                onClick={() => copyTrackingNumber(order.trackingNumber!)}
+                                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+                                aria-label={isZh ? '复制物流追踪号码' : 'Copy parcel tracking number'}
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                                {isZh ? '复制' : 'Copy'}
+                              </button>
+                            </div>
+                            <p className="mt-1.5 text-[10px] leading-4 text-slate-500">
+                              {isZh ? '请将此号码输入承运商的包裹追踪页面。' : "Enter this number on the courier's parcel-tracking page."}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

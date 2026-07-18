@@ -368,6 +368,24 @@ test('production auth and order boundaries', async () => {
   const repeatedConfirmationSession = await json(await request('/api/session', { cookie: memberCookie }));
   assert.equal(repeatedConfirmationSession.body.profile.memberPoints, Math.round(orderBody.order.total));
 
+  const shippedOrder = {
+    ...confirmedOrder,
+    status: 'shipped',
+    trackingNumber: '  RHS-MY-123456  ',
+  };
+  const shippedResult = await json(await request('/api/orders', {
+    method: 'PUT',
+    cookie: sellerCookie,
+    body: { orders: [shippedOrder] },
+  }));
+  assert.equal(shippedResult.response.status, 200);
+  assert.equal(shippedResult.body.orders[0].status, 'shipped');
+  assert.equal(shippedResult.body.orders[0].trackingNumber, 'RHS-MY-123456');
+
+  const trackedMemberOrders = await json(await request('/api/member/orders', { cookie: memberCookie }));
+  assert.equal(trackedMemberOrders.response.status, 200);
+  assert.equal(trackedMemberOrders.body.orders[0].trackingNumber, 'RHS-MY-123456');
+
   assert.equal((await request('/api/members/logout', { method: 'POST', cookie: memberCookie })).status, 200);
   const login = await request('/api/members/login', { method: 'POST', body: { username, password } });
   assert.equal(login.status, 200);

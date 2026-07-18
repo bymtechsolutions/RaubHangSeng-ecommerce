@@ -35,7 +35,8 @@ import {
   Home,
   LogOut,
   Store,
-  Languages
+  Languages,
+  ArrowLeft
 } from 'lucide-react';
 import { Product, CartItem, Language, DeliveryDetails, ProductMedia, ProductMediaAspectRatio, ProductOption, ProductOptionKind, ProductOptionValue, ProductVariant, ProductCutType, StoreSettings, StoreDiscount, StoreDiscountScope, StoreDiscountValueType, CollectionDisplay, ProductCategory, OrderRecord, PaymentStatus } from '../types';
 import { normalizeCollectionDisplays } from '../data/collections';
@@ -1009,6 +1010,7 @@ export default function SellerDashboard({
     setFormFeaturesEn(product.featuresEn ? product.featuresEn.join(', ') : '');
     setFormIsWild(product.isWild);
     setFormStockStatus(product.stockStatus || 'available');
+    requestAnimationFrame(() => document.getElementById('seller-main-content')?.scrollTo({ top: 0, behavior: 'smooth' }));
   };
 
   // Handle Reset Form
@@ -1190,20 +1192,39 @@ export default function SellerDashboard({
   };
 
   // Handle Order Status Update
-  const handleUpdateOrderStatus = async (orderId: string, status: string) => {
+  const handleUpdateOrderStatus = async (orderId: string, status: string, trackingNumber?: string) => {
+    const existingOrder = orderHistory.find(order => order.id === orderId);
+    const nextTrackingNumber = trackingNumber?.trim() || existingOrder?.trackingNumber?.trim();
+    if (status === 'shipped' && !nextTrackingNumber) {
+      triggerError(isZh ? '请先填写物流追踪号码。' : 'Enter a tracking number before marking this order as shipped.');
+      return;
+    }
+
     const updatedOrders = orderHistory.map(order => {
       if (order.id === orderId) {
-        return { ...order, status };
+        return {
+          ...order,
+          status,
+          ...(nextTrackingNumber ? { trackingNumber: nextTrackingNumber } : {}),
+        };
       }
       return order;
     });
 
     await setOrderHistory(updatedOrders);
-    triggerSuccess(isZh ? `订单 #${orderId} 状态已更新！` : `Order #${orderId} status updated!`);
+    triggerSuccess(
+      status === 'shipped'
+        ? (isZh ? `订单 #${orderId} 已发货，追踪号码已保存！` : `Order #${orderId} shipped and tracking number saved!`)
+        : (isZh ? `订单 #${orderId} 状态已更新！` : `Order #${orderId} status updated!`),
+    );
     
     // Update active detail view if open
     if (selectedOrderDetail && selectedOrderDetail.id === orderId) {
-      setSelectedOrderDetail({ ...selectedOrderDetail, status });
+      setSelectedOrderDetail({
+        ...selectedOrderDetail,
+        status,
+        ...(nextTrackingNumber ? { trackingNumber: nextTrackingNumber } : {}),
+      });
     }
   };
 
@@ -2319,7 +2340,7 @@ export default function SellerDashboard({
             {/* TAB: PRODUCTS CATALOG MANAGER */}
             {activeTab === 'products' && (
               <div className="space-y-6">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className={`${editingProduct || isAddingNew ? 'hidden' : 'flex'} flex-col md:flex-row justify-between items-start md:items-center gap-4`}>
                   <div>
                     <h3 className="text-base font-bold text-slate-900">{isZh ? '上架河鱼品类目录' : 'Fishes Storefront Catalog'}</h3>
                     <p className="text-xs text-slate-500">{isZh ? '管理彭亨河鱼的售价、规格、图库及在售库存状态。修改后前台页面立即实时渲染' : 'Real-time edit price, average weight, custom images or add a species.'}</p>
@@ -2328,6 +2349,7 @@ export default function SellerDashboard({
                     onClick={() => {
                       resetProductForm();
                       setIsAddingNew(true);
+                      requestAnimationFrame(() => document.getElementById('seller-main-content')?.scrollTo({ top: 0, behavior: 'smooth' }));
                     }}
                     className="flex items-center space-x-1.5 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all hover:scale-105"
                   >
@@ -2337,7 +2359,7 @@ export default function SellerDashboard({
                 </div>
 
                 {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                <div className={`${editingProduct || isAddingNew ? 'hidden' : 'grid'} grid-cols-1 md:grid-cols-12 gap-3`}>
                   <div className="relative md:col-span-8">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                     <input
@@ -2368,12 +2390,12 @@ export default function SellerDashboard({
                 <div className="space-y-4">
                   
                   {/* Products table list */}
-                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                  <div className={`${editingProduct || isAddingNew ? 'hidden' : 'block'} bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs`}>
                     <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         {isZh ? `上架目录（${filteredProducts.length} 款）` : `Active Storefront Catalog (${filteredProducts.length} items)`}
                       </span>
-                      <span className="text-[10px] text-slate-400">{isZh ? '点击编辑打开弹窗' : 'Use Edit to open modal'}</span>
+                      <span className="text-[10px] text-slate-400">{isZh ? '点击编辑进入商品编辑页面' : 'Use Edit to open the product editor page'}</span>
                     </div>
 
                     {filteredProducts.length === 0 ? (
@@ -2472,37 +2494,41 @@ export default function SellerDashboard({
                   </div>
 
                   {(editingProduct || isAddingNew) && (
-                    <div
-                      className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-950/60 px-3 py-6 sm:px-6"
-                      onClick={resetProductForm}
-                    >
-                      <div
-                        className="w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4">
-                          <div>
-                            <h4 className="text-sm font-bold text-slate-900">
+                    <div className="mx-auto w-full max-w-7xl space-y-5">
+                      <div className="w-full">
+                        <div className="sticky -top-4 z-20 flex flex-col gap-4 border-b border-slate-200 bg-[#f6f6f7]/95 py-4 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between md:-top-6 lg:-top-7">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <button
+                              type="button"
+                              onClick={resetProductForm}
+                              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-slate-600 hover:bg-slate-200 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+                            >
+                              <ArrowLeft className="h-4 w-4" />
+                              <span className="hidden sm:inline">{isZh ? '返回商品' : 'Back to products'}</span>
+                            </button>
+                            <div className="min-w-0">
+                            <h1 className="text-2xl font-bold tracking-tight text-slate-950">
                               {isAddingNew ? (isZh ? '上架全新河鱼品类' : 'Add New Species Catalog') : (isZh ? '修改河鱼商品资料' : 'Modify Species Profile')}
-                            </h4>
-                            <p className="text-[10px] text-slate-400">
+                            </h1>
+                            <p className="mt-1 text-sm text-slate-500">
                               {isAddingNew
                                 ? (isZh ? '配置一尾全新彭亨野生或特马鲁养殖河鱼' : 'Configure a fresh wild caught species')
                                 : `Updating: ${editingProduct?.id}`}
                             </p>
+                            </div>
                           </div>
                           <button
-                            type="button"
-                            onClick={resetProductForm}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-800 cursor-pointer"
-                            aria-label={isZh ? '关闭商品编辑弹窗' : 'Close product editor'}
+                            type="submit"
+                            form="product-editor-form"
+                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 text-sm font-semibold text-white hover:bg-sky-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
                           >
-                            <X className="w-4 h-4" />
+                            <Check className="h-4 w-4" />
+                            {isZh ? '保存商品' : 'Save product'}
                           </button>
                         </div>
-                        <div className="max-h-[calc(100vh-9rem)] overflow-y-auto p-5">
-                          <form onSubmit={handleSaveProduct} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
+                        <div className="py-5">
+                          <form id="product-editor-form" onSubmit={handleSaveProduct} className="space-y-5">
+                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                         <div>
                           <label className="block text-[10px] font-bold text-slate-500 uppercase">
                             {isZh ? '产品 ID * (例: patin-buah)' : 'Product ID * (e.g. patin-buah)'}
@@ -3075,32 +3101,42 @@ export default function SellerDashboard({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase">
-                            {isZh ? '中文说明 (每条用逗号隔开)' : 'Description CN (comma separated)'}
-                          </label>
-                          <textarea
-                            value={formDescriptionZh}
-                            onChange={(e) => setFormDescriptionZh(e.target.value)}
-                            rows={2}
-                            placeholder="富含Omega-3，极其鲜美..."
-                            className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg resize-none"
-                          />
+                      <section className="border-y border-slate-200 py-6">
+                        <div className="mb-4">
+                          <h2 className="text-base font-bold text-slate-900">{isZh ? '商品详细说明' : 'Product descriptions'}</h2>
+                          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                            {isZh ? '分别维护完整的中文和英文商品说明。编辑框可从右下角继续拉高。' : 'Maintain the complete Chinese and English product descriptions separately. Drag the lower-right corner to make either editor taller.'}
+                          </p>
                         </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase">
-                            {isZh ? '英文说明 (每条用逗号隔开)' : 'Description EN (comma separated)'}
+                        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                          <label className="block">
+                            <span className="mb-2 flex items-center justify-between gap-3 text-sm font-semibold text-slate-700">
+                              <span>{isZh ? '中文商品说明' : 'Chinese description'}</span>
+                              <span className="text-xs font-normal tabular-nums text-slate-400">{formDescriptionZh.length}</span>
+                            </span>
+                            <textarea
+                              value={formDescriptionZh}
+                              onChange={(e) => setFormDescriptionZh(e.target.value)}
+                              rows={12}
+                              placeholder="详细说明鱼种来源、口感、处理方式、适合的烹饪方法与配送注意事项……"
+                              className="min-h-72 w-full resize-y rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm leading-6 text-slate-800 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                            />
                           </label>
-                          <textarea
-                            value={formDescriptionEn}
-                            onChange={(e) => setFormDescriptionEn(e.target.value)}
-                            rows={2}
-                            placeholder="High fat concentration caught in Pahang..."
-                            className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg resize-none"
-                          />
+                          <label className="block">
+                            <span className="mb-2 flex items-center justify-between gap-3 text-sm font-semibold text-slate-700">
+                              <span>{isZh ? '英文商品说明' : 'English description'}</span>
+                              <span className="text-xs font-normal tabular-nums text-slate-400">{formDescriptionEn.length}</span>
+                            </span>
+                            <textarea
+                              value={formDescriptionEn}
+                              onChange={(e) => setFormDescriptionEn(e.target.value)}
+                              rows={12}
+                              placeholder="Describe the fish source, flavour, processing, cooking uses, and delivery notes in full…"
+                              className="min-h-72 w-full resize-y rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm leading-6 text-slate-800 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                            />
+                          </label>
                         </div>
-                      </div>
+                      </section>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -3129,12 +3165,22 @@ export default function SellerDashboard({
                         </div>
                       </div>
 
-                      <button
-                        type="submit"
-                        className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all"
-                      >
-                        {isZh ? '💾 保存并发布同步至商城' : 'Save & Sync Product to Store'}
-                      </button>
+                      <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={resetProductForm}
+                          className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+                        >
+                          {isZh ? '取消并返回商品' : 'Cancel and return'}
+                        </button>
+                        <button
+                          type="submit"
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-sky-600 px-5 text-sm font-semibold text-white hover:bg-sky-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+                        >
+                          <Check className="h-4 w-4" />
+                          {isZh ? '保存并同步至商城' : 'Save & sync product'}
+                        </button>
+                      </div>
                           </form>
                         </div>
                       </div>

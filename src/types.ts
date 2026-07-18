@@ -147,6 +147,7 @@ export interface OrderRecord {
   total: number;
   date: string;
   status?: string;
+  trackingNumber?: string;
   payment?: PaymentRecord;
   userId?: string;
   shippingRegion?: 'local' | 'outstation';

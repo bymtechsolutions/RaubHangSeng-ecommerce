@@ -990,6 +990,9 @@ app.put('/api/orders', requireSeller, async (req, res, next) => {
         const proposed = proposedById.get(order.id);
         if (!proposed) return order;
         const status = allowedStatuses.has(String(proposed.status)) ? proposed.status : order.status;
+        const trackingNumber = proposed.trackingNumber === undefined
+          ? order.trackingNumber
+          : cleanText(proposed.trackingNumber, 120) || undefined;
         const paymentStatus = allowedPaymentStatuses.has(String(proposed.payment?.status))
           ? proposed.payment?.status
           : order.payment?.status;
@@ -1020,6 +1023,7 @@ app.put('/api/orders', requireSeller, async (req, res, next) => {
         return {
           ...order,
           status,
+          trackingNumber,
           loyaltyPointsAwarded,
           payment: order.payment
             ? {
