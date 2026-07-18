@@ -455,7 +455,7 @@ export default function ProductPage({
               <button onClick={onBackToShop} className="hidden min-h-11 items-center rounded-xl border border-[#c4d5d9] bg-white px-4 text-sm font-bold text-[#17323d] hover:bg-[#f4f8f7] cursor-pointer sm:inline-flex">{isZh ? '查看全部' : 'View all'}</button>
             </div>
 
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid max-w-[980px] gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {relatedProducts.map(relatedProduct => (
                 <button
                   key={relatedProduct.id}
@@ -464,10 +464,10 @@ export default function ProductPage({
                   disabled={orderingPaused}
                   className={`group overflow-hidden rounded-2xl border text-left transition-all ${orderingPaused ? 'border-slate-200 bg-slate-100 opacity-75 cursor-not-allowed' : 'border-[#d1dfe1] bg-white hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-xl cursor-pointer'}`}
                 >
-                  <div className="aspect-[4/3] overflow-hidden bg-[#eaf0ef]">
-                    <img src={resolveMediaUrl(relatedProduct.image)} alt={isZh ? relatedProduct.nameZh : relatedProduct.nameEn} className={`h-full w-full object-contain transition-transform duration-500 ${orderingPaused ? 'grayscale opacity-60' : 'group-hover:scale-[1.03]'}`} referrerPolicy="no-referrer" />
+                  <div className="aspect-square overflow-hidden bg-[#eaf0ef]">
+                    <img src={resolveMediaUrl(relatedProduct.image)} alt={isZh ? relatedProduct.nameZh : relatedProduct.nameEn} className={`h-full w-full object-cover transition-transform duration-500 ${orderingPaused ? 'grayscale opacity-60' : 'group-hover:scale-[1.03]'}`} referrerPolicy="no-referrer" />
                   </div>
-                  <div className="p-5">
+                  <div className="p-4">
                     <p className="font-mono text-xs uppercase tracking-[0.08em] text-sky-700">{relatedProduct.scientificName}</p>
                     <h3 className="mt-2 text-xl font-extrabold text-slate-950">{isZh ? relatedProduct.nameZh : relatedProduct.nameEn}</h3>
                     <p className="mt-3 text-base font-black text-[#c76a12]">RM {formatPrice(relatedProduct.pricePerKg)} <span className="text-sm font-semibold text-[#71868c]">/ kg</span></p>

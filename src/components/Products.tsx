@@ -277,7 +277,7 @@ export default function Products({ language, products = PRODUCTS, collections = 
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {filteredProducts.map((product) => {
               const configuration = getProductConfiguration(product);
               const selection = getCardSelection(product);
@@ -312,7 +312,7 @@ export default function Products({ language, products = PRODUCTS, collections = 
                       }
                     }}
                     aria-disabled={orderingPaused}
-                    className={`relative aspect-[4/3] overflow-hidden bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-[#d9e7e8] ${
+                    className={`relative aspect-square overflow-hidden bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-[#d9e7e8] ${
                       orderingPaused ? 'cursor-not-allowed' : 'cursor-pointer'
                     }`}
                     aria-label={isZh ? `查看${product.nameZh}详情` : `View ${product.nameEn} details`}

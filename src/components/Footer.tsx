@@ -1,7 +1,7 @@
 import { MapPin, Phone, Mail, Award, Clock, Globe2 } from 'lucide-react';
 import { Language } from '../types';
 
-const logoImage = new URL('../../assets/raub-hang-seng-logo.jpg', import.meta.url).href;
+const logoImage = new URL('../../assets/raub-hang-seng-logo-mark.jpg', import.meta.url).href;
 
 interface FooterProps {
   language: Language;
@@ -44,15 +44,18 @@ export default function Footer({ language, setLanguage, onNavigate, onPolicyClic
         
         {/* Brand Block: 4 Cols */}
         <div className="md:col-span-4 space-y-4">
-          <div className="flex items-center space-x-2">
-            <img
-              src={logoImage}
-              alt="Raub Hang Seng Fisheries"
-              className="w-12 h-12 rounded-full object-cover bg-[#314b59] border border-white/15 shadow-sm"
-            />
-            <div className="flex flex-col">
-              <span className="text-lg font-extrabold tracking-wide text-white">彭亨河鱼</span>
-              <span className="text-[9px] tracking-[0.18em] text-white/80 font-mono uppercase">Pahang River Fish</span>
+          <div className="flex items-center gap-3">
+            <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full ring-2 ring-white/80 shadow-md">
+              <img
+                src={logoImage}
+                alt="Raub Hang Seng river fish logo"
+                className="absolute inset-0 h-full w-full object-cover scale-[1.7]"
+                style={{ transformOrigin: '50% 60%' }}
+              />
+            </span>
+            <div className="flex flex-col leading-none">
+              <span className="text-[22px] font-semibold tracking-[0.01em] text-white">Raub Hang Seng</span>
+              <span className="mt-1.5 text-[11px] font-semibold tracking-[0.1em] text-white/90">River Fish</span>
             </div>
           </div>
 
