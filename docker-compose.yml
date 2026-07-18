@@ -2,15 +2,27 @@ services:
   rhsfish:
     build:
       context: .
+      args:
+        APP_RELEASE_ID: ${APP_RELEASE_ID:-compose}
     image: rhsfish:latest
     container_name: rhsfish-app
     restart: unless-stopped
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     environment:
       NODE_ENV: production
       PORT: 3000
       RHS_DATA_FILE: /app/data/store.json
       RHS_UPLOAD_DIR: /app/data/uploads
-      SELLER_PASSCODE: ${SELLER_PASSCODE}
+      SELLER_PASSWORD: ${SELLER_PASSWORD:-}
       SESSION_SECRET: ${SESSION_SECRET}
     ports:
       - "127.0.0.1:9999:3000"

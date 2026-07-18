@@ -47,19 +47,33 @@ Copy this repository into `/opt/rhsfish`.
 Run this from the project root on EC2:
 
 ```bash
-sudo env SELLER_PASSCODE='use-a-strong-private-passcode' CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
+sudo env CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
 ```
 
 That command will:
 
 - Install Docker, Nginx, Certbot, and required tools.
-- Build the Docker image.
+- Create a verified pre-deploy backup when the data volume already exists.
+- Build and health-check a candidate Docker image.
+- Bake the Git commit ID into the image and reject promotion if the health endpoint reports a different release.
+- Automatically restore the previous image if the candidate fails its health check.
+- Retain the last healthy release as `rhsfish:previous` for a later manual rollback.
 - Run the app container on `127.0.0.1:9999`.
+- Drop Linux capabilities, prevent privilege escalation, and rotate container logs.
 - Install `/etc/nginx/conf.d/00-rhsfish.com.conf`.
 - Reload Nginx.
 - Enable HTTPS if all four DNS names already resolve to `54.251.150.167`.
 
-The deployment script requires a non-default seller passcode with at least 8 characters. It creates and preserves a random `SESSION_SECRET` in `/opt/rhsfish/.env`; keep that file private and stable because changing the secret signs every member and seller out. On the first hardened deployment, any legacy seller passcode is replaced by the `SELLER_PASSCODE` supplied to the deployment command.
+The deployment script creates and preserves a random `SESSION_SECRET` in `/opt/rhsfish/.env`; keep that file private and stable because changing the secret signs every member and seller out.
+
+For a brand-new data volume, the store-owner login is:
+
+```text
+Owner ID: admin
+Password: abcd1234
+```
+
+Sign in at `/seller`, open **Store Settings**, and change the initial password immediately. The password is stored as a salted hash in the backend. If the Docker volume already contains a seller password from an earlier release, that password is preserved and used with the new `admin` owner ID.
 
 Before deployment, run the production boundary test:
 
@@ -125,17 +139,21 @@ docker exec mysellerbase-prod-proxy-1 nginx -s reload
 ## Verify
 
 ```bash
-curl http://127.0.0.1:9999/api/health
-curl -I http://rhsfish.com
-curl -I https://rhsfish.com
-curl -I http://raubfish.com
+sudo bash deploy/verify-production.sh
 sudo certbot renew --dry-run
+```
+
+The verifier checks the persistent-store health endpoint, storefront metadata, robots and sitemap discovery, HTTPS security headers, immutable asset caching and compression, public-store privacy boundary, anonymous seller-access boundary, and the `raubfish.com` redirect. For a local-only check before DNS is ready:
+
+```bash
+sudo env BASE_URL='http://127.0.0.1:9999' SKIP_REDIRECT=1 \
+  bash deploy/verify-production.sh
 ```
 
 Expected local health response:
 
 ```json
-{"ok":true}
+{"ok":true,"release":"<git-commit-id>"}
 ```
 
 Expected redirect:
@@ -166,9 +184,49 @@ sudo systemctl reload nginx
 From `/opt/rhsfish`:
 
 ```bash
-git pull
-sudo env SELLER_PASSCODE='use-a-strong-private-passcode' CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
+git pull --ff-only origin main
+sudo env CERTBOT_EMAIL='you@example.com' bash deploy/setup-ec2.sh
+sudo env EXPECTED_RELEASE="$(git rev-parse --short=12 HEAD)" bash deploy/verify-production.sh
 docker image prune -f
+```
+
+The setup script preserves the Docker data volume, creates a backup before replacing the container, and only promotes the candidate image after `/api/health` confirms that the persistent store is readable. If the candidate fails, it restarts the previous production image automatically. After a successful promotion, the release that was previously live remains tagged as `rhsfish:previous`.
+
+If a problem is discovered after promotion, inspect the retained images and perform a health-checked rollback:
+
+```bash
+docker image ls rhsfish
+sudo env ROLLBACK_CONFIRM='rhsfish:previous' bash deploy/rollback-release.sh
+sudo bash deploy/verify-production.sh
+```
+
+Rollback first creates a verified data backup. If the previous image does not start or pass health checks, the script automatically restores the release that was running before the rollback attempt. The two release tags are swapped after success, so the same command can reverse the rollback if necessary.
+
+## Data Backup And Restore
+
+Create an additional on-demand backup:
+
+```bash
+cd /opt/rhsfish
+sudo bash deploy/backup-data.sh
+```
+
+Backups and SHA-256 checksum files are written to `/opt/rhsfish/backups`. They include orders, member profiles, password hashes, payment slips, and uploaded product media, so keep them private and copy them to a separate encrypted backup location. Local archives are retained for 30 days by default; set `BACKUP_RETENTION_DAYS` when running the backup script to change the window (`0` disables pruning).
+
+To restore a verified backup, first inspect the exact filename, then run:
+
+```bash
+cd /opt/rhsfish
+sudo env RESTORE_CONFIRM=rhsfish_data \
+  bash deploy/restore-data.sh /opt/rhsfish/backups/rhsfish-data-YYYYMMDDTHHMMSSZ.tar.gz
+```
+
+Restore creates a new safety backup before changing the volume. If the restored data fails the application health check, the script automatically puts the pre-restore data back.
+
+For scheduled daily backups, add this root cron entry and copy the resulting archives off the EC2 instance:
+
+```cron
+15 3 * * * cd /opt/rhsfish && bash deploy/backup-data.sh >> /var/log/rhsfish-backup.log 2>&1
 ```
 
 ## Useful Commands
@@ -176,7 +234,7 @@ docker image prune -f
 ```bash
 docker logs -f rhsfish-app
 docker restart rhsfish-app
-docker rm -f rhsfish-app
+docker image ls rhsfish
 docker exec rhsfish-app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>r.text()).then(console.log)"
 sudo nginx -t
 sudo systemctl reload nginx

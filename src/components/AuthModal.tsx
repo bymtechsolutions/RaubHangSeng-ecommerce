@@ -503,7 +503,7 @@ export default function AuthModal({
                       {isZh ? '您目前还没有提交过订单。' : 'No saved orders under this profile yet.'}
                     </p>
                     <p className="text-[10px] text-slate-400 mt-0.5">
-                      {isZh ? '下单时登录即可累积会员积分！' : 'Earn loyalty points on your next purchase!'}
+                      {isZh ? '登录下单并确认付款后即可累积会员积分！' : 'Earn loyalty points after payment is confirmed.'}
                     </p>
                   </div>
                 ) : (

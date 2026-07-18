@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Phone, MapPin, Send, HelpCircle, ChevronDown, ChevronUp, CheckCircle, MessageSquare } from 'lucide-react';
+import { Mail, Phone, MapPin, Send, HelpCircle, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
 import { Language } from '../types';
 import { FAQS } from '../data/products';
 
@@ -15,7 +15,6 @@ export default function ContactUs({ language }: ContactUsProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
   const toggleFaq = (id: string) => {
@@ -24,17 +23,17 @@ export default function ContactUs({ language }: ContactUsProps) {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !message) return;
+    if (!name.trim() || !message.trim()) return;
 
-    setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
-      setSuccess(true);
-      setName('');
-      setEmail('');
-      setMessage('');
-      setTimeout(() => setSuccess(false), 4000);
-    }, 800);
+    const whatsappMessage = [
+      isZh ? '*网站咨询*' : '*Website Inquiry*',
+      '',
+      `${isZh ? '姓名' : 'Name'}: ${name.trim()}`,
+      `${isZh ? '电邮' : 'Email'}: ${email.trim() || '-'}`,
+      `${isZh ? '问题' : 'Message'}: ${message.trim()}`,
+    ].join('\n');
+    window.open(`https://wa.me/60187682528?text=${encodeURIComponent(whatsappMessage)}`, '_blank', 'noopener,noreferrer');
+    setSuccess(true);
   };
 
   return (
@@ -150,7 +149,11 @@ export default function ContactUs({ language }: ContactUsProps) {
                   <input
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      setSuccess(false);
+                    }}
+                    maxLength={100}
                     placeholder={isZh ? '您的名字 / Your Name' : 'Your name'}
                     required
                     className="w-full bg-[#f8fbfa] border border-[#c4d5d9] focus:border-sky-500 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
@@ -161,7 +164,11 @@ export default function ContactUs({ language }: ContactUsProps) {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setSuccess(false);
+                    }}
+                    maxLength={254}
                     placeholder={isZh ? '电子邮箱 (选填) / Email (Optional)' : 'Your email address'}
                     className="w-full bg-[#f8fbfa] border border-[#c4d5d9] focus:border-sky-500 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
@@ -170,7 +177,11 @@ export default function ContactUs({ language }: ContactUsProps) {
                 <div className="space-y-1">
                   <textarea
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={(e) => {
+                      setMessage(e.target.value);
+                      setSuccess(false);
+                    }}
+                    maxLength={1000}
                     rows={3}
                     placeholder={isZh ? '请输入您的问题（如大宗餐饮采购、特定的河鱼种类预约、外州配送咨询等）...' : 'Enter your inquiry details (e.g., restaurant wholesale purchase, specific seasonal fish reservation)...'}
                     required
@@ -181,17 +192,17 @@ export default function ContactUs({ language }: ContactUsProps) {
                 {success && (
                   <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg flex items-center space-x-2">
                     <CheckCircle className="w-4 h-4" />
-                    <span>{isZh ? '消息提交成功！客服会在24小时内联系您。' : 'Message received! We will contact you soon.'}</span>
+                    <span>{isZh ? 'WhatsApp 已打开，请在聊天窗口点击发送。' : 'WhatsApp opened. Press Send in the chat to deliver your inquiry.'}</span>
                   </div>
                 )}
 
                 <button
                   type="submit"
-                  disabled={submitting || !name || !message}
+                  disabled={!name.trim() || !message.trim()}
                   className="w-full py-2.5 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 disabled:opacity-40 text-white font-bold rounded-lg transition-all flex items-center justify-center space-x-1.5 cursor-pointer shadow-xs"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>{isZh ? '发送信息' : 'Submit Inquiry'}</span>
+                  <span>{isZh ? '通过 WhatsApp 发送' : 'Send with WhatsApp'}</span>
                 </button>
               </form>
             </div>

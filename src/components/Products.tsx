@@ -156,7 +156,7 @@ export default function Products({ language, products = PRODUCTS, collections = 
           en: 'Seasonal Only',
           class: 'bg-red-50 text-red-600 border-red-200'
         };
-      case 'out_of_stock' as any:
+      case 'out_of_stock':
         return {
           zh: '暂时售罄',
           en: 'Out of Stock',
@@ -517,17 +517,17 @@ export default function Products({ language, products = PRODUCTS, collections = 
 
                       {/* Add to Cart Button */}
                       <button
-                        onClick={() => product.stockStatus === ('out_of_stock' as any) || orderingPaused || variantUnavailable ? null : onAddToCart(product, selection.quantity, selection.weightKg, selection.cutType, selectedVariant?.id)}
-                        disabled={product.stockStatus === ('out_of_stock' as any) || orderingPaused || variantUnavailable}
+                        onClick={() => product.stockStatus === 'out_of_stock' || orderingPaused || variantUnavailable ? null : onAddToCart(product, selection.quantity, selection.weightKg, selection.cutType, selectedVariant?.id)}
+                        disabled={product.stockStatus === 'out_of_stock' || orderingPaused || variantUnavailable}
                         className={`col-span-3 flex items-center justify-center space-x-1.5 md:space-x-2 px-3 py-2.5 rounded-xl transition-all whitespace-nowrap font-bold text-xs md:text-sm ${
-                          product.stockStatus === ('out_of_stock' as any) || orderingPaused || variantUnavailable
+                          product.stockStatus === 'out_of_stock' || orderingPaused || variantUnavailable
                             ? 'bg-slate-300 text-slate-500 cursor-not-allowed border border-slate-200 shadow-none scale-100'
                             : 'bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white cursor-pointer shadow-md active:scale-95'
                         }`}
                       >
                         {orderingPaused ? (
                           <span>{isZh ? '更新中' : 'Updating'}</span>
-                        ) : product.stockStatus === ('out_of_stock' as any) || variantUnavailable ? (
+                        ) : product.stockStatus === 'out_of_stock' || variantUnavailable ? (
                           <span>{isZh ? '暂时售罄' : 'Sold Out'}</span>
                         ) : (
                           <>

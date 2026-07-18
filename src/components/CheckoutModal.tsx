@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, ShieldCheck, ClipboardCheck, Info, Award, Upload, FileCheck2, Landmark } from 'lucide-react';
 import { AppliedDiscount, CartItem, Language, DeliveryDetails, User, OrderRecord, PaymentSlip } from '../types';
 import { getDiscountLabel } from '../lib/discounts';
 import { getCartItemOptionSummary, getCartItemPricePerKg } from '../lib/productOptions';
+import { getDeliveryCoverage, type ShippingRegion } from '../lib/shipping';
 
 interface CheckoutModalProps {
   cartItems: CartItem[];
@@ -22,7 +23,8 @@ interface CheckoutModalProps {
     instructions: string;
   };
   shippingRegion: 'local' | 'outstation';
-  onOrderSuccess: (order: OrderRecord) => Promise<void>;
+  onShippingRegionChange: (region: ShippingRegion) => void;
+  onOrderSuccess: (order: OrderRecord, idempotencyKey: string) => Promise<void>;
   currentUser: User | null;
   onAuthClick: () => void;
 }
@@ -40,6 +42,7 @@ export default function CheckoutModal({
   discountApplications,
   bankTransferSettings,
   shippingRegion,
+  onShippingRegionChange,
   onOrderSuccess,
   currentUser,
   onAuthClick,
@@ -59,6 +62,11 @@ export default function CheckoutModal({
   const [paymentSlip, setPaymentSlip] = useState<PaymentSlip | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const idempotencyKey = useRef<string | null>(null);
+  if (!idempotencyKey.current) {
+    idempotencyKey.current = globalThis.crypto?.randomUUID?.()
+      || `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  }
 
   // Autofill if logged in
   useEffect(() => {
@@ -75,8 +83,18 @@ export default function CheckoutModal({
 
   // Validation feedback
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isCheckingPostcode, setIsCheckingPostcode] = useState(false);
   const [postcodeStatus, setPostcodeStatus] = useState<'valid' | 'invalid' | null>(null);
+
+  useEffect(() => {
+    if (postcode.length !== 5) {
+      setPostcodeStatus(null);
+      return;
+    }
+
+    const coverage = getDeliveryCoverage(postcode);
+    setPostcodeStatus(coverage.covered ? 'valid' : 'invalid');
+    if (coverage.covered && coverage.region) onShippingRegionChange(coverage.region);
+  }, [postcode, onShippingRegionChange]);
 
   const handlePaymentSlipUpload = (file?: File | null) => {
     if (!file) return;
@@ -127,31 +145,15 @@ export default function CheckoutModal({
     reader.readAsDataURL(file);
   };
 
-  // Postcode checks (Simplified for Malaysian standard 5-digit postcodes)
   const handlePostcodeChange = (val: string) => {
     const cleaned = val.replace(/\D/g, '').slice(0, 5);
     setPostcode(cleaned);
-
-    if (cleaned.length === 5) {
-      setIsCheckingPostcode(true);
-      // Simulate real-time route checking for cold chain coverage
-      setTimeout(() => {
-        setIsCheckingPostcode(false);
-        // Standard west Malaysian postcode ranges (01000 - 86000) are generally covered by cold chain
-        const codeNum = parseInt(cleaned);
-        if (codeNum >= 1000 && codeNum <= 98000) {
-          setPostcodeStatus('valid');
-          setErrors(prev => {
-            const next = { ...prev };
-            delete next.postcode;
-            return next;
-          });
-        } else {
-          setPostcodeStatus('invalid');
-        }
-      }, 500);
-    } else {
-      setPostcodeStatus(null);
+    if (getDeliveryCoverage(cleaned).covered) {
+      setErrors(prev => {
+        const next = { ...prev };
+        delete next.postcode;
+        return next;
+      });
     }
   };
 
@@ -235,7 +237,7 @@ export default function CheckoutModal({
           accountNumber: bankTransferSettings.accountNumber,
           slip: paymentSlip || undefined,
         },
-      });
+      }, idempotencyKey.current);
     } catch {
       setSubmissionError(isZh
         ? '订单尚未提交成功。您的购物车和资料已保留，请检查网络后重试。'
@@ -380,12 +382,16 @@ export default function CheckoutModal({
                   <option value="Selangor">Selangor (雪兰莪)</option>
                   <option value="Kuala Lumpur">Kuala Lumpur (吉隆坡)</option>
                   <option value="Pahang">Pahang (彭亨)</option>
+                  <option value="Putrajaya">Putrajaya</option>
                   <option value="Negeri Sembilan">Negeri Sembilan (森美兰)</option>
                   <option value="Johor">Johor (柔佛)</option>
                   <option value="Penang">Penang (槟城)</option>
                   <option value="Perak">Perak (霹雳)</option>
                   <option value="Melaka">Melaka (马六甲)</option>
                   <option value="Kedah">Kedah (吉打)</option>
+                  <option value="Perlis">Perlis (玻璃市)</option>
+                  <option value="Kelantan">Kelantan (吉兰丹)</option>
+                  <option value="Terengganu">Terengganu (登嘉楼)</option>
                 </select>
               </div>
 
@@ -404,12 +410,6 @@ export default function CheckoutModal({
                       errors.postcode ? 'border-red-500 focus:border-red-500' : 'border-slate-200 focus:border-sky-500'
                     }`}
                   />
-                  {isCheckingPostcode && (
-                    <span className="absolute right-3.5 top-3 flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-sky-500"></span>
-                    </span>
-                  )}
                 </div>
 
                 {/* Postcode check feedback indicator */}
@@ -472,6 +472,8 @@ export default function CheckoutModal({
                 type="date"
                 value={deliveryDate}
                 onChange={(e) => setDeliveryDate(e.target.value)}
+                min={new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10)}
+                max={new Date(Date.now() - new Date().getTimezoneOffset() * 60_000 + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
                 className={`w-full bg-white border rounded-xl px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-1 focus:ring-sky-500 transition-colors ${
                   errors.deliveryDate ? 'border-red-500 focus:border-red-500' : 'border-slate-200 focus:border-sky-500'
                 }`}

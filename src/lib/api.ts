@@ -33,7 +33,12 @@ const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
 
 export const fetchStore = () => requestJson<Pick<StoreState, 'products' | 'settings'>>('/api/store');
 
-export const fetchSession = () => requestJson<{ profile: User | null; sellerAuthenticated: boolean }>('/api/session');
+export const fetchSession = () => requestJson<{
+  profile: User | null;
+  sellerAuthenticated: boolean;
+  sellerUsername: string | null;
+  sellerPasswordChangeRequired: boolean;
+}>('/api/session');
 
 export const fetchSellerStore = () => requestJson<StoreState>('/api/seller/store');
 
@@ -46,9 +51,10 @@ export const replaceProducts = (products: Product[], options?: { draft?: boolean
   })
 );
 
-export const createOrder = (order: OrderRecord) => (
+export const createOrder = (order: OrderRecord, idempotencyKey: string) => (
   requestJson<{ order: OrderRecord; profile: User | null }>('/api/orders', {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify({ order }),
   })
 );
@@ -79,10 +85,10 @@ export const uploadStorefrontMedia = (media: {
   })
 );
 
-export const verifySellerPasscode = (passcode: string) => (
-  requestJson<{ ok: boolean }>('/api/seller/verify-passcode', {
+export const loginSeller = (username: string, password: string) => (
+  requestJson<{ ok: boolean; username: string; passwordChangeRequired: boolean }>('/api/seller/login', {
     method: 'POST',
-    body: JSON.stringify({ passcode }),
+    body: JSON.stringify({ username, password }),
   })
 );
 
@@ -90,10 +96,10 @@ export const logoutSeller = () => (
   requestJson<{ ok: boolean }>('/api/seller/logout', { method: 'POST' })
 );
 
-export const updateSellerPasscode = (currentPasscode: string, nextPasscode: string) => (
-  requestJson<{ ok: boolean }>('/api/seller/passcode', {
+export const updateSellerPassword = (currentPassword: string, nextPassword: string) => (
+  requestJson<{ ok: boolean; username: string; passwordChangeRequired: boolean }>('/api/seller/password', {
     method: 'PATCH',
-    body: JSON.stringify({ currentPasscode, nextPasscode }),
+    body: JSON.stringify({ currentPassword, nextPassword }),
   })
 );
 

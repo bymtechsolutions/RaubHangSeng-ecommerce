@@ -13,10 +13,14 @@ FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
 
+ARG APP_RELEASE_ID=development
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV RHS_DATA_FILE=/app/data/store.json
 ENV RHS_UPLOAD_DIR=/app/data/uploads
+ENV APP_RELEASE_ID=$APP_RELEASE_ID
+
+LABEL org.opencontainers.image.revision=$APP_RELEASE_ID
 
 COPY package*.json ./
 RUN npm ci --omit=dev --include=optional --ignore-scripts

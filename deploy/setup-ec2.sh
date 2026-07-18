@@ -4,6 +4,8 @@ set -Eeuo pipefail
 APP_NAME="rhsfish"
 CONTAINER_NAME="rhsfish-app"
 IMAGE_NAME="rhsfish:latest"
+CANDIDATE_IMAGE_NAME="rhsfish:candidate"
+PREVIOUS_IMAGE_NAME="rhsfish:previous"
 HOST_PORT="9999"
 CONTAINER_PORT="3000"
 DATA_VOLUME="rhsfish_data"
@@ -12,6 +14,7 @@ MAIN_WWW_DOMAIN="www.rhsfish.com"
 REDIRECT_DOMAIN="raubfish.com"
 REDIRECT_WWW_DOMAIN="www.raubfish.com"
 PUBLIC_IP="54.251.150.167"
+RELEASE_ID=""
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NGINX_SOURCE="$ROOT_DIR/deploy/nginx/rhsfish.com.conf"
@@ -130,14 +133,9 @@ connect_existing_proxy_network() {
 load_or_create_env() {
   if [[ ! -f "$ROOT_DIR/.env" ]]; then
     log "Creating .env"
-    local passcode="${SELLER_PASSCODE:-}"
-    if [[ ${#passcode} -lt 8 || "$passcode" == "8888" ]]; then
-      echo "Set SELLER_PASSCODE to a non-default value with at least 8 characters before deployment." >&2
-      exit 1
-    fi
     local generated_session_secret
     generated_session_secret="${SESSION_SECRET:-$(openssl rand -hex 32)}"
-    printf 'SELLER_PASSCODE=%q\nSESSION_SECRET=%q\n' "$passcode" "$generated_session_secret" > "$ROOT_DIR/.env"
+    printf 'SESSION_SECRET=%q\n' "$generated_session_secret" > "$ROOT_DIR/.env"
     chmod 600 "$ROOT_DIR/.env"
   fi
 
@@ -145,11 +143,6 @@ load_or_create_env() {
   # shellcheck disable=SC1091
   source "$ROOT_DIR/.env"
   set +a
-
-  if [[ ${#SELLER_PASSCODE} -lt 8 || "$SELLER_PASSCODE" == "8888" ]]; then
-    echo "SELLER_PASSCODE in $ROOT_DIR/.env must be non-default and at least 8 characters." >&2
-    exit 1
-  fi
 
   if [[ -z "${SESSION_SECRET:-}" ]]; then
     SESSION_SECRET="$(openssl rand -hex 32)"
@@ -163,11 +156,28 @@ load_or_create_env() {
   fi
 }
 
-run_container() {
-  log "Building Docker image"
-  docker build -t "$IMAGE_NAME" "$ROOT_DIR"
+backup_existing_data() {
+  if ! docker volume inspect "$DATA_VOLUME" >/dev/null 2>&1; then
+    return
+  fi
+
+  log "Creating a verified pre-deploy data backup"
+  BACKUP_DIR="${BACKUP_DIR:-$ROOT_DIR/backups}" \
+    bash "$ROOT_DIR/deploy/backup-data.sh"
+}
+
+build_candidate_image() {
+  RELEASE_ID="${APP_RELEASE_ID:-$(git rev-parse --short=12 HEAD 2>/dev/null || date -u +%Y%m%dT%H%M%SZ)}"
+  log "Building candidate Docker image for release $RELEASE_ID"
+  docker build --build-arg APP_RELEASE_ID="$RELEASE_ID" -t "$CANDIDATE_IMAGE_NAME" "$ROOT_DIR"
+}
+
+start_container() {
+  local image_name="$1"
+  local enable_legacy_auth="${2:-0}"
 
   local docker_network_args=()
+  local legacy_auth_args=()
   local proxy_network
   proxy_network="$(existing_proxy_network || true)"
   if [[ -n "$proxy_network" ]]; then
@@ -179,9 +189,17 @@ run_container() {
 
   docker volume create "$DATA_VOLUME" >/dev/null
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  if [[ "$enable_legacy_auth" == "1" ]]; then
+    legacy_auth_args=(-e SELLER_PASSCODE="${SELLER_PASSCODE:-${SELLER_PASSWORD:-abcd1234}}")
+  fi
   docker run -d \
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
+    --init \
+    --cap-drop ALL \
+    --security-opt no-new-privileges:true \
+    --log-opt max-size=10m \
+    --log-opt max-file=3 \
     "${docker_network_args[@]}" \
     -p "127.0.0.1:$HOST_PORT:$CONTAINER_PORT" \
     -v "$DATA_VOLUME:/app/data" \
@@ -189,16 +207,23 @@ run_container() {
     -e PORT="$CONTAINER_PORT" \
     -e RHS_DATA_FILE=/app/data/store.json \
     -e RHS_UPLOAD_DIR=/app/data/uploads \
-    -e SELLER_PASSCODE="$SELLER_PASSCODE" \
+    -e SELLER_PASSWORD="${SELLER_PASSWORD:-}" \
+    "${legacy_auth_args[@]}" \
     -e SESSION_SECRET="$SESSION_SECRET" \
-    "$IMAGE_NAME" >/dev/null
+    "$image_name" >/dev/null
 }
 
 wait_for_app() {
+  local expected_release="${1:-}"
+  local health_response
   log "Waiting for app health check"
   for _ in $(seq 1 40); do
-    if curl -fsS "http://127.0.0.1:$HOST_PORT/api/health" >/dev/null 2>&1; then
-      curl -fsS "http://127.0.0.1:$HOST_PORT/api/health"
+    if health_response="$(curl -fsS "http://127.0.0.1:$HOST_PORT/api/health" 2>/dev/null)"; then
+      if [[ -n "$expected_release" ]] && ! grep -Fq "\"release\":\"$expected_release\"" <<<"$health_response"; then
+        sleep 2
+        continue
+      fi
+      printf '%s' "$health_response"
       printf '\n'
       return
     fi
@@ -207,7 +232,19 @@ wait_for_app() {
 
   docker logs "$CONTAINER_NAME" --tail=80 || true
   echo "App did not become healthy on 127.0.0.1:$HOST_PORT." >&2
-  exit 1
+  return 1
+}
+
+rollback_container() {
+  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+    log "No previous image is available for rollback."
+    return 1
+  fi
+
+  log "Restoring the previous production image"
+  start_container "$IMAGE_NAME" 1
+  wait_for_app
 }
 
 configure_nginx() {
@@ -287,8 +324,22 @@ enable_https_if_ready() {
 install_packages
 enable_service docker
 load_or_create_env
-run_container
-wait_for_app
+backup_existing_data
+build_candidate_image
+if ! start_container "$CANDIDATE_IMAGE_NAME" || ! wait_for_app "$RELEASE_ID"; then
+  if rollback_container; then
+    log "Candidate failed health checks; the previous production image was restored."
+  else
+    log "Candidate failed health checks and automatic rollback was unavailable."
+  fi
+  exit 1
+fi
+if docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+  log "Retaining the current image as $PREVIOUS_IMAGE_NAME"
+  docker tag "$IMAGE_NAME" "$PREVIOUS_IMAGE_NAME"
+fi
+docker tag "$CANDIDATE_IMAGE_NAME" "$IMAGE_NAME"
+docker image rm "$CANDIDATE_IMAGE_NAME" >/dev/null 2>&1 || true
 connect_existing_proxy_network
 if port_80_taken_by_other_proxy; then
   log "Skipped host Nginx and Certbot because this server already has a public proxy on port 80."
@@ -303,3 +354,4 @@ log "Done"
 printf 'Main site: https://%s\n' "$MAIN_DOMAIN"
 printf 'Redirect:  https://%s -> https://%s\n' "$REDIRECT_DOMAIN" "$MAIN_DOMAIN"
 printf 'Local app: http://127.0.0.1:%s/api/health\n' "$HOST_PORT"
+printf 'Release:   %s\n' "$RELEASE_ID"

@@ -79,7 +79,7 @@ export interface Product {
   featuresZh: string[];
   featuresEn: string[];
   isWild: boolean;
-  stockStatus: 'available' | 'limited' | 'seasonal';
+  stockStatus: 'available' | 'limited' | 'seasonal' | 'out_of_stock';
 }
 
 export interface CartItem {
@@ -155,6 +155,9 @@ export interface OrderRecord {
   shippingFee?: number;
   discountTotal?: number;
   discounts?: AppliedDiscount[];
+  idempotencyKeyHash?: string;
+  requestFingerprint?: string;
+  loyaltyPointsAwarded?: number;
 }
 
 export interface StoreSettings {

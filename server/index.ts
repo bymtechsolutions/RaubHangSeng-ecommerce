@@ -1,5 +1,6 @@
 import express from 'express';
 import crypto from 'node:crypto';
+import { constants as fsConstants } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,7 @@ import { DEFAULT_COLLECTIONS, normalizeCollectionDisplays } from '../src/data/co
 import { PRODUCTS } from '../src/data/products';
 import { calculateDiscounts } from '../src/lib/discounts';
 import { getVariantPricePerKg } from '../src/lib/productOptions';
+import { getDeliveryCoverage } from '../src/lib/shipping';
 import type { CartItem, DeliveryDetails, OrderRecord, PaymentSlip, Product, ProductMedia, StoreDiscount, StoreSettings, StoreState, User } from '../src/types';
 
 interface MemberRecord {
@@ -15,11 +17,16 @@ interface MemberRecord {
   profile: User;
 }
 
-type PasscodeRecord = Pick<MemberRecord, 'passwordHash' | 'salt'> & { policyVersion?: number };
+type PasswordRecord = Pick<MemberRecord, 'passwordHash' | 'salt'> & { policyVersion?: number };
+
+interface SellerAccountRecord extends PasswordRecord {
+  username: string;
+}
 
 interface PersistedStore extends StoreState {
   members: Record<string, MemberRecord>;
-  sellerPasscode?: PasscodeRecord;
+  sellerAccount?: SellerAccountRecord;
+  sellerPasscode?: PasswordRecord;
 }
 
 interface SessionPayload {
@@ -37,7 +44,16 @@ const uploadDir = process.env.RHS_UPLOAD_DIR || path.join(path.dirname(dataFile)
 const storefrontUploadDir = path.join(uploadDir, 'storefront');
 const port = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === 'production' || process.argv.includes('--production');
+const publicSiteUrl = (() => {
+  const url = new URL(String(process.env.PUBLIC_SITE_URL || 'https://rhsfish.com'));
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('PUBLIC_SITE_URL must use HTTP or HTTPS');
+  return url.origin;
+})();
+const releaseId = String(process.env.APP_RELEASE_ID || 'development').slice(0, 80);
 const sessionSecret = process.env.SESSION_SECRET || (isProduction ? '' : 'rhs-development-session-secret-change-me');
+const sellerUsername = 'admin';
+const defaultSellerPassword = 'abcd1234';
+const sellerCredentialPolicyVersion = 3;
 const memberCookieName = 'rhs_member_session';
 const sellerCookieName = 'rhs_seller_session';
 const memberSessionSeconds = 60 * 60 * 24 * 7;
@@ -57,6 +73,7 @@ const allowedUploadTypes: Record<string, { extension: string; type: ProductMedia
   'video/quicktime': { extension: 'mov', type: 'video', maxBytes: maxVideoUploadBytes },
 };
 const allowedProductMediaAspectRatios = new Set(['square', 'portrait', 'landscape', 'wide', 'original']);
+const allowedProductStockStatuses = new Set(['available', 'limited', 'seasonal', 'out_of_stock']);
 
 const defaultSettings: StoreSettings = {
   maintenanceMode: false,
@@ -88,15 +105,16 @@ const normalizeMediaLibrary = (mediaLibrary: unknown): ProductMedia[] => {
   if (!Array.isArray(mediaLibrary)) return [];
 
   return mediaLibrary
+    .slice(0, 5000)
     .filter(media => media?.id && media?.url && (media?.type === 'image' || media?.type === 'video'))
     .map(media => ({
-      id: String(media.id),
-      url: normalizeStoredMediaUrl(media.url),
+      id: String(media.id).slice(0, 100),
+      url: normalizeStoredMediaUrl(media.url).slice(0, 4096),
       type: media.type,
-      name: media.name ? String(media.name) : undefined,
-      size: Number.isFinite(Number(media.size)) ? Number(media.size) : undefined,
-      mimeType: media.mimeType ? String(media.mimeType) : undefined,
-      uploadedAt: media.uploadedAt ? String(media.uploadedAt) : undefined,
+      name: media.name ? String(media.name).slice(0, 120) : undefined,
+      size: Number.isFinite(Number(media.size)) && Number(media.size) >= 0 ? Number(media.size) : undefined,
+      mimeType: media.mimeType ? String(media.mimeType).slice(0, 80) : undefined,
+      uploadedAt: media.uploadedAt ? String(media.uploadedAt).slice(0, 40) : undefined,
     }));
 };
 
@@ -104,6 +122,7 @@ const normalizeDiscounts = (discounts: unknown): StoreDiscount[] => {
   if (!Array.isArray(discounts)) return [];
 
   return discounts
+    .slice(0, 100)
     .filter(discount => discount?.id && discount?.titleZh && discount?.titleEn)
     .map(discount => {
       const scope = discount.scope === 'shipping' ? 'shipping' : 'order';
@@ -112,13 +131,13 @@ const normalizeDiscounts = (discounts: unknown): StoreDiscount[] => {
         : 'percentage';
 
       return {
-        id: String(discount.id),
-        titleZh: String(discount.titleZh),
-        titleEn: String(discount.titleEn),
+        id: String(discount.id).slice(0, 80),
+        titleZh: String(discount.titleZh).slice(0, 120),
+        titleEn: String(discount.titleEn).slice(0, 120),
         scope,
         valueType: scope === 'order' && valueType === 'free_shipping' ? 'percentage' : valueType,
-        value: Math.max(0, Number(discount.value) || 0),
-        minSubtotal: Math.max(0, Number(discount.minSubtotal) || 0),
+        value: Number.isFinite(Number(discount.value)) ? Math.max(0, Math.min(Number(discount.value), 100000)) : 0,
+        minSubtotal: Number.isFinite(Number(discount.minSubtotal)) ? Math.max(0, Math.min(Number(discount.minSubtotal), 1000000)) : 0,
         isActive: Boolean(discount.isActive),
       };
     });
@@ -131,22 +150,39 @@ const createDefaultStore = (): PersistedStore => ({
   members: {},
 });
 
-const ensureStoreShape = (value: Partial<PersistedStore> | null | undefined): PersistedStore => ({
-  products: Array.isArray(value?.products) ? value.products : PRODUCTS,
-  draftProducts: Array.isArray(value?.draftProducts) ? value.draftProducts : undefined,
-  orders: Array.isArray(value?.orders) ? value.orders : [],
-  settings: {
-    ...defaultSettings,
-    ...(value?.settings || {}),
-    collections: normalizeCollectionDisplays(value?.settings?.collections),
-    mediaLibrary: normalizeMediaLibrary(value?.settings?.mediaLibrary),
-    discounts: normalizeDiscounts(value?.settings?.discounts),
-  },
-  members: value?.members && typeof value.members === 'object' ? value.members : {},
-  sellerPasscode: value?.sellerPasscode?.passwordHash && value?.sellerPasscode?.salt
-    ? value.sellerPasscode
-    : undefined,
-});
+const ensureStoreShape = (value: Partial<PersistedStore> | null | undefined): PersistedStore => {
+  const sellerCredential = value?.sellerAccount?.passwordHash && value?.sellerAccount?.salt
+    ? value.sellerAccount
+    : value?.sellerPasscode?.passwordHash && value?.sellerPasscode?.salt
+      ? value.sellerPasscode
+      : undefined;
+
+  return {
+    products: Array.isArray(value?.products) ? value.products : PRODUCTS,
+    draftProducts: Array.isArray(value?.draftProducts) ? value.draftProducts : undefined,
+    orders: Array.isArray(value?.orders)
+      ? value.orders.map(order => (
+          order.loyaltyPointsAwarded === undefined
+            ? { ...order, loyaltyPointsAwarded: order.userId ? Math.max(0, Math.round(Number(order.total) || 0)) : 0 }
+            : order
+        ))
+      : [],
+    settings: {
+      ...defaultSettings,
+      ...(value?.settings || {}),
+      collections: normalizeCollectionDisplays(value?.settings?.collections),
+      mediaLibrary: normalizeMediaLibrary(value?.settings?.mediaLibrary),
+      discounts: normalizeDiscounts(value?.settings?.discounts),
+    },
+    members: value?.members && typeof value.members === 'object' ? value.members : {},
+    sellerAccount: sellerCredential
+      ? { ...sellerCredential, username: sellerUsername, policyVersion: sellerCredentialPolicyVersion }
+      : undefined,
+    sellerPasscode: sellerCredential
+      ? { salt: sellerCredential.salt, passwordHash: sellerCredential.passwordHash, policyVersion: 2 }
+      : undefined,
+  };
+};
 
 const sellerStore = (store: PersistedStore): StoreState => ({
   products: store.products,
@@ -168,19 +204,27 @@ const hashPassword = (password: string, salt = crypto.randomBytes(16).toString('
   passwordHash: crypto.scryptSync(password, salt, 64).toString('hex'),
 });
 
-const verifyPassword = (password: string, member: PasscodeRecord) => {
+const verifyPassword = (password: string, member: PasswordRecord) => {
   const candidate = crypto.scryptSync(password, member.salt, 64);
   const stored = Buffer.from(member.passwordHash, 'hex');
   return stored.length === candidate.length && crypto.timingSafeEqual(stored, candidate);
 };
 
-const verifySellerPasscodeValue = (passcode: string, store: PersistedStore) => {
-  if (store.sellerPasscode) {
-    return verifyPassword(passcode, store.sellerPasscode);
+const initialSellerPassword = () => String(
+  process.env.SELLER_PASSWORD || process.env.SELLER_PASSCODE || defaultSellerPassword,
+);
+
+const verifySellerPasswordValue = (password: string, store: PersistedStore) => {
+  if (store.sellerAccount) {
+    return verifyPassword(password, store.sellerAccount);
   }
 
-  return passcode === (process.env.SELLER_PASSCODE || '8888');
+  return password === initialSellerPassword();
 };
+
+const sellerUsesDefaultPassword = (store: PersistedStore) => (
+  Boolean(store.sellerAccount && verifyPassword(defaultSellerPassword, store.sellerAccount))
+);
 
 const storeBackupFile = `${dataFile}.backup`;
 
@@ -264,7 +308,7 @@ const credentialVersion = (value: string) => (
 );
 
 const sellerCredentialVersion = (store: PersistedStore) => (
-  credentialVersion(store.sellerPasscode?.passwordHash || String(process.env.SELLER_PASSCODE || ''))
+  credentialVersion(store.sellerAccount?.passwordHash || initialSellerPassword())
 );
 
 const signSession = (payload: SessionPayload) => {
@@ -332,7 +376,7 @@ const issueMemberSession = (res: express.Response, key: string, member: MemberRe
 
 const issueSellerSession = (res: express.Response, store: PersistedStore) => {
   const value = signSession({
-    sub: 'seller',
+    sub: sellerUsername,
     role: 'seller',
     version: sellerCredentialVersion(store),
     expiresAt: Date.now() + sellerSessionSeconds * 1000,
@@ -353,6 +397,7 @@ const hasSellerSession = (req: express.Request, store: PersistedStore) => {
   return Boolean(
     session &&
     session.role === 'seller' &&
+    session.sub === sellerUsername &&
     session.version === sellerCredentialVersion(store)
   );
 };
@@ -447,6 +492,25 @@ const sanitizeDeliveryDetails = (details: Partial<DeliveryDetails> | undefined):
     throw new HttpError(400, 'INVALID_DELIVERY_DETAILS', 'Complete delivery details are required');
   }
   if (!validEmail(sanitized.email || '')) throw new HttpError(400, 'INVALID_EMAIL', 'Enter a valid email address');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(sanitized.deliveryDate)) {
+    throw new HttpError(400, 'INVALID_DELIVERY_DATE', 'Enter a valid delivery date');
+  }
+
+  const deliveryDate = new Date(`${sanitized.deliveryDate}T00:00:00.000Z`);
+  const normalizedDeliveryDate = Number.isNaN(deliveryDate.getTime())
+    ? ''
+    : deliveryDate.toISOString().slice(0, 10);
+  const today = new Date();
+  const earliestDeliveryDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const latestDeliveryDate = new Date(earliestDeliveryDate);
+  latestDeliveryDate.setUTCDate(latestDeliveryDate.getUTCDate() + 365);
+  if (
+    normalizedDeliveryDate !== sanitized.deliveryDate
+    || deliveryDate < earliestDeliveryDate
+    || deliveryDate > latestDeliveryDate
+  ) {
+    throw new HttpError(400, 'INVALID_DELIVERY_DATE', 'Delivery date must be within the next 365 days');
+  }
   return sanitized;
 };
 
@@ -478,6 +542,9 @@ const sanitizeOrderItems = (items: CartItem[] | undefined, products: Product[]) 
     const quantity = Number(item?.quantity);
     if (!product || !Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
       throw new HttpError(400, 'INVALID_ORDER_ITEM', 'An order item is invalid');
+    }
+    if (product.stockStatus === 'out_of_stock') {
+      throw new HttpError(409, 'PRODUCT_UNAVAILABLE', 'A selected product is out of stock');
     }
 
     const variant = item.variantId ? product.variants?.find(candidate => candidate.id === item.variantId) : undefined;
@@ -550,19 +617,37 @@ const savePaymentSlip = async (slip: PaymentSlip | undefined, orderId: string): 
   };
 };
 
-const withoutPrivateSlipStorage = (order: OrderRecord): OrderRecord => ({
-  ...order,
-  payment: order.payment
-    ? {
-        ...order.payment,
-        slip: order.payment.slip ? { ...order.payment.slip, storageKey: undefined } : undefined,
-      }
-    : undefined,
-});
+const withoutPrivateSlipStorage = (order: OrderRecord): OrderRecord => {
+  const {
+    idempotencyKeyHash: _idempotencyKeyHash,
+    requestFingerprint: _requestFingerprint,
+    loyaltyPointsAwarded: _loyaltyPointsAwarded,
+    ...publicOrder
+  } = order;
+  return {
+    ...publicOrder,
+    payment: order.payment
+      ? {
+          ...order.payment,
+          slip: order.payment.slip ? { ...order.payment.slip, storageKey: undefined } : undefined,
+        }
+      : undefined,
+  };
+};
 
 const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
+
+app.use((req, res, next) => {
+  const providedRequestId = String(req.get('x-request-id') || '');
+  const requestId = /^[a-zA-Z0-9._-]{8,80}$/.test(providedRequestId)
+    ? providedRequestId
+    : crypto.randomUUID();
+  res.locals.requestId = requestId;
+  res.setHeader('X-Request-ID', requestId);
+  next();
+});
 
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -580,6 +665,10 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: '16mb' }));
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 app.use((req, res, next) => {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
     next();
@@ -597,7 +686,47 @@ app.use((req, res, next) => {
     res.status(403).json({ error: 'Cross-origin request blocked', code: 'INVALID_ORIGIN' });
   }
 });
-app.use('/uploads/storefront', express.static(storefrontUploadDir, { dotfiles: 'deny', index: false }));
+app.use('/uploads/storefront', express.static(storefrontUploadDir, {
+  dotfiles: 'deny',
+  immutable: true,
+  index: false,
+  maxAge: '1y',
+}));
+app.use('/uploads', (_req, res) => {
+  res.status(404).json({ error: 'Uploaded media not found', code: 'NOT_FOUND' });
+});
+
+app.get('/robots.txt', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.type('text/plain').send([
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /api/',
+    'Disallow: /login',
+    'Disallow: /seller',
+    `Sitemap: ${publicSiteUrl}/sitemap.xml`,
+    '',
+  ].join('\n'));
+});
+
+app.get('/sitemap.xml', async (_req, res, next) => {
+  try {
+    const store = await readStore();
+    const paths = ['/', '/shop', '/about', '/business-order', '/privacy', '/terms', '/refund'];
+    store.products.forEach(product => paths.push(`/product/${encodeURIComponent(product.id)}`));
+    const urls = paths.map(sitePath => `  <url><loc>${publicSiteUrl}${sitePath}</loc></url>`).join('\n');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.type('application/xml').send([
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      urls,
+      '</urlset>',
+      '',
+    ].join('\n'));
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.post('/api/media', requireSeller, async (req, res, next) => {
   try {
@@ -635,7 +764,16 @@ app.post('/api/media', requireSeller, async (req, res, next) => {
   }
 });
 
-app.get('/api/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/health', async (_req, res) => {
+  try {
+    await readStore();
+    await fs.access(path.dirname(dataFile), fsConstants.R_OK | fsConstants.W_OK);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ ok: true, release: releaseId });
+  } catch {
+    res.status(503).json({ ok: false, error: 'Persistent store is unavailable' });
+  }
+});
 
 app.get('/api/store', async (_req, res, next) => {
   try {
@@ -650,10 +788,13 @@ app.get('/api/session', async (req, res, next) => {
   try {
     const store = await readStore();
     const memberSession = getMemberSession(req, store);
+    const sellerAuthenticated = hasSellerSession(req, store);
     res.setHeader('Cache-Control', 'no-store');
     res.json({
       profile: memberSession?.member.profile || null,
-      sellerAuthenticated: hasSellerSession(req, store),
+      sellerAuthenticated,
+      sellerUsername: sellerAuthenticated ? sellerUsername : null,
+      sellerPasswordChangeRequired: sellerAuthenticated && sellerUsesDefaultPassword(store),
     });
   } catch (error) {
     next(error);
@@ -685,8 +826,14 @@ app.put('/api/products', requireSeller, async (req, res, next) => {
     if (!Array.isArray(products) || products.length > 1000) {
       throw new HttpError(400, 'INVALID_PRODUCTS', 'Products must be an array with at most 1000 entries');
     }
+    const productIds = new Set<string>();
     const invalidProduct = products.find(product => (
       !product?.id || !product.nameZh || !product.nameEn ||
+      productIds.has(product.id) || !productIds.add(product.id) ||
+      product.id.length > 80 || product.nameZh.length > 200 || product.nameEn.length > 200 ||
+      !Number.isFinite(Number(product.pricePerKg)) || Number(product.pricePerKg) <= 0 || Number(product.pricePerKg) > 100000 ||
+      !Number.isFinite(Number(product.averageWeightKg)) || Number(product.averageWeightKg) <= 0 || Number(product.averageWeightKg) > 100 ||
+      !allowedProductStockStatuses.has(product.stockStatus) ||
       (product.mediaAspectRatio !== undefined && !allowedProductMediaAspectRatios.has(product.mediaAspectRatio)) ||
       (product.options?.length || 0) > 3 || (product.variants?.length || 0) > 2048
     ));
@@ -733,16 +880,41 @@ app.post('/api/orders', rateLimit(12, 10 * 60 * 1000), async (req, res, next) =>
   let savedSlip: PaymentSlip | undefined;
   try {
     const submitted = req.body?.order as OrderRecord | undefined;
+    const idempotencyKey = cleanText(req.get('idempotency-key'), 100);
+    if (!/^[a-zA-Z0-9._:-]{16,100}$/.test(idempotencyKey)) {
+      throw new HttpError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'A valid idempotency key is required');
+    }
+    const idempotencyKeyHash = crypto.createHash('sha256').update(idempotencyKey).digest('hex');
+    const requestFingerprint = crypto.createHash('sha256').update(JSON.stringify(submitted || null)).digest('hex');
 
     const update = await updateStore(async current => {
+      const memberSession = getMemberSession(req, current);
+      const existingOrder = current.orders.find(order => order.idempotencyKeyHash === idempotencyKeyHash);
+      if (existingOrder) {
+        if (existingOrder.requestFingerprint !== requestFingerprint) {
+          throw new HttpError(409, 'IDEMPOTENCY_KEY_REUSED', 'The idempotency key was already used for another order');
+        }
+        return {
+          store: current,
+          result: {
+            order: withoutPrivateSlipStorage(existingOrder),
+            profile: memberSession?.member.profile || null,
+            created: false,
+          },
+        };
+      }
+
       if (current.settings.maintenanceMode) throw new HttpError(503, 'ORDERING_PAUSED', 'Ordering is temporarily paused');
       if (!current.settings.bankName || !current.settings.bankAccountHolder || !current.settings.bankAccountNumber) {
         throw new HttpError(503, 'PAYMENT_NOT_CONFIGURED', 'Bank transfer details are not configured');
       }
       const { items, subtotal } = sanitizeOrderItems(submitted?.items, current.products);
       const details = sanitizeDeliveryDetails(submitted?.details);
-      const normalizedState = details.state.toLowerCase().replace(/[^a-z]/g, '');
-      const shippingRegion = ['pahang', 'selangor', 'kualalumpur', 'kl'].includes(normalizedState) ? 'local' : 'outstation';
+      const deliveryCoverage = getDeliveryCoverage(details.postcode);
+      if (!deliveryCoverage.covered || !deliveryCoverage.region) {
+        throw new HttpError(422, 'DELIVERY_UNAVAILABLE', 'Cold-chain delivery is unavailable for this postcode');
+      }
+      const shippingRegion = deliveryCoverage.region;
       let orderId: string;
       do {
         orderId = `PFR-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
@@ -755,21 +927,7 @@ app.post('/api/orders', rateLimit(12, 10 * 60 * 1000), async (req, res, next) =>
           ? current.settings.localShippingRate
           : current.settings.outstationShippingRate;
       const totals = calculateDiscounts(current.settings.discounts, subtotal, baseShippingFee);
-      const memberSession = getMemberSession(req, current);
-      const members = { ...current.members };
-      let profile: User | null = null;
-
-      if (memberSession) {
-        const nextMember = {
-          ...memberSession.member,
-          profile: {
-            ...memberSession.member.profile,
-            memberPoints: memberSession.member.profile.memberPoints + Math.round(totals.totalAmount),
-          },
-        };
-        members[memberSession.key] = nextMember;
-        profile = nextMember.profile;
-      }
+      const profile = memberSession?.member.profile || null;
 
       const order: OrderRecord = {
         id: orderId,
@@ -795,15 +953,21 @@ app.post('/api/orders', rateLimit(12, 10 * 60 * 1000), async (req, res, next) =>
           reference: cleanText(submitted?.payment?.reference, 100) || undefined,
           slip: savedSlip,
         },
+        idempotencyKeyHash,
+        requestFingerprint,
+        loyaltyPointsAwarded: 0,
       };
 
       return {
-        store: { ...current, orders: [order, ...current.orders], members },
-        result: { order: withoutPrivateSlipStorage(order), profile },
+        store: { ...current, orders: [order, ...current.orders] },
+        result: { order: withoutPrivateSlipStorage(order), profile, created: true },
       };
     });
 
-    res.status(201).json(update.result);
+    res.status(update.result.created ? 201 : 200).json({
+      order: update.result.order,
+      profile: update.result.profile,
+    });
   } catch (error) {
     if (savedSlip?.storageKey) {
       await fs.rm(path.join(paymentSlipDir, savedSlip.storageKey), { force: true }).catch(() => undefined);
@@ -821,6 +985,7 @@ app.put('/api/orders', requireSeller, async (req, res, next) => {
     const allowedPaymentStatuses = new Set(['pending_review', 'confirmed', 'rejected']);
 
     const update = await updateStore(current => {
+      const members = { ...current.members };
       const orders = current.orders.map(order => {
         const proposed = proposedById.get(order.id);
         if (!proposed) return order;
@@ -828,9 +993,34 @@ app.put('/api/orders', requireSeller, async (req, res, next) => {
         const paymentStatus = allowedPaymentStatuses.has(String(proposed.payment?.status))
           ? proposed.payment?.status
           : order.payment?.status;
+        const memberKey = order.userId?.toLowerCase();
+        const member = memberKey ? members[memberKey] : undefined;
+        let loyaltyPointsAwarded = Math.max(0, Number(order.loyaltyPointsAwarded) || 0);
+
+        if (member && paymentStatus === 'confirmed' && loyaltyPointsAwarded === 0) {
+          loyaltyPointsAwarded = Math.max(0, Math.round(order.total));
+          members[memberKey!] = {
+            ...member,
+            profile: {
+              ...member.profile,
+              memberPoints: member.profile.memberPoints + loyaltyPointsAwarded,
+            },
+          };
+        } else if (member && loyaltyPointsAwarded > 0 && (paymentStatus === 'rejected' || status === 'cancelled')) {
+          members[memberKey!] = {
+            ...member,
+            profile: {
+              ...member.profile,
+              memberPoints: Math.max(0, member.profile.memberPoints - loyaltyPointsAwarded),
+            },
+          };
+          loyaltyPointsAwarded = 0;
+        }
+
         return {
           ...order,
           status,
+          loyaltyPointsAwarded,
           payment: order.payment
             ? {
                 ...order.payment,
@@ -843,7 +1033,7 @@ app.put('/api/orders', requireSeller, async (req, res, next) => {
             : undefined,
         };
       });
-      return { store: { ...current, orders }, result: orders.map(withoutPrivateSlipStorage) };
+      return { store: { ...current, orders, members }, result: orders.map(withoutPrivateSlipStorage) };
     });
     res.json({ orders: update.result });
   } catch (error) {
@@ -855,12 +1045,32 @@ app.patch('/api/settings', requireSeller, async (req, res, next) => {
   try {
     const settings = req.body?.settings as Partial<StoreSettings>;
     if (!settings || typeof settings !== 'object') throw new HttpError(400, 'INVALID_SETTINGS', 'Settings patch is required');
-    const settingsPatch: Partial<StoreSettings> = {
-      ...settings,
-      ...(settings.discounts !== undefined ? { discounts: normalizeDiscounts(settings.discounts) } : {}),
-      ...(settings.collections !== undefined ? { collections: normalizeCollectionDisplays(settings.collections) } : {}),
-      ...(settings.mediaLibrary !== undefined ? { mediaLibrary: normalizeMediaLibrary(settings.mediaLibrary) } : {}),
-    };
+    const settingsPatch: Partial<StoreSettings> = {};
+    if (settings.maintenanceMode !== undefined) settingsPatch.maintenanceMode = Boolean(settings.maintenanceMode);
+
+    const numericSettings: Array<keyof Pick<StoreSettings, 'freeShippingThreshold' | 'localShippingRate' | 'outstationShippingRate'>> = [
+      'freeShippingThreshold',
+      'localShippingRate',
+      'outstationShippingRate',
+    ];
+    numericSettings.forEach(key => {
+      if (settings[key] === undefined) return;
+      const value = Number(settings[key]);
+      if (!Number.isFinite(value) || value < 0 || value > 100000) {
+        throw new HttpError(400, 'INVALID_SETTINGS', `${key} must be a valid non-negative amount`);
+      }
+      settingsPatch[key] = Number(value.toFixed(2));
+    });
+
+    if (settings.storeAnnouncement !== undefined) settingsPatch.storeAnnouncement = cleanText(settings.storeAnnouncement, 500);
+    if (settings.bankName !== undefined) settingsPatch.bankName = cleanText(settings.bankName, 120);
+    if (settings.bankAccountHolder !== undefined) settingsPatch.bankAccountHolder = cleanText(settings.bankAccountHolder, 120);
+    if (settings.bankAccountNumber !== undefined) settingsPatch.bankAccountNumber = cleanText(settings.bankAccountNumber, 80);
+    if (settings.bankTransferInstructions !== undefined) settingsPatch.bankTransferInstructions = cleanText(settings.bankTransferInstructions, 1000);
+    if (settings.discounts !== undefined) settingsPatch.discounts = normalizeDiscounts(settings.discounts);
+    if (settings.collections !== undefined) settingsPatch.collections = normalizeCollectionDisplays(settings.collections);
+    if (settings.mediaLibrary !== undefined) settingsPatch.mediaLibrary = normalizeMediaLibrary(settings.mediaLibrary);
+
     const update = await updateStore(current => ({
       store: { ...current, settings: { ...current.settings, ...settingsPatch } },
       result: null,
@@ -871,13 +1081,20 @@ app.patch('/api/settings', requireSeller, async (req, res, next) => {
   }
 });
 
-app.post('/api/seller/verify-passcode', rateLimit(8, 15 * 60 * 1000), async (req, res, next) => {
+app.post('/api/seller/login', rateLimit(8, 15 * 60 * 1000), async (req, res, next) => {
   try {
-    const passcode = String(req.body?.passcode || '');
+    const username = cleanText(req.body?.username, 32).toLowerCase();
+    const password = String(req.body?.password || '');
     const store = await readStore();
-    if (!verifySellerPasscodeValue(passcode, store)) throw new HttpError(401, 'INVALID_SELLER_PASSCODE', 'Invalid seller passcode');
+    if (username !== sellerUsername || !verifySellerPasswordValue(password, store)) {
+      throw new HttpError(401, 'INVALID_SELLER_CREDENTIALS', 'Invalid owner ID or password');
+    }
     issueSellerSession(res, store);
-    res.json({ ok: true });
+    res.json({
+      ok: true,
+      username: sellerUsername,
+      passwordChangeRequired: sellerUsesDefaultPassword(store),
+    });
   } catch (error) {
     next(error);
   }
@@ -888,21 +1105,33 @@ app.post('/api/seller/logout', (_req, res) => {
   res.json({ ok: true });
 });
 
-app.patch('/api/seller/passcode', requireSeller, async (req, res, next) => {
+app.patch('/api/seller/password', requireSeller, async (req, res, next) => {
   try {
-    const currentPasscode = String(req.body?.currentPasscode || '');
-    const nextPasscode = String(req.body?.nextPasscode || '').trim();
+    const currentPassword = String(req.body?.currentPassword || '');
+    const nextPassword = String(req.body?.nextPassword || '');
     const store = await readStore();
-    if (!verifySellerPasscodeValue(currentPasscode, store)) throw new HttpError(401, 'INVALID_SELLER_PASSCODE', 'Current passcode is invalid');
-    if (nextPasscode.length < 8 || nextPasscode.length > 128) {
-      throw new HttpError(400, 'WEAK_SELLER_PASSCODE', 'New passcode must be between 8 and 128 characters');
+    if (!verifySellerPasswordValue(currentPassword, store)) {
+      throw new HttpError(401, 'INVALID_CURRENT_PASSWORD', 'Current password is invalid');
+    }
+    if (nextPassword.length < 8 || nextPassword.length > 128) {
+      throw new HttpError(400, 'WEAK_PASSWORD', 'New password must be between 8 and 128 characters');
+    }
+    if (nextPassword === currentPassword) {
+      throw new HttpError(400, 'PASSWORD_UNCHANGED', 'New password must be different from the current password');
     }
     const update = await updateStore(current => ({
-      store: { ...current, sellerPasscode: { ...hashPassword(nextPasscode), policyVersion: 2 } },
+      store: {
+        ...current,
+        sellerAccount: {
+          username: sellerUsername,
+          ...hashPassword(nextPassword),
+          policyVersion: sellerCredentialPolicyVersion,
+        },
+      },
       result: null,
     }));
     issueSellerSession(res, update.store);
-    res.json({ ok: true });
+    res.json({ ok: true, username: sellerUsername, passwordChangeRequired: false });
   } catch (error) {
     next(error);
   }
@@ -1003,8 +1232,17 @@ app.use('/api', (_req, res) => {
 });
 
 if (isProduction) {
-  app.use(express.static(path.join(rootDir, 'dist')));
+  app.use('/assets', express.static(path.join(rootDir, 'dist', 'assets'), {
+    dotfiles: 'deny',
+    immutable: true,
+    index: false,
+    maxAge: '1y',
+  }));
+  app.use('/assets', (_req, res) => {
+    res.status(404).send('Asset not found');
+  });
   app.get('*', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(rootDir, 'dist', 'index.html'));
   });
 } else {
@@ -1018,36 +1256,79 @@ if (isProduction) {
 }
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const requestId = String(res.locals.requestId || '');
   if (error instanceof HttpError) {
-    res.status(error.status).json({ error: error.message, code: error.code });
+    res.status(error.status).json({ error: error.message, code: error.code, requestId });
     return;
   }
   if (error instanceof SyntaxError) {
-    res.status(400).json({ error: 'Invalid JSON request body', code: 'INVALID_JSON' });
+    res.status(400).json({ error: 'Invalid JSON request body', code: 'INVALID_JSON', requestId });
     return;
   }
-  console.error(error);
-  res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR' });
+  console.error('Unhandled request error', {
+    requestId,
+    method: _req.method,
+    path: _req.path,
+    error: error instanceof Error
+      ? { name: error.name, message: error.message, stack: error.stack }
+      : String(error),
+  });
+  res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR', requestId });
 });
 
 if (sessionSecret.length < 32) {
   throw new Error('SESSION_SECRET must be configured with at least 32 characters');
 }
 
-if (isProduction) {
-  const fallbackPasscode = String(process.env.SELLER_PASSCODE || '');
-  if (fallbackPasscode.length < 8 || fallbackPasscode === '8888') {
-    throw new Error('Configure a non-default SELLER_PASSCODE with at least 8 characters before starting production');
+await fs.mkdir(path.dirname(dataFile), { recursive: true });
+await fs.mkdir(storefrontUploadDir, { recursive: true });
+await fs.mkdir(paymentSlipDir, { recursive: true });
+
+const startupStore = await readStore();
+if (!startupStore.sellerAccount) {
+  const configuredSellerPassword = initialSellerPassword();
+  if (configuredSellerPassword.length < 8 || configuredSellerPassword.length > 128) {
+    throw new Error('The initial seller password must be between 8 and 128 characters');
   }
-  const startupStore = await readStore();
-  if (startupStore.sellerPasscode?.policyVersion !== 2) {
-    await updateStore(current => ({
-      store: { ...current, sellerPasscode: { ...hashPassword(fallbackPasscode), policyVersion: 2 } },
-      result: null,
-    }));
-  }
+  await updateStore(current => ({
+    store: {
+      ...current,
+      sellerAccount: {
+        username: sellerUsername,
+        ...hashPassword(configuredSellerPassword),
+        policyVersion: sellerCredentialPolicyVersion,
+      },
+    },
+    result: null,
+  }));
+} else {
+  await updateStore(current => ({
+    store: current,
+    result: null,
+  }));
 }
 
-app.listen(port, '0.0.0.0', () => {
+const httpServer = app.listen(port, '0.0.0.0', () => {
   console.log(`Raub Hang Seng app running at http://localhost:${port}`);
 });
+
+const shutdown = (signal: string) => {
+  console.log(`${signal} received; closing the HTTP server`);
+  const forceExitTimer = setTimeout(() => {
+    console.error('Graceful shutdown timed out');
+    process.exit(1);
+  }, 10_000);
+  forceExitTimer.unref();
+
+  httpServer.close(async error => {
+    if (error) {
+      console.error(error);
+      process.exit(1);
+    }
+    await storeUpdateQueue.catch(() => undefined);
+    process.exit(0);
+  });
+};
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));

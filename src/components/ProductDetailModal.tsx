@@ -31,9 +31,10 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
   const hasVariants = configuration.options.length > 0 && configuration.variants.length > 0;
   const mediaAspect = getProductMediaAspectRatio(product.mediaAspectRatio);
   const isOriginalMediaRatio = mediaAspect.value === 'original';
+  const isSoldOut = product.stockStatus === 'out_of_stock';
 
   const handleAdd = () => {
-    if (orderingPaused) return;
+    if (orderingPaused || isSoldOut) return;
 
     if (selectedVariant?.isAvailable === false) return;
     onAddToCart(product, quantity, weightKg, cutType, selectedVariant?.id);
@@ -261,16 +262,16 @@ export default function ProductDetailModal({ product, language, onClose, onAddTo
               </button>
               <button
                 onClick={handleAdd}
-                disabled={orderingPaused || selectedVariant?.isAvailable === false}
+                disabled={orderingPaused || isSoldOut || selectedVariant?.isAvailable === false}
                 className={`w-2/3 flex items-center justify-center space-x-2 py-3 rounded-xl font-bold text-xs md:text-sm transition-all shadow-xs ${
-                  orderingPaused || selectedVariant?.isAvailable === false
+                  orderingPaused || isSoldOut || selectedVariant?.isAvailable === false
                     ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                     : 'bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white cursor-pointer shadow-lg active:scale-95'
                 }`}
               >
                 <ShoppingCart className="w-4 h-4" />
-                <span>{orderingPaused ? (isZh ? '维护中暂不可下单' : 'Ordering Paused') : selectedVariant?.isAvailable === false ? (isZh ? '此规格暂不可售' : 'Variant unavailable') : (isZh ? '加入购物车' : 'Add To Cart')}</span>
-                {!orderingPaused && selectedVariant?.isAvailable !== false && (
+                <span>{orderingPaused ? (isZh ? '维护中暂不可下单' : 'Ordering Paused') : isSoldOut ? (isZh ? '暂时售罄' : 'Sold out') : selectedVariant?.isAvailable === false ? (isZh ? '此规格暂不可售' : 'Variant unavailable') : (isZh ? '加入购物车' : 'Add To Cart')}</span>
+                {!orderingPaused && !isSoldOut && selectedVariant?.isAvailable !== false && (
                   <span className="font-mono bg-sky-950/20 px-2 py-0.5 rounded text-[10px] ml-1">
                     RM {calculatedTotalPrice.toFixed(0)}
                   </span>

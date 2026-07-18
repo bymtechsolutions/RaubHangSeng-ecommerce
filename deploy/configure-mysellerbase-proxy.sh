@@ -163,6 +163,12 @@ server {
   listen 80;
   server_name rhsfish.com www.rhsfish.com;
   client_max_body_size 25m;
+  gzip on;
+  gzip_comp_level 5;
+  gzip_min_length 1024;
+  gzip_proxied any;
+  gzip_vary on;
+  gzip_types application/javascript application/json application/xml image/svg+xml text/css text/plain;
 
   location ^~ /.well-known/acme-challenge/ {
     root /var/www/certbot;
@@ -179,6 +185,7 @@ server {
     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $msb_fwd_proto;
     proxy_set_header X-Forwarded-Host  $host;
+    proxy_set_header X-Request-ID      $request_id;
     proxy_set_header Upgrade           $http_upgrade;
     proxy_set_header Connection        $msb_conn_upgrade;
   }
@@ -264,6 +271,12 @@ server {
   listen 443 ssl;
   server_name rhsfish.com www.rhsfish.com;
   client_max_body_size 25m;
+  gzip on;
+  gzip_comp_level 5;
+  gzip_min_length 1024;
+  gzip_proxied any;
+  gzip_vary on;
+  gzip_types application/javascript application/json application/xml image/svg+xml text/css text/plain;
 
   ssl_certificate /etc/letsencrypt/live/rhsfish.com/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/rhsfish.com/privkey.pem;
@@ -277,6 +290,7 @@ server {
     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
     proxy_set_header X-Forwarded-Host  $host;
+    proxy_set_header X-Request-ID      $request_id;
     proxy_set_header Upgrade           $http_upgrade;
     proxy_set_header Connection        $msb_conn_upgrade;
   }

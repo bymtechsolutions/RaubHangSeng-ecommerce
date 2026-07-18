@@ -54,8 +54,10 @@ before(async () => {
       PORT: String(port),
       RHS_DATA_FILE: path.join(tempDir, 'store.json'),
       RHS_UPLOAD_DIR: path.join(tempDir, 'uploads'),
-      SELLER_PASSCODE: 'production-test-passcode',
+      SELLER_PASSWORD: '',
+      SELLER_PASSCODE: '',
       SESSION_SECRET: 'production-test-session-secret-0123456789abcdef',
+      APP_RELEASE_ID: 'production-test-release',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -81,22 +83,83 @@ after(async () => {
 });
 
 test('production auth and order boundaries', async () => {
+  const healthResult = await json(await request('/api/health'));
+  assert.equal(healthResult.response.status, 200);
+  assert.equal(healthResult.body.release, 'production-test-release');
+  assert.match(healthResult.response.headers.get('x-request-id'), /^[a-f0-9-]{36}$/);
+
+  const robotsResponse = await request('/robots.txt');
+  assert.equal(robotsResponse.status, 200);
+  const robots = await robotsResponse.text();
+  assert.match(robots, /Disallow: \/seller/);
+  assert.match(robots, /Sitemap: https:\/\/rhsfish\.com\/sitemap\.xml/);
+
+  const sitemapResponse = await request('/sitemap.xml');
+  assert.equal(sitemapResponse.status, 200);
+  const sitemap = await sitemapResponse.text();
+  assert.match(sitemap, /<loc>https:\/\/rhsfish\.com\/shop<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/rhsfish\.com\/product\/patin-buah<\/loc>/);
+
   const publicStoreResult = await json(await request('/api/store'));
   assert.equal(publicStoreResult.response.status, 200);
+  assert.equal(publicStoreResult.response.headers.get('cache-control'), 'no-store');
   assert.ok(Array.isArray(publicStoreResult.body.products));
   assert.equal('orders' in publicStoreResult.body, false);
   assert.equal('draftProducts' in publicStoreResult.body, false);
+
+  const missingUpload = await json(await request('/uploads/storefront/not-present.jpg'));
+  assert.equal(missingUpload.response.status, 404);
+  assert.equal(missingUpload.body.code, 'NOT_FOUND');
 
   assert.equal((await request('/api/seller/store')).status, 401);
   assert.equal((await request('/api/orders')).status, 401);
   assert.equal((await request('/api/products', { method: 'PUT', body: { products: [] } })).status, 401);
 
-  const sellerLogin = await request('/api/seller/verify-passcode', {
+  const invalidOwnerLogin = await request('/api/seller/login', {
     method: 'POST',
-    body: { passcode: 'production-test-passcode' },
+    body: { username: 'not-admin', password: 'abcd1234' },
+  });
+  assert.equal(invalidOwnerLogin.status, 401);
+
+  const invalidPasswordLogin = await request('/api/seller/login', {
+    method: 'POST',
+    body: { username: 'admin', password: 'wrong-password' },
+  });
+  assert.equal(invalidPasswordLogin.status, 401);
+
+  const sellerLogin = await request('/api/seller/login', {
+    method: 'POST',
+    body: { username: 'admin', password: 'abcd1234' },
   });
   assert.equal(sellerLogin.status, 200);
-  const sellerCookie = cookieFrom(sellerLogin);
+  const sellerLoginBody = await sellerLogin.json();
+  assert.equal(sellerLoginBody.username, 'admin');
+  assert.equal(sellerLoginBody.passwordChangeRequired, true);
+  const initialSellerCookie = cookieFrom(sellerLogin);
+
+  const passwordUpdate = await request('/api/seller/password', {
+    method: 'PATCH',
+    cookie: initialSellerCookie,
+    body: { currentPassword: 'abcd1234', nextPassword: 'owner-test-password' },
+  });
+  assert.equal(passwordUpdate.status, 200);
+  assert.equal((await passwordUpdate.json()).passwordChangeRequired, false);
+  const sellerCookie = cookieFrom(passwordUpdate);
+  assert.equal((await request('/api/seller/store', { cookie: initialSellerCookie })).status, 401);
+
+  assert.equal((await request('/api/seller/login', {
+    method: 'POST',
+    body: { username: 'admin', password: 'abcd1234' },
+  })).status, 401);
+  assert.equal((await request('/api/seller/login', {
+    method: 'POST',
+    body: { username: 'admin', password: 'owner-test-password' },
+  })).status, 200);
+
+  const sellerSession = await json(await request('/api/session', { cookie: sellerCookie }));
+  assert.equal(sellerSession.body.sellerAuthenticated, true);
+  assert.equal(sellerSession.body.sellerUsername, 'admin');
+  assert.equal(sellerSession.body.sellerPasswordChangeRequired, false);
 
   const settingsUpdate = await request('/api/settings', {
     method: 'PATCH',
@@ -173,36 +236,72 @@ test('production auth and order boundaries', async () => {
     dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
     uploadedAt: new Date().toISOString(),
   };
+  const deliveryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const orderPayload = {
+    id: 'CLIENT-CONTROLLED-ID',
+    userId: 'someone-else',
+    total: 0.01,
+    shippingRegion: 'outstation',
+    items: [{
+      product: { id: product.id },
+      quantity: 1,
+      selectedWeightKg: variant?.weightKg || product.averageWeightKg,
+      cutType: variant?.cutType || 'cleaned',
+      variantId: variant?.id,
+    }],
+    details: {
+      fullName: 'Production Test Member',
+      phoneNumber: '0180000000',
+      email: 'member@example.com',
+      address: '1 Test Road',
+      city: 'Raub',
+      state: 'Johor',
+      postcode: '27600',
+      deliveryDate,
+      notes: '',
+    },
+    payment: { method: 'bank_transfer', status: 'confirmed', amount: 0.01, slip: paymentSlip },
+  };
+
+  assert.equal((await request('/api/orders', {
+    method: 'POST',
+    cookie: memberCookie,
+    body: { order: orderPayload },
+  })).status, 400);
+
+  assert.equal((await request('/api/orders', {
+    method: 'POST',
+    cookie: memberCookie,
+    headers: { 'Idempotency-Key': 'unsupported-postcode-order-key' },
+    body: { order: { ...orderPayload, details: { ...orderPayload.details, postcode: '90000' } } },
+  })).status, 422);
+
+  const soldOutProducts = productsWithMediaRatio.map((candidate, index) => (
+    index === 0 ? { ...candidate, stockStatus: 'out_of_stock' } : candidate
+  ));
+  assert.equal((await request('/api/products', {
+    method: 'PUT',
+    cookie: sellerCookie,
+    body: { products: soldOutProducts },
+  })).status, 200);
+  assert.equal((await request('/api/orders', {
+    method: 'POST',
+    cookie: memberCookie,
+    headers: { 'Idempotency-Key': 'sold-out-product-order-key' },
+    body: { order: orderPayload },
+  })).status, 409);
+  assert.equal((await request('/api/products', {
+    method: 'PUT',
+    cookie: sellerCookie,
+    body: { products: productsWithMediaRatio },
+  })).status, 200);
+
+  const idempotencyKey = 'production-order-idempotency-key';
   const orderResult = await request('/api/orders', {
     method: 'POST',
     cookie: memberCookie,
-    body: {
-      order: {
-        id: 'CLIENT-CONTROLLED-ID',
-        userId: 'someone-else',
-        total: 0.01,
-        shippingRegion: 'local',
-        items: [{
-          product: { id: product.id },
-          quantity: 1,
-          selectedWeightKg: variant?.weightKg || product.averageWeightKg,
-          cutType: variant?.cutType || 'cleaned',
-          variantId: variant?.id,
-        }],
-        details: {
-          fullName: 'Production Test Member',
-          phoneNumber: '0180000000',
-          email: 'member@example.com',
-          address: '1 Test Road',
-          city: 'Raub',
-          state: 'Pahang',
-          postcode: '27600',
-          deliveryDate: '2030-01-01',
-          notes: '',
-        },
-        payment: { method: 'bank_transfer', status: 'confirmed', amount: 0.01, slip: paymentSlip },
-      },
-    },
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: { order: orderPayload },
   });
   assert.equal(orderResult.status, 201);
   const orderBody = await orderResult.json();
@@ -211,7 +310,28 @@ test('production auth and order boundaries', async () => {
   assert.ok(orderBody.order.total > 0.01);
   assert.equal(orderBody.order.payment.status, 'pending_review');
   assert.equal(orderBody.order.payment.slip.storageKey, undefined);
-  assert.ok(orderBody.profile.memberPoints > 0);
+  assert.equal(orderBody.order.idempotencyKeyHash, undefined);
+  assert.equal(orderBody.order.requestFingerprint, undefined);
+  assert.equal(orderBody.order.shippingRegion, 'local');
+  assert.equal(orderBody.profile.memberPoints, 0);
+
+  const repeatedOrder = await request('/api/orders', {
+    method: 'POST',
+    cookie: memberCookie,
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: { order: orderPayload },
+  });
+  assert.equal(repeatedOrder.status, 200);
+  const repeatedOrderBody = await repeatedOrder.json();
+  assert.equal(repeatedOrderBody.order.id, orderBody.order.id);
+  assert.equal(repeatedOrderBody.profile.memberPoints, orderBody.profile.memberPoints);
+
+  assert.equal((await request('/api/orders', {
+    method: 'POST',
+    cookie: memberCookie,
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: { order: { ...orderPayload, details: { ...orderPayload.details, notes: 'different request' } } },
+  })).status, 409);
 
   const memberOrders = await json(await request('/api/member/orders', { cookie: memberCookie }));
   assert.equal(memberOrders.response.status, 200);
@@ -227,6 +347,26 @@ test('production auth and order boundaries', async () => {
   const sellerStoreResult = await json(await request('/api/seller/store', { cookie: sellerCookie }));
   assert.equal(sellerStoreResult.response.status, 200);
   assert.equal(sellerStoreResult.body.orders.length, 1);
+
+  const confirmedOrder = {
+    ...sellerStoreResult.body.orders[0],
+    payment: { ...sellerStoreResult.body.orders[0].payment, status: 'confirmed' },
+  };
+  assert.equal((await request('/api/orders', {
+    method: 'PUT',
+    cookie: sellerCookie,
+    body: { orders: [confirmedOrder] },
+  })).status, 200);
+  const confirmedSession = await json(await request('/api/session', { cookie: memberCookie }));
+  assert.equal(confirmedSession.body.profile.memberPoints, Math.round(orderBody.order.total));
+
+  assert.equal((await request('/api/orders', {
+    method: 'PUT',
+    cookie: sellerCookie,
+    body: { orders: [confirmedOrder] },
+  })).status, 200);
+  const repeatedConfirmationSession = await json(await request('/api/session', { cookie: memberCookie }));
+  assert.equal(repeatedConfirmationSession.body.profile.memberPoints, Math.round(orderBody.order.total));
 
   assert.equal((await request('/api/members/logout', { method: 'POST', cookie: memberCookie })).status, 200);
   const login = await request('/api/members/login', { method: 'POST', body: { username, password } });

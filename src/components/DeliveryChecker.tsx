@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Truck, ShieldCheck, AlertCircle, Search, HelpCircle } from 'lucide-react';
+import { Truck, ShieldCheck, AlertCircle, Search } from 'lucide-react';
 import { Language } from '../types';
+import { getDeliveryCoverage } from '../lib/shipping';
 
 interface DeliveryCheckerProps {
   language: Language;
@@ -16,7 +17,6 @@ export default function DeliveryChecker({ language }: DeliveryCheckerProps) {
     eta?: string;
     shippingFee?: number;
   } | null>(null);
-  const [searching, setSearching] = useState(false);
 
   const checkPostcode = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,74 +27,71 @@ export default function DeliveryChecker({ language }: DeliveryCheckerProps) {
       return;
     }
 
-    setSearching(true);
-    setTimeout(() => {
-      setSearching(false);
-      const codeNum = parseInt(cleaned);
+    const codeNum = parseInt(cleaned);
+    const coverage = getDeliveryCoverage(cleaned);
 
-      // Simple routing logic based on Malaysian postcode series:
-      // 01000 - 02000: Perlis (Covered, 2-3 working days)
-      // 05000 - 09000: Kedah (Covered, 2-3 working days)
-      // 10000 - 14000: Penang (Covered, 2 working days)
-      // 15000 - 18000: Kelantan (Covered, 3 working days)
-      // 20000 - 24000: Terengganu (Covered, 3 working days)
-      // 25000 - 28000: Pahang (Temerloh/Kuantan area, Covered, 24-48 hours)
-      // 30000 - 36000: Perak (Covered, 2-3 working days)
-      // 40000 - 48000: Selangor (Klang Valley, Covered, 24-48 hours)
-      // 50000 - 60000: Kuala Lumpur (Covered, 24-48 hours)
-      // 70000 - 73000: Negeri Sembilan (Covered, 2 working days)
-      // 75000 - 78000: Melaka (Covered, 2 working days)
-      // 79000 - 86000: Johor (Covered, 2-3 working days)
-      // 90000+: Sabah & Sarawak (East Malaysia, Not covered due to fresh frozen air logistics constraints)
+    // Simple routing logic based on Malaysian postcode series:
+    // 01000 - 02000: Perlis (Covered, 2-3 working days)
+    // 05000 - 09000: Kedah (Covered, 2-3 working days)
+    // 10000 - 14000: Penang (Covered, 2 working days)
+    // 15000 - 18000: Kelantan (Covered, 3 working days)
+    // 20000 - 24000: Terengganu (Covered, 3 working days)
+    // 25000 - 28000: Pahang (Temerloh/Kuantan area, Covered, 24-48 hours)
+    // 30000 - 36000: Perak (Covered, 2-3 working days)
+    // 40000 - 48000: Selangor (Klang Valley, Covered, 24-48 hours)
+    // 50000 - 60000: Kuala Lumpur (Covered, 24-48 hours)
+    // 70000 - 73000: Negeri Sembilan (Covered, 2 working days)
+    // 75000 - 78000: Melaka (Covered, 2 working days)
+    // 79000 - 86000: Johor (Covered, 2-3 working days)
+    // 90000+: Sabah & Sarawak (East Malaysia, Not covered due to fresh frozen air logistics constraints)
 
-      if (codeNum >= 90000) {
-        setResult({
-          status: 'not-covered',
-          city: 'East Malaysia Region',
-          state: 'Sabah / Sarawak',
-        });
-      } else if (codeNum >= 50000 && codeNum <= 60000) {
-        setResult({
-          status: 'covered',
-          city: 'Kuala Lumpur Central',
-          state: 'Kuala Lumpur (吉隆坡)',
-          eta: isZh ? '24 - 48 小时极速送达' : '24 - 48 Hours fast delivery',
-          shippingFee: 20,
-        });
-      } else if (codeNum >= 40000 && codeNum <= 48999) {
-        setResult({
-          status: 'covered',
-          city: 'Klang Valley Area',
-          state: 'Selangor (雪兰莪)',
-          eta: isZh ? '24 - 48 小时极速送达' : '24 - 48 Hours fast delivery',
-          shippingFee: 20,
-        });
-      } else if (codeNum >= 25000 && codeNum <= 28999) {
-        setResult({
-          status: 'covered',
-          city: 'Temerloh / Mentakab / Kuantan',
-          state: 'Pahang (彭亨 - 河鱼大本营)',
-          eta: isZh ? '24 - 48 小时直达发货' : '24 - 48 Hours direct delivery',
-          shippingFee: 20,
-        });
-      } else {
-        // Other West Malaysian states
-        let stateName = 'Peninsular Malaysia';
-        if (codeNum >= 79000 && codeNum <= 86999) stateName = 'Johor (柔佛)';
-        else if (codeNum >= 10000 && codeNum <= 14999) stateName = 'Penang (槟城)';
-        else if (codeNum >= 30000 && codeNum <= 36999) stateName = 'Perak (霹雳)';
-        else if (codeNum >= 75000 && codeNum <= 78999) stateName = 'Melaka (马六甲)';
-        else if (codeNum >= 70000 && codeNum <= 73999) stateName = 'Negeri Sembilan (森美兰)';
+    if (!coverage.covered) {
+      setResult({
+        status: 'not-covered',
+        city: codeNum >= 87000 ? 'East Malaysia Region' : 'Outside supported routes',
+        state: codeNum >= 87000 ? 'Labuan / Sabah / Sarawak' : 'Unsupported postcode',
+      });
+    } else if (codeNum >= 50000 && codeNum <= 60000) {
+      setResult({
+        status: 'covered',
+        city: 'Kuala Lumpur Central',
+        state: 'Kuala Lumpur (吉隆坡)',
+        eta: isZh ? '24 - 48 小时极速送达' : '24 - 48 Hours fast delivery',
+        shippingFee: 20,
+      });
+    } else if (codeNum >= 40000 && codeNum <= 48999) {
+      setResult({
+        status: 'covered',
+        city: 'Klang Valley Area',
+        state: 'Selangor (雪兰莪)',
+        eta: isZh ? '24 - 48 小时极速送达' : '24 - 48 Hours fast delivery',
+        shippingFee: 20,
+      });
+    } else if (codeNum >= 25000 && codeNum <= 28999) {
+      setResult({
+        status: 'covered',
+        city: 'Temerloh / Mentakab / Kuantan',
+        state: 'Pahang (彭亨 - 河鱼大本营)',
+        eta: isZh ? '24 - 48 小时直达发货' : '24 - 48 Hours direct delivery',
+        shippingFee: 20,
+      });
+    } else {
+      // Other West Malaysian states
+      let stateName = 'Peninsular Malaysia';
+      if (codeNum >= 79000 && codeNum <= 86999) stateName = 'Johor (柔佛)';
+      else if (codeNum >= 10000 && codeNum <= 14999) stateName = 'Penang (槟城)';
+      else if (codeNum >= 30000 && codeNum <= 36999) stateName = 'Perak (霹雳)';
+      else if (codeNum >= 75000 && codeNum <= 78999) stateName = 'Melaka (马六甲)';
+      else if (codeNum >= 70000 && codeNum <= 73999) stateName = 'Negeri Sembilan (森美兰)';
 
-        setResult({
-          status: 'covered',
-          city: 'Major Outstation Cities',
-          state: stateName,
-          eta: isZh ? '2 - 3 工作日全程冷藏配送' : '2 - 3 Working Days (Cold Chain Truck)',
-          shippingFee: 30,
-        });
-      }
-    }, 600);
+      setResult({
+        status: 'covered',
+        city: 'Major Outstation Cities',
+        state: stateName,
+        eta: isZh ? '2 - 3 工作日全程冷藏配送' : '2 - 3 Working Days (Cold Chain Truck)',
+        shippingFee: 30,
+      });
+    }
   };
 
   return (
@@ -154,7 +151,7 @@ export default function DeliveryChecker({ language }: DeliveryCheckerProps) {
                 </div>
                 <button
                   type="submit"
-                  disabled={searching || postcode.length < 5}
+                  disabled={postcode.length < 5}
                   className="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-blue-700 hover:from-sky-500 hover:to-blue-600 text-white font-bold text-xs md:text-sm rounded-xl flex items-center space-x-1.5 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Search className="w-4 h-4" />
@@ -164,17 +161,7 @@ export default function DeliveryChecker({ language }: DeliveryCheckerProps) {
             </form>
 
             {/* Results Feedback box */}
-            {searching && (
-              <div className="py-8 text-center text-slate-500 space-y-2">
-                <span className="relative flex h-4 w-4 mx-auto">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-4 w-4 bg-sky-500"></span>
-                </span>
-                <p className="text-xs">{isZh ? '正在匹配冷藏路线图...' : 'Matching cold chain route map...'}</p>
-              </div>
-            )}
-
-            {!searching && result && (
+            {result && (
               <div className="p-4 bg-[#f8fbfa] border border-[#c4d5d9] rounded-xl space-y-3 animate-fade-in text-xs leading-relaxed">
                 
                 {result.status === 'covered' && (

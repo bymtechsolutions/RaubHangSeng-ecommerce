@@ -118,7 +118,8 @@ export default function ProductPage({
     ? cutOptions.find(option => option.value === selectedVariant.cutType)
     : null;
   const selectedVariantName = selectedVariant ? (isZh ? selectedVariant.nameZh : selectedVariant.nameEn) : '';
-  const canAddToCart = !orderingPaused && !isCustomVariantInquiry && (!hasVariants || (Boolean(selectedVariant) && selectedVariant?.isAvailable !== false));
+  const isSoldOut = product.stockStatus === 'out_of_stock';
+  const canAddToCart = !orderingPaused && !isSoldOut && !isCustomVariantInquiry && (!hasVariants || (Boolean(selectedVariant) && selectedVariant?.isAvailable !== false));
   const whatsappText = encodeURIComponent(
     isCustomVariantInquiry
       ? (isZh
@@ -387,7 +388,7 @@ export default function ProductPage({
                     }`}
                   >
                     <ShoppingCart className="h-5 w-5" />
-                    <span>{orderingPaused ? (isZh ? '维护中暂不可下单' : 'Ordering paused') : isCustomVariantInquiry ? (isZh ? '请用 WhatsApp 询问' : 'Ask on WhatsApp') : selectedVariant?.isAvailable === false ? (isZh ? '此规格暂不可售' : 'Variant unavailable') : (isZh ? '加入购物车' : 'Add to cart')}</span>
+                    <span>{orderingPaused ? (isZh ? '维护中暂不可下单' : 'Ordering paused') : isSoldOut ? (isZh ? '暂时售罄' : 'Sold out') : isCustomVariantInquiry ? (isZh ? '请用 WhatsApp 询问' : 'Ask on WhatsApp') : selectedVariant?.isAvailable === false ? (isZh ? '此规格暂不可售' : 'Variant unavailable') : (isZh ? '加入购物车' : 'Add to cart')}</span>
                   </button>
                   <a
                     href={orderingPaused ? undefined : `https://wa.me/60187682528?text=${whatsappText}`}

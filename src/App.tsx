@@ -1,11 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import { AnimatePresence } from 'motion/react';
 import Header from './components/Header';
 import Hero from './components/Hero';
-import Products from './components/Products';
-import ProductPage from './components/ProductPage';
-import AboutUs from './components/AboutUs';
-import BusinessOrder from './components/BusinessOrder';
 import ProductDetailModal from './components/ProductDetailModal';
 import Cart from './components/Cart';
 import CheckoutModal from './components/CheckoutModal';
@@ -15,22 +11,45 @@ import DeliveryChecker from './components/DeliveryChecker';
 import Reviews from './components/Reviews';
 import ContactUs from './components/ContactUs';
 import Footer from './components/Footer';
-import AuthModal from './components/AuthModal';
 import { Product, CartItem, Language, DeliveryDetails, User, OrderRecord, StoreSettings, ProductCategory, CollectionDisplay, ProductMedia, StoreDiscount } from './types';
 import { X, CheckCircle, Lock } from 'lucide-react';
 import { PRODUCTS } from './data/products';
 import { DEFAULT_COLLECTIONS, normalizeCollectionDisplays } from './data/collections';
-import SellerDashboard, { type SellerDashboardTab } from './components/SellerDashboard';
-import PolicyView from './components/PolicyView';
-import { createOrder, fetchMemberOrders, fetchSellerStore, fetchSession, fetchStore, logoutMember, logoutSeller, replaceOrders, replaceProducts, updateSellerPasscode, updateSettings, verifySellerPasscode } from './lib/api';
+import type { SellerDashboardTab } from './components/SellerDashboard';
+import { createOrder, fetchMemberOrders, fetchSellerStore, fetchSession, fetchStore, loginSeller, logoutMember, logoutSeller, replaceOrders, replaceProducts, updateSellerPassword, updateSettings } from './lib/api';
 import { calculateDiscounts } from './lib/discounts';
 import { resolveMediaUrl } from './lib/media';
 import { getCartItemPricePerKg } from './lib/productOptions';
+import { updateDocumentSeo } from './lib/seo';
+
+const SellerDashboard = lazy(() => import('./components/SellerDashboard'));
+const Products = lazy(() => import('./components/Products'));
+const ProductPage = lazy(() => import('./components/ProductPage'));
+const AboutUs = lazy(() => import('./components/AboutUs'));
+const BusinessOrder = lazy(() => import('./components/BusinessOrder'));
+const AuthModal = lazy(() => import('./components/AuthModal'));
+const PolicyView = lazy(() => import('./components/PolicyView'));
+
+const StorefrontRouteFallback = ({ language }: { language: Language }) => (
+  <main className="min-h-[65vh] pt-[calc(var(--rhs-topbar-height)+48px)] px-4 rhs-section-alt" role="status" aria-live="polite" aria-busy="true">
+    <div className="mx-auto max-w-5xl">
+      <p className="text-sm font-semibold text-[#36545e]">
+        {language === 'zh' ? '正在载入页面…' : 'Loading page…'}
+      </p>
+      <div className="mt-6 space-y-4 motion-safe:animate-pulse" aria-hidden="true">
+        <div className="h-9 w-2/3 max-w-lg rounded-lg bg-[#c9d9dc]" />
+        <div className="h-4 w-full max-w-2xl rounded bg-[#d1dfe1]" />
+        <div className="h-72 rounded-2xl bg-[#cfdddf]" />
+      </div>
+    </div>
+  </main>
+);
 
 type AppRoute = 'home' | 'shop' | 'product' | 'about' | 'business-order' | 'login' | 'seller' | 'privacy' | 'terms' | 'refund';
 
 const PRODUCT_ROUTE_PREFIX = '/product/';
 const SELLER_ROUTE_PREFIX = '/seller';
+const SELLER_OWNER_ID = 'admin';
 const SELLER_TABS: SellerDashboardTab[] = ['overview', 'orders', 'customers', 'products', 'collections', 'discounts', 'shipping', 'settings'];
 const DEFAULT_STORE_ANNOUNCEMENT = '【恒升河鱼公告】彭亨河主流特马鲁网箱及野生巴丁/苏丹鱼每日捕捞，西马冷链送达，消费满 RM250 免运费！';
 const DEFAULT_BANK_TRANSFER_INSTRUCTIONS = 'Transfer the exact total amount, then upload your payment slip before submitting the order.';
@@ -116,9 +135,10 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [draftProducts, setDraftProducts] = useState<Product[] | null>(null);
   const [sellerAccessGranted, setSellerAccessGranted] = useState(false);
-  const [isPasscodeModalOpen, setIsPasscodeModalOpen] = useState(false);
-  const [passcodeInput, setPasscodeInput] = useState('');
-  const [passcodeError, setPasscodeError] = useState(false);
+  const [sellerPasswordChangeRequired, setSellerPasswordChangeRequired] = useState(false);
+  const [sellerPasswordInput, setSellerPasswordInput] = useState('');
+  const [sellerLoginError, setSellerLoginError] = useState(false);
+  const [isSellerLoginPending, setIsSellerLoginPending] = useState(false);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(250);
   const [localShippingRate, setLocalShippingRate] = useState(20);
@@ -253,6 +273,7 @@ export default function App() {
         applyStoreSettings(store.settings);
         setCurrentUser(session.profile);
         setSellerAccessGranted(session.sellerAuthenticated);
+        setSellerPasswordChangeRequired(session.sellerPasswordChangeRequired);
 
         if (session.profile) {
           const memberOrders = await fetchMemberOrders();
@@ -300,6 +321,16 @@ export default function App() {
     window.addEventListener('popstate', syncRouteFromBrowser);
     return () => window.removeEventListener('popstate', syncRouteFromBrowser);
   }, []);
+
+  useEffect(() => {
+    updateDocumentSeo({
+      route,
+      language,
+      product: route === 'product'
+        ? products.find(product => product.id === activeProductId) || null
+        : null,
+    });
+  }, [route, language, activeProductId, products]);
 
   useEffect(() => {
     if (isMaintenanceMode) {
@@ -396,7 +427,7 @@ export default function App() {
     cutType: 'whole' | 'cleaned' | 'sliced' | 'steak' | 'fillet',
     variantId?: string,
   ) => {
-    if (isMaintenanceMode) return;
+    if (isMaintenanceMode || product.stockStatus === 'out_of_stock') return;
 
     const existingIndex = cartItems.findIndex(
       (item) =>
@@ -447,10 +478,10 @@ export default function App() {
   };
 
   // Order success registration
-  const handleOrderSuccess = async (order: OrderRecord) => {
+  const handleOrderSuccess = async (order: OrderRecord, idempotencyKey: string) => {
     if (isMaintenanceMode) throw new Error('Ordering is paused');
 
-    const response = await createOrder(order);
+    const response = await createOrder(order, idempotencyKey);
     if (response.profile) setCurrentUser(response.profile);
     if (currentUser) {
       setOrderHistory(previous => [response.order, ...previous.filter(existing => existing.id !== response.order.id)]);
@@ -553,8 +584,8 @@ export default function App() {
   };
 
   const handleSellerAccess = async () => {
-    setPasscodeInput('');
-    setPasscodeError(false);
+    setSellerPasswordInput('');
+    setSellerLoginError(false);
     if (sellerAccessGranted) {
       try {
         await loadSellerStore();
@@ -571,26 +602,32 @@ export default function App() {
     setOrderHistory([]);
   };
 
-  const handleVerifyPasscode = async (e: React.FormEvent) => {
+  const handleSellerLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSellerLoginPending(true);
     try {
-      await verifySellerPasscode(passcodeInput);
+      const response = await loginSeller(SELLER_OWNER_ID, sellerPasswordInput);
       await loadSellerStore();
       setSellerAccessGranted(true);
-      setPasscodeInput('');
-      setPasscodeError(false);
+      setSellerPasswordChangeRequired(response.passwordChangeRequired);
+      setSellerPasswordInput('');
+      setSellerLoginError(false);
     } catch {
-      setPasscodeError(true);
+      setSellerLoginError(true);
+    } finally {
+      setIsSellerLoginPending(false);
     }
   };
 
-  const handleChangeSellerPasscode = async (currentPasscode: string, nextPasscode: string) => {
-    await updateSellerPasscode(currentPasscode, nextPasscode);
+  const handleChangeSellerPassword = async (currentPassword: string, nextPassword: string) => {
+    await updateSellerPassword(currentPassword, nextPassword);
+    setSellerPasswordChangeRequired(false);
   };
 
   const handleSellerLogout = async () => {
     await logoutSeller().catch(() => undefined);
     setSellerAccessGranted(false);
+    setSellerPasswordChangeRequired(false);
     if (currentUser) {
       const response = await fetchMemberOrders().catch(() => ({ orders: [] }));
       setOrderHistory(response.orders);
@@ -654,40 +691,62 @@ export default function App() {
 
   if (route === 'seller' && sellerAccessGranted) {
     return (
-      <SellerDashboard
-        language={language}
-        onClose={handleSellerLogout}
-        initialTab={sellerTab}
-        onTabChange={handleSellerTabChange}
-        products={isMaintenanceMode ? draftProducts || products : products}
-        setProducts={persistProducts}
-        orderHistory={orderHistory}
-        setOrderHistory={persistOrders}
-        isMaintenanceMode={isMaintenanceMode}
-        setIsMaintenanceMode={setIsMaintenanceMode}
-        freeShippingThreshold={freeShippingThreshold}
-        setFreeShippingThreshold={setFreeShippingThreshold}
-        localShippingRate={localShippingRate}
-        setLocalShippingRate={setLocalShippingRate}
-        outstationShippingRate={outstationShippingRate}
-        setOutstationShippingRate={setOutstationShippingRate}
-        storeAnnouncement={storeAnnouncement}
-        setStoreAnnouncement={setStoreAnnouncement}
-        bankName={bankName}
-        setBankName={setBankName}
-        bankAccountHolder={bankAccountHolder}
-        setBankAccountHolder={setBankAccountHolder}
-        bankAccountNumber={bankAccountNumber}
-        setBankAccountNumber={setBankAccountNumber}
-        bankTransferInstructions={bankTransferInstructions}
-        setBankTransferInstructions={setBankTransferInstructions}
-        collectionDisplays={collectionDisplays}
-        mediaLibrary={mediaLibrary}
-        discounts={discounts}
-        setDiscounts={setDiscounts}
-        onSaveSettings={persistSettings}
-        onChangeSellerPasscode={handleChangeSellerPasscode}
-      />
+      <Suspense fallback={(
+        <div className="rhs-admin-shell min-h-screen bg-slate-100 text-slate-800" role="status" aria-live="polite">
+          <div className="rhs-admin-topbar h-[72px] bg-slate-900 px-5 flex items-center">
+            <span className="text-sm font-bold text-white">{language === 'zh' ? '恒升河鱼商家后台' : 'Raub Hang Seng Seller Dashboard'}</span>
+          </div>
+          <div className="flex min-h-[calc(100vh-72px)]">
+            <div className="rhs-admin-sidebar hidden w-64 bg-slate-900 md:block" aria-hidden="true" />
+            <main className="rhs-admin-main flex-1 p-5 md:p-7" aria-busy="true">
+              <p className="text-sm font-semibold text-slate-700">
+                {language === 'zh' ? '正在载入商家后台…' : 'Loading seller dashboard…'}
+              </p>
+              <div className="mt-6 grid gap-4 md:grid-cols-3 motion-safe:animate-pulse" aria-hidden="true">
+                <div className="h-28 rounded-xl bg-slate-200" />
+                <div className="h-28 rounded-xl bg-slate-200" />
+                <div className="h-28 rounded-xl bg-slate-200" />
+              </div>
+            </main>
+          </div>
+        </div>
+      )}>
+        <SellerDashboard
+          language={language}
+          onClose={handleSellerLogout}
+          initialTab={sellerTab}
+          onTabChange={handleSellerTabChange}
+          products={isMaintenanceMode ? draftProducts || products : products}
+          setProducts={persistProducts}
+          orderHistory={orderHistory}
+          setOrderHistory={persistOrders}
+          isMaintenanceMode={isMaintenanceMode}
+          setIsMaintenanceMode={setIsMaintenanceMode}
+          freeShippingThreshold={freeShippingThreshold}
+          setFreeShippingThreshold={setFreeShippingThreshold}
+          localShippingRate={localShippingRate}
+          setLocalShippingRate={setLocalShippingRate}
+          outstationShippingRate={outstationShippingRate}
+          setOutstationShippingRate={setOutstationShippingRate}
+          storeAnnouncement={storeAnnouncement}
+          setStoreAnnouncement={setStoreAnnouncement}
+          bankName={bankName}
+          setBankName={setBankName}
+          bankAccountHolder={bankAccountHolder}
+          setBankAccountHolder={setBankAccountHolder}
+          bankAccountNumber={bankAccountNumber}
+          setBankAccountNumber={setBankAccountNumber}
+          bankTransferInstructions={bankTransferInstructions}
+          setBankTransferInstructions={setBankTransferInstructions}
+          collectionDisplays={collectionDisplays}
+          mediaLibrary={mediaLibrary}
+          discounts={discounts}
+          setDiscounts={setDiscounts}
+          onSaveSettings={persistSettings}
+          sellerPasswordChangeRequired={sellerPasswordChangeRequired}
+          onChangeSellerPassword={handleChangeSellerPassword}
+        />
+      </Suspense>
     );
   }
 
@@ -743,8 +802,9 @@ export default function App() {
         </div>
       </div>
 
-      {policyRoute ? (
-        <PolicyView
+      <Suspense fallback={<StorefrontRouteFallback language={language} />}>
+        {policyRoute ? (
+          <PolicyView
           initialPolicyType={policyRoute}
           language={language}
           onClose={() => navigateToRoute('home')}
@@ -821,39 +881,56 @@ export default function App() {
                 </div>
               </div>
 
-              <form onSubmit={handleVerifyPasscode} className="mt-6 space-y-4">
+              <form onSubmit={handleSellerLogin} className="mt-6 space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1.5">
-                    {language === 'zh' ? '请输入管理授权密码' : 'Enter Admin Passcode'}
+                    {language === 'zh' ? '店主账号' : 'Owner ID'}
+                  </label>
+                  <input
+                    type="text"
+                    value={SELLER_OWNER_ID}
+                    readOnly
+                    autoComplete="username"
+                    className="w-full px-4 py-3 rounded-xl border border-[#c4d5d9] bg-slate-100 text-slate-700 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                    {language === 'zh' ? '店主密码' : 'Owner Password'}
                   </label>
                   <input
                     type="password"
                     required
-                    placeholder="????"
-                    value={passcodeInput}
+                    maxLength={128}
+                    placeholder="••••••••"
+                    value={sellerPasswordInput}
                     onChange={(e) => {
-                      setPasscodeInput(e.target.value);
-                      setPasscodeError(false);
+                      setSellerPasswordInput(e.target.value);
+                      setSellerLoginError(false);
                     }}
                     className={`w-full px-4 py-3 rounded-xl border bg-[#f8fbfa] font-mono text-center text-lg tracking-widest focus:ring-2 focus:outline-hidden transition-all ${
-                      passcodeError
+                      sellerLoginError
                         ? 'border-red-300 focus:border-red-500 focus:ring-red-100'
                         : 'border-[#c4d5d9] focus:border-amber-500 focus:ring-amber-100'
                     }`}
+                    autoComplete="current-password"
                     autoFocus
                   />
-                  {passcodeError && (
+                  {sellerLoginError && (
                     <p className="mt-1.5 text-xs text-red-600 font-medium">
-                      {language === 'zh' ? '密码错误，拒绝访问！' : 'Invalid passcode. Access denied.'}
+                      {language === 'zh' ? '店主账号或密码不正确。' : 'Invalid owner ID or password.'}
                     </p>
                   )}
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-xs md:text-sm rounded-xl cursor-pointer transition-all shadow-md active:scale-95"
+                  disabled={isSellerLoginPending}
+                  className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs md:text-sm rounded-xl cursor-pointer transition-all shadow-md active:scale-95"
                 >
-                  {language === 'zh' ? '登入商家后台' : 'Open Seller Dashboard'}
+                  {isSellerLoginPending
+                    ? (language === 'zh' ? '登录中…' : 'Signing in…')
+                    : (language === 'zh' ? '登入商家后台' : 'Open Seller Dashboard')}
                 </button>
               </form>
             </div>
@@ -888,7 +965,8 @@ export default function App() {
           {/* Frequently Asked Questions + Location map + inquiry form */}
           <ContactUs language={language} />
         </>
-      )}
+        )}
+      </Suspense>
 
       {/* Professional structured Footer */}
       <Footer language={language} setLanguage={handleLanguageChange} onNavigate={handleSetActiveSection} onPolicyClick={handlePolicyClick} />
@@ -943,6 +1021,7 @@ export default function App() {
           shippingFee={shippingFee}
           totalAmount={totalAmount}
           shippingRegion={shippingState}
+          onShippingRegionChange={setShippingState}
           onOrderSuccess={handleOrderSuccess}
           currentUser={currentUser}
           onAuthClick={() => navigateToRoute('login')}
@@ -991,87 +1070,6 @@ export default function App() {
             >
               {language === 'zh' ? '好的，返回商城' : 'Got it, return to Store'}
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Seller Passcode Authorization */}
-      {isPasscodeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="w-full max-w-md rhs-panel rounded-2xl shadow-xl overflow-hidden border animate-fade-in">
-            <div className="p-6">
-              {/* Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                <div className="flex items-center space-x-2">
-                  <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
-                    <Lock className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900">
-                      {language === 'zh' ? '商家安全验证' : 'Seller Authentication'}
-                    </h2>
-                    <p className="text-xs text-slate-500">
-                      {language === 'zh' ? '管理后台访问受限' : 'Restricted Admin Access'}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setIsPasscodeModalOpen(false)}
-                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Form Content */}
-              <form onSubmit={handleVerifyPasscode} className="mt-6 space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">
-                    {language === 'zh' ? '请输入管理授权密码' : 'Enter Admin Passcode'}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="password"
-                      required
-                      placeholder="••••"
-                      value={passcodeInput}
-                      onChange={(e) => {
-                        setPasscodeInput(e.target.value);
-                        setPasscodeError(false);
-                      }}
-                      className={`w-full px-4 py-3 rounded-xl border font-mono text-center text-lg tracking-widest focus:ring-2 focus:outline-hidden transition-all ${
-                        passcodeError
-                          ? 'border-red-300 focus:border-red-500 focus:ring-red-100'
-                          : 'border-slate-200 focus:border-amber-500 focus:ring-amber-100'
-                      }`}
-                      autoFocus
-                    />
-                  </div>
-                  {passcodeError && (
-                    <p className="mt-1.5 text-xs text-red-600 font-medium">
-                      {language === 'zh' ? '密码错误，拒绝访问！' : 'Invalid passcode. Access Denied!'}
-                    </p>
-                  )}
-                </div>
-
-                {/* Footer Actions */}
-                <div className="flex space-x-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsPasscodeModalOpen(false)}
-                    className="flex-1 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs md:text-sm rounded-xl border border-slate-100 cursor-pointer transition-all"
-                  >
-                    {language === 'zh' ? '取消' : 'Cancel'}
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-xs md:text-sm rounded-xl cursor-pointer transition-all shadow-md active:scale-95"
-                  >
-                    {language === 'zh' ? '确认登录' : 'Confirm'}
-                  </button>
-                </div>
-              </form>
-            </div>
           </div>
         </div>
       )}

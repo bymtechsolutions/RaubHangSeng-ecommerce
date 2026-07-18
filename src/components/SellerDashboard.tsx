@@ -73,7 +73,8 @@ interface SellerDashboardProps {
   discounts: StoreDiscount[];
   setDiscounts: (discounts: StoreDiscount[]) => void;
   onSaveSettings?: (settings: Partial<StoreSettings>) => void | Promise<void>;
-  onChangeSellerPasscode?: (currentPasscode: string, nextPasscode: string) => void | Promise<void>;
+  sellerPasswordChangeRequired?: boolean;
+  onChangeSellerPassword?: (currentPassword: string, nextPassword: string) => void | Promise<void>;
 }
 
 export type SellerDashboardTab = 'overview' | 'orders' | 'customers' | 'products' | 'collections' | 'discounts' | 'shipping' | 'settings';
@@ -143,7 +144,8 @@ export default function SellerDashboard({
   discounts,
   setDiscounts,
   onSaveSettings,
-  onChangeSellerPasscode,
+  sellerPasswordChangeRequired = false,
+  onChangeSellerPassword,
 }: SellerDashboardProps) {
   const isZh = language === 'zh';
   const [activeTab, setActiveTab] = useState<SellerDashboardTab>(initialTab);
@@ -182,7 +184,7 @@ export default function SellerDashboard({
   const [formFeaturesZh, setFormFeaturesZh] = useState('');
   const [formFeaturesEn, setFormFeaturesEn] = useState('');
   const [formIsWild, setFormIsWild] = useState(true);
-  const [formStockStatus, setFormStockStatus] = useState<'available' | 'limited' | 'seasonal' | 'out_of_stock'>('available');
+  const [formStockStatus, setFormStockStatus] = useState<Product['stockStatus']>('available');
 
   // Notification states
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -193,9 +195,10 @@ export default function SellerDashboard({
   const [testState, setTestState] = useState('Pahang');
   const [testResult, setTestResult] = useState<{ eligible: boolean; fee: number; zone: string } | null>(null);
   const [collectionDrafts, setCollectionDrafts] = useState<CollectionDisplay[]>(() => normalizeCollectionDisplays(collectionDisplays));
-  const [currentSellerPasscode, setCurrentSellerPasscode] = useState('');
-  const [newSellerPasscode, setNewSellerPasscode] = useState('');
-  const [confirmSellerPasscode, setConfirmSellerPasscode] = useState('');
+  const [currentSellerPassword, setCurrentSellerPassword] = useState('');
+  const [newSellerPassword, setNewSellerPassword] = useState('');
+  const [confirmSellerPassword, setConfirmSellerPassword] = useState('');
+  const [isChangingSellerPassword, setIsChangingSellerPassword] = useState(false);
   const [mediaPickerTarget, setMediaPickerTarget] = useState<MediaPickerTarget | null>(null);
   const [editingMediaIndex, setEditingMediaIndex] = useState<number | null>(null);
   const [editingDiscountId, setEditingDiscountId] = useState<string | null>(null);
@@ -300,32 +303,40 @@ export default function SellerDashboard({
     );
   };
 
-  const handleSellerPasscodeChange = async (e: React.FormEvent) => {
+  const handleSellerPasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!currentSellerPasscode.trim() || !newSellerPasscode.trim()) {
-      triggerError(isZh ? '请输入当前密码与新密码。' : 'Enter the current and new passcode.');
+    if (!currentSellerPassword || !newSellerPassword) {
+      triggerError(isZh ? '请输入当前密码与新密码。' : 'Enter the current and new password.');
       return;
     }
 
-    if (newSellerPasscode.trim().length < 8) {
-      triggerError(isZh ? '新密码至少需要 8 个字符。' : 'New passcode must be at least 8 characters.');
+    if (newSellerPassword.length < 8 || newSellerPassword.length > 128) {
+      triggerError(isZh ? '新密码需要 8 至 128 个字符。' : 'New password must be between 8 and 128 characters.');
       return;
     }
 
-    if (newSellerPasscode.trim() !== confirmSellerPasscode.trim()) {
-      triggerError(isZh ? '两次输入的新密码不一致。' : 'New passcodes do not match.');
+    if (newSellerPassword !== confirmSellerPassword) {
+      triggerError(isZh ? '两次输入的新密码不一致。' : 'New passwords do not match.');
       return;
     }
 
+    if (newSellerPassword === currentSellerPassword) {
+      triggerError(isZh ? '新密码必须与当前密码不同。' : 'New password must be different from the current password.');
+      return;
+    }
+
+    setIsChangingSellerPassword(true);
     try {
-      await onChangeSellerPasscode?.(currentSellerPasscode, newSellerPasscode.trim());
-      setCurrentSellerPasscode('');
-      setNewSellerPasscode('');
-      setConfirmSellerPasscode('');
-      triggerSuccess(isZh ? '商家登录密码已更新。' : 'Seller passcode updated.');
-    } catch (error) {
-      triggerError(isZh ? '当前密码不正确，无法更新。' : 'Current passcode is incorrect.');
+      await onChangeSellerPassword?.(currentSellerPassword, newSellerPassword);
+      setCurrentSellerPassword('');
+      setNewSellerPassword('');
+      setConfirmSellerPassword('');
+      triggerSuccess(isZh ? '店主登录密码已更新。' : 'Owner password updated.');
+    } catch {
+      triggerError(isZh ? '当前密码不正确，无法更新。' : 'Current password is incorrect.');
+    } finally {
+      setIsChangingSellerPassword(false);
     }
   };
 
@@ -985,7 +996,7 @@ export default function SellerDashboard({
     setFormFeaturesZh(product.featuresZh ? product.featuresZh.join(', ') : '');
     setFormFeaturesEn(product.featuresEn ? product.featuresEn.join(', ') : '');
     setFormIsWild(product.isWild);
-    setFormStockStatus((product.stockStatus as any) || 'available');
+    setFormStockStatus(product.stockStatus || 'available');
   };
 
   // Handle Reset Form
@@ -1120,7 +1131,7 @@ export default function SellerDashboard({
       featuresZh: formFeaturesZh.split(',').map(s => s.trim()).filter(Boolean),
       featuresEn: formFeaturesEn.split(',').map(s => s.trim()).filter(Boolean),
       isWild: formIsWild,
-      stockStatus: formStockStatus as any,
+      stockStatus: formStockStatus,
     };
 
     let updatedProducts = [...products];
@@ -2567,7 +2578,7 @@ export default function SellerDashboard({
                           </label>
                           <select
                             value={formStockStatus}
-                            onChange={(e) => setFormStockStatus(e.target.value as any)}
+                            onChange={(e) => setFormStockStatus(e.target.value as Product['stockStatus'])}
                             className="w-full text-xs px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500"
                           >
                             <option value="available">{isZh ? '现货充足 (Available)' : 'Available'}</option>
@@ -3816,54 +3827,68 @@ export default function SellerDashboard({
                     </button>
                   </div>
 
-                  <form onSubmit={handleSellerPasscodeChange} className="border-t border-slate-100 pt-4 space-y-3">
+                  <form onSubmit={handleSellerPasswordChange} className="border-t border-slate-100 pt-4 space-y-3">
                     <div className="flex items-start gap-3">
                       <div className="p-2 rounded-lg bg-sky-50 text-sky-600 border border-sky-100">
                         <KeyRound className="w-4 h-4" />
                       </div>
                       <div>
                         <h5 className="text-xs font-bold text-slate-800">
-                          {isZh ? '更改商家登录密码' : 'Change Seller Login Passcode'}
+                          {isZh ? '更改店主登录密码' : 'Change Owner Password'}
                         </h5>
                         <p className="text-[11px] text-slate-500 leading-snug">
-                          {isZh ? '默认密码为 8888。更新后，请使用新密码进入 /seller。' : 'Default passcode is 8888. After updating, use the new passcode for /seller.'}
+                          {isZh ? '店主账号固定为 admin。更新后，请使用新密码进入 /seller。' : 'The owner ID is admin. After updating, use the new password for /seller.'}
                         </p>
                       </div>
                     </div>
 
+                    {sellerPasswordChangeRequired && (
+                      <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+                        {isZh
+                          ? '此店面仍在使用初始密码 abcd1234。请立即更改密码。'
+                          : 'This store is still using the initial password abcd1234. Change it now.'}
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <label className="block">
                         <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-                          {isZh ? '当前密码' : 'Current Passcode'}
+                          {isZh ? '当前密码' : 'Current Password'}
                         </span>
                         <input
                           type="password"
-                          value={currentSellerPasscode}
-                          onChange={(e) => setCurrentSellerPasscode(e.target.value)}
+                          required
+                          maxLength={128}
+                          value={currentSellerPassword}
+                          onChange={(e) => setCurrentSellerPassword(e.target.value)}
                           className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg"
                           autoComplete="current-password"
                         />
                       </label>
                       <label className="block">
                         <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-                          {isZh ? '新密码' : 'New Passcode'}
+                          {isZh ? '新密码' : 'New Password'}
                         </span>
                         <input
                           type="password"
-                          value={newSellerPasscode}
-                          onChange={(e) => setNewSellerPasscode(e.target.value)}
+                          required
+                          maxLength={128}
+                          value={newSellerPassword}
+                          onChange={(e) => setNewSellerPassword(e.target.value)}
                           className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg"
                           autoComplete="new-password"
                         />
                       </label>
                       <label className="block">
                         <span className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-                          {isZh ? '确认新密码' : 'Confirm New Passcode'}
+                          {isZh ? '确认新密码' : 'Confirm New Password'}
                         </span>
                         <input
                           type="password"
-                          value={confirmSellerPasscode}
-                          onChange={(e) => setConfirmSellerPasscode(e.target.value)}
+                          required
+                          maxLength={128}
+                          value={confirmSellerPassword}
+                          onChange={(e) => setConfirmSellerPassword(e.target.value)}
                           className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg"
                           autoComplete="new-password"
                         />
@@ -3873,9 +3898,12 @@ export default function SellerDashboard({
                     <div className="flex justify-end">
                       <button
                         type="submit"
-                        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer"
+                        disabled={isChangingSellerPassword}
+                        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 disabled:cursor-wait text-white rounded-lg text-xs font-bold cursor-pointer"
                       >
-                        {isZh ? '更新登录密码' : 'Update Passcode'}
+                        {isChangingSellerPassword
+                          ? (isZh ? '更新中…' : 'Updating…')
+                          : (isZh ? '更新登录密码' : 'Update Password')}
                       </button>
                     </div>
                   </form>
